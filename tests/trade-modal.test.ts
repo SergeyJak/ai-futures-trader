@@ -3,3 +3,5 @@ test('history rows can launch accessible trade candle modal',()=>{for(const text
 test('historical interval validates symbol and bounded duration on server',()=>{const source=readFileSync('src/index.ts','utf8');assert.match(source,/api\/trade-candles/);assert.match(source,/to-from>1440\*60000/);assert.match(source,/db\.candlesBetween/);});
 
 test('trade chart SVG uses namespace and rejects parser errors',()=>{assert.match(dashboardHtml,/xmlns="http:\/\/www\.w3\.org\/2000\/svg"/);assert.match(dashboardHtml,/querySelector\('parsererror'\)/)});
+
+test('open position supports chart modal and current quote with risk lines',()=>{for(const s of ['openCurrentPosition','active-position','trade-exit-key','Текущая цена','trade.stop','trade.take'])assert.ok(dashboardHtml.includes(s),s)});
