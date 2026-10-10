@@ -8,13 +8,13 @@ export function validateHistory(rows:Bar[]){
  }
  return {gaps,complete:gaps===0,minutes:rows.length};
 }
-export function walkForward(rows:Bar[],strategy:Strategy){
+export function walkForward(rows:Bar[],strategy:Strategy,symbol='BTCUSDT'){
  const quality=validateHistory(rows);
  const split=Math.floor(rows.length*.7);
  const training=rows.slice(0,split);
  // Validation starts strictly after training; warm-up occurs inside validation.
  const testing=rows.slice(split);
- const train=backtest(training,100,strategy);
- const test=backtest(testing,100,strategy);
+ const train=backtest(training,100,strategy,symbol);
+ const test=backtest(testing,100,strategy,symbol);
  return {strategy,quality,splitAt:rows[split]?.start_at??null,training:{bars:training.length,returnPct:train.returnPct,trades:train.trades,maxDrawdown:train.maxDrawdown},validation:{bars:rows.length-split,returnPct:test.returnPct,trades:test.trades,maxDrawdown:test.maxDrawdown},preliminary:rows.length<2880||quality.gaps>0};
 }
