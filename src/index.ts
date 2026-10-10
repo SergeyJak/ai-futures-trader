@@ -1,3 +1,4 @@
+import {researchExitV4} from './v4-exits.js';
 import 'dotenv/config';
 import http from 'node:http';import {backtest} from './backtest.js';
 import {evaluateCandidate} from './research.js';
@@ -28,6 +29,18 @@ const server=http.createServer(async(req,res)=>{
   if(!Number.isInteger(id)||id<1||id>11){res.writeHead(400).end(JSON.stringify({error:'Invalid account'}));return}
   try{res.writeHead(200).end(JSON.stringify(await db.shadowAccountDetails(id)))}
   catch(e){console.error('Shadow account error',e);res.writeHead(503).end(JSON.stringify({error:'Shadow account unavailable'}))}
+  return;
+ }
+ if(req.url==='/api/v4-exits'){
+  try{
+   const results=[];
+   for(const symbol of ['BTCUSDT','ETHUSDT','SOLUSDT']){
+    const bars=await db.recentCandles(symbol,12000);
+    const split=Math.floor(bars.length*.7);
+    results.push({symbol,bars:bars.length,training:researchExitV4(bars.slice(0,split)),validation:researchExitV4(bars.slice(split))});
+   }
+   res.writeHead(200).end(JSON.stringify({type:'research-only',version:'v4-exit-study',selection:'fixed entry stream, compare exit methods without changing existing accounts',chronologicalSplit:'70/30',results}));
+  }catch(e){console.error('V4 exit research error',e);res.writeHead(503).end(JSON.stringify({error:'v4 exit study unavailable'}))}
   return;
  }
  if(req.url==='/api/v3'){
