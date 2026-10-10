@@ -1,13 +1,26 @@
 import {feasibleQuantity} from './contracts.js';
 import {analyze} from './indicators.js';
 import type {Bar} from './backtest.js';
-export type Candidate='squeeze'|'regime';
+export type Candidate='squeeze'|'regime'|'sweep'|'quarter';
 export function researchSignal(rows:Bar[],candidate:Candidate):'LONG'|'SHORT'|null{
  if(rows.length<61)return null;
  const recent=rows.slice(-61);
  const closes=recent.map(b=>Number(b.close)),highs=recent.map(b=>Number(b.high)),lows=recent.map(b=>Number(b.low));
  if([...closes,...highs,...lows].some(n=>!Number.isFinite(n)||n<=0))return null;
  const last=closes.at(-1)!;
+ if(candidate==='sweep'){
+  const prevHigh=Math.max(...highs.slice(-21,-1)),prevLow=Math.min(...lows.slice(-21,-1));
+  const lastBar=recent.at(-1)!;
+  return Number(lastBar.high)>prevHigh&&last<prevHigh&&last>prevLow?'SHORT':
+   Number(lastBar.low)<prevLow&&last>prevLow&&last<prevHigh?'LONG':null;
+ }
+ if(candidate==='quarter'){
+  const at=Date.parse(recent.at(-1)!.start_at);
+  if(!Number.isFinite(at)||new Date(at).getUTCMinutes()%15!==0)return null;
+  const prior=closes.at(-6)!;
+  const move=last/prior-1;
+  return move>.002?'LONG':move<-.002?'SHORT':null;
+ }
  if(candidate==='squeeze'){
   const widths:number[]=[];
   for(let i=20;i<61;i++){const arr=closes.slice(i-20,i);const avg=arr.reduce((a,b)=>a+b,0)/20;const std=Math.sqrt(arr.reduce((a,b)=>a+(b-avg)**2,0)/20);widths.push(4*std/avg)}
