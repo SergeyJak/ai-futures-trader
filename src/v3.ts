@@ -8,7 +8,7 @@ for(const symbol of ['BTCUSDT','ETHUSDT','SOLUSDT'])
  for(const dip of [.002,.004])
   for(const stop of [.002,.004])
    for(const take of [.003,.006])
-    for(const hold of [5,15,30])
+    for(const hold of [15,30])
      for(const side of ['LONG','SHORT'] as const)
       V3_CONFIGS.push({id:[symbol,side,'d'+dip,'s'+stop,'t'+take,'h'+hold].join('_'),symbol,side,dip,stop,take,hold});
 export function v3Advance(state:State,history:Bar[]):{state:State;trade:Record<string,unknown>|null;event:string}{
@@ -63,7 +63,7 @@ export async function initV3(pool:pg.Pool){
 export async function tickV3(pool:pg.Pool){
  const client=await pool.connect();try{
   await client.query('BEGIN');
-  const accounts=await client.query('SELECT * FROM v3_accounts ORDER BY id FOR UPDATE');
+  const accounts=await client.query('SELECT * FROM v3_accounts WHERE hold >= 15 ORDER BY id FOR UPDATE');
   let changed=0,opened=0,closed=0,gaps=0;
   for(const symbol of ['BTCUSDT','ETHUSDT','SOLUSDT']){
    const barsResult=await client.query(`SELECT start_at::text,open::text,high::text,low::text,close::text FROM market_candles WHERE symbol=$1 AND confirmed=true ORDER BY start_at DESC LIMIT 34`,[symbol]);
