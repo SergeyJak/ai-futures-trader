@@ -122,7 +122,18 @@ async function refreshPaper(){
  try{
   var d=await json('/api/paper');
   var balance=Number(d.balance),p=d.position;
-  set('paper-balance','
+  set('paper-balance',usd.format(balance)+' USD');
+  set('paper-pnl',(balance>=100?'+':'')+usd.format(balance-100)+' USD (реализованный)');
+  set('paper-position',p?p.symbol.replace('USDT','')+' '+p.side:'Нет');
+  set('paper-count',String(d.trades.length)+(d.trades.length===50?'+':''));
+  set('paper-note',p?'Открыта '+p.side+' '+p.symbol+' '+p.qty+' по '+usd.format(p.entry)+' USD; открытый P&L не включён.':'Новых виртуальных позиций нет. Анализируются только новые закрытые свечи.');
+  var root=document.getElementById('paper-journal');root.replaceChildren();
+  root.appendChild(tradeRow(['Монета','Сторона','Выход UTC','P&L']));
+  if(!d.trades.length)root.appendChild(tradeRow(['Пока нет сделок','','','']));
+  d.trades.forEach(function(t){root.appendChild(tradeRow([t.symbol,t.side,String(t.exit_at).slice(5,16),Number(t.pnl).toFixed(2)+' USD']))});
+ }catch(e){set('paper-note','Paper Trading временно недоступен')}
+}
+async function refreshBacktest(){
  var symbol=active;
  set('bt-note','Расчёт сделок…');
  try{
@@ -212,192 +223,3 @@ document.getElementById('older').addEventListener('click',function(){offset=Math
 document.getElementById('latest').addEventListener('click',function(){offset=0;redraw()});
 refresh();setInterval(refresh,30000);
 </script></body></html>`;+usd.format(balance));
-  set('paper-pnl',(balance>=100?'+':'')+usd.format(balance-100)+' USD (реализованный)');
-  set('paper-position',p?p.symbol.replace('USDT','')+' '+p.side:'Нет');
-  set('paper-count',String(d.trades.length)+(d.trades.length===50?'+':''));
-  set('paper-note',p?'Открыта '+p.side+' '+p.symbol+', '+p.qty+' по '+usd.format(p.entry)+' USD. Неисполненный P&L не включён в баланс.':'Новых виртуальных позиций нет. Система следит за новыми закрытыми свечами.');
-  var root=document.getElementById('paper-journal');root.replaceChildren();
-  root.appendChild(tradeRow(['Монета','Направление','Закрыта UTC','P&L']));
-  if(!d.trades.length)root.appendChild(tradeRow(['Сделок пока нет','','','']));
-  d.trades.forEach(function(t){root.appendChild(tradeRow([t.symbol,t.side,String(t.exit_at).slice(5,16),Number(t.pnl).toFixed(2)+' 
- var symbol=active;
- set('bt-note','Расчёт сделок…');
- try{
-  var data=await json('/api/backtest?symbol='+encodeURIComponent(symbol));
-  if(active!==symbol)return;
-  set('bt-equity',usd.format(data.equity)+' USD');
-  set('bt-return',(data.returnPct>=0?'+':'')+data.returnPct.toFixed(2)+'%');
-  set('bt-trades',data.trades+' / '+(data.winRate===null?'—':data.winRate.toFixed(1)+'%'));
-  set('bt-drawdown',data.maxDrawdown.toFixed(2)+'%');
-  set('journal-symbol',symbol);
-  var journal=document.getElementById('trade-journal');journal.replaceChildren();
-  journal.appendChild(tradeRow(['Сторона','Вход','Выход','P&L']));
-  if(!data.tradeHistory.length){journal.appendChild(tradeRow(['Сделок нет','','','']))}
-  data.tradeHistory.slice().reverse().forEach(function(t){
-   journal.appendChild(tradeRow([t.side,t.entryAt.slice(5,16),t.exitAt.slice(5,16),t.pnl.toFixed(2)]));
-  });
-  set('bt-note',symbol+': '+data.bars+' свечей; симуляция, не реальные ордера.');
- }catch(e){if(active===symbol)set('bt-note','Расчёт временно недоступен')}
-}
-async function refreshSignals(){
- var symbol=active;
- try{
-  var data=await json('/api/signals?symbol='+encodeURIComponent(symbol));
-  if(symbol!==active)return;
-  set('signal-symbol',symbol);
-  function display(v,n){return v===null||!Number.isFinite(Number(v))?'—':Number(v).toFixed(n)}
-  set('ema9',display(data.ema9,2));set('ema21',display(data.ema21,2));set('rsi14',display(data.rsi14,1));
-  set('volume-ratio',data.volumeRatio===null?'—':display(data.volumeRatio,2)+'×');
-  var labels={BULLISH_WATCH:'Возможный бычий импульс · наблюдение',BEARISH_WATCH:'Возможный медвежий импульс · наблюдение',NEUTRAL:'Нет подтверждённого сигнала',INSUFFICIENT_DATA:'Недостаточно свечей'};
-  set('signal',labels[data.signal]||'Сигнал недоступен');
- }catch(e){if(symbol===active)set('signal','Индикаторы временно недоступны')}
-}
-async function refresh(){
- try{
- var d=await json('/api/overview');var total=d.symbols.reduce(function(v,x){return v+Number(x.confirmed)},0);
- var gaps=d.symbols.reduce(function(v,x){return v+Number(x.missing_minutes)},0);
- set('candles',fmt.format(total));set('gaps',fmt.format(gaps));set('dbsize',mb(d.storage.database_bytes));set('tablesize',mb(d.storage.candles_total_bytes));
- var connected=d.stream.connected&&Date.now()-d.stream.lastDataAt<90000;set('status-text',connected?'Collecting':'Stream offline');
- document.getElementById('status').style.cssText=connected?'':'background:#fff0e6;color:#ac5418';
- var container=document.getElementById('coins');container.replaceChildren();
- symbols.forEach(function(symbol){
- var s=d.symbols.find(function(r){return r.symbol===symbol})||{};
- var article=document.createElement('article');article.className='card coin';
- var title=document.createElement('strong');title.textContent=symbol;article.appendChild(title);
- var n=document.createElement('div');n.className='count';n.textContent=fmt.format(Number(s.confirmed||0))+' candles';article.appendChild(n);
- var note=document.createElement('div');note.className='metric-note';note.textContent=Number(s.missing_minutes||0)+' missing minutes · latest: '+(s.last_at?new Date(s.last_at).toISOString().slice(11,16)+' UTC':'none');article.appendChild(note);
- container.appendChild(article)});
- set('updated','Checked '+new Date().toLocaleTimeString());
- }catch(e){set('status-text','API unavailable');document.getElementById('status').style.cssText='background:#ffeded;color:#b73333';set('updated','Cannot reach server')}
- await Promise.all([loadChart(),refreshSignals(),refreshBacktest(),refreshComparison()]);
-}
-document.querySelectorAll('[data-symbol]').forEach(function(el){el.addEventListener('click',function(){active=el.dataset.symbol;document.querySelectorAll('[data-symbol]').forEach(function(tab){tab.classList.toggle('active',tab===el)});void loadChart();void refreshSignals();void refreshBacktest()})});
-document.querySelectorAll('[data-mode]').forEach(function(el){el.addEventListener('click',function(){mode=el.dataset.mode;document.querySelectorAll('[data-mode]').forEach(function(tab){tab.classList.toggle('active',tab===el)});void loadChart()})});
-document.querySelectorAll('[data-period]').forEach(function(el){el.addEventListener('click',function(){period=Number(el.dataset.period);document.querySelectorAll('[data-period]').forEach(function(tab){tab.classList.toggle('active',tab===el)});void loadChart()})});
-document.getElementById('run-backtest').addEventListener('click',function(){void refreshBacktest()});
-document.querySelectorAll('[data-page]').forEach(function(button){button.addEventListener('click',function(){
- var page=button.dataset.page;
- document.getElementById('market-page').hidden=page!=='market';
- document.getElementById('trades-page').hidden=page!=='trades';
- document.querySelectorAll('[data-page]').forEach(function(item){item.classList.toggle('active',item===button);item.setAttribute('aria-selected',String(item===button))});
-})});
-var svg=document.getElementById('plot');
-svg.addEventListener('pointerdown',function(e){
- if(e.pointerType==='touch')touchX=e.clientX;
-});
-svg.addEventListener('pointerup',function(e){
- if(touchX!==null&&Math.abs(e.clientX-touchX)>22){
-  offset+=Math.round((e.clientX-touchX)/Math.max(1,svg.clientWidth)*visibleCount);
-  offset=Math.max(0,Math.min(allRows.length-visibleCount,offset));redraw();touchX=null;return;
- }
- touchX=null;
- var rect=svg.getBoundingClientRect();
- var x=(e.clientX-rect.left)/rect.width*900;
- var rows=viewport();
- if(rows.length){var idx=mode==='candles'?Math.floor((x-20)/860*rows.length):Math.round((x-20)/860*(rows.length-1));inspectIndex(idx)}
-});
-svg.addEventListener('wheel',function(e){
- if(!allRows.length)return;
- e.preventDefault();
- if(e.ctrlKey){visibleCount=Math.max(12,Math.min(allRows.length,visibleCount+(e.deltaY>0?12:-12)))}
- else{offset=Math.max(0,Math.min(allRows.length-visibleCount,offset+(e.deltaY>0?10:-10)))}
- redraw();
-},{passive:false});
-document.getElementById('zoom-in').addEventListener('click',function(){visibleCount=Math.max(12,visibleCount-12);redraw()});
-document.getElementById('zoom-out').addEventListener('click',function(){visibleCount=Math.min(allRows.length,visibleCount+12);redraw()});
-document.getElementById('older').addEventListener('click',function(){offset=Math.min(Math.max(0,allRows.length-visibleCount),offset+Math.max(5,Math.floor(visibleCount/2)));redraw()});
-document.getElementById('latest').addEventListener('click',function(){offset=0;redraw()});
-refresh();setInterval(refresh,30000);
-</script></body></html>`;]))});
- }catch(e){set('paper-note','Paper Trading временно недоступен')}
-}
-async function refreshBacktest(){
- var symbol=active;
- set('bt-note','Расчёт сделок…');
- try{
-  var data=await json('/api/backtest?symbol='+encodeURIComponent(symbol));
-  if(active!==symbol)return;
-  set('bt-equity',usd.format(data.equity)+' USD');
-  set('bt-return',(data.returnPct>=0?'+':'')+data.returnPct.toFixed(2)+'%');
-  set('bt-trades',data.trades+' / '+(data.winRate===null?'—':data.winRate.toFixed(1)+'%'));
-  set('bt-drawdown',data.maxDrawdown.toFixed(2)+'%');
-  set('journal-symbol',symbol);
-  var journal=document.getElementById('trade-journal');journal.replaceChildren();
-  journal.appendChild(tradeRow(['Сторона','Вход','Выход','P&L']));
-  if(!data.tradeHistory.length){journal.appendChild(tradeRow(['Сделок нет','','','']))}
-  data.tradeHistory.slice().reverse().forEach(function(t){
-   journal.appendChild(tradeRow([t.side,t.entryAt.slice(5,16),t.exitAt.slice(5,16),t.pnl.toFixed(2)]));
-  });
-  set('bt-note',symbol+': '+data.bars+' свечей; симуляция, не реальные ордера.');
- }catch(e){if(active===symbol)set('bt-note','Расчёт временно недоступен')}
-}
-async function refreshSignals(){
- var symbol=active;
- try{
-  var data=await json('/api/signals?symbol='+encodeURIComponent(symbol));
-  if(symbol!==active)return;
-  set('signal-symbol',symbol);
-  function display(v,n){return v===null||!Number.isFinite(Number(v))?'—':Number(v).toFixed(n)}
-  set('ema9',display(data.ema9,2));set('ema21',display(data.ema21,2));set('rsi14',display(data.rsi14,1));
-  set('volume-ratio',data.volumeRatio===null?'—':display(data.volumeRatio,2)+'×');
-  var labels={BULLISH_WATCH:'Возможный бычий импульс · наблюдение',BEARISH_WATCH:'Возможный медвежий импульс · наблюдение',NEUTRAL:'Нет подтверждённого сигнала',INSUFFICIENT_DATA:'Недостаточно свечей'};
-  set('signal',labels[data.signal]||'Сигнал недоступен');
- }catch(e){if(symbol===active)set('signal','Индикаторы временно недоступны')}
-}
-async function refresh(){
- try{
- var d=await json('/api/overview');var total=d.symbols.reduce(function(v,x){return v+Number(x.confirmed)},0);
- var gaps=d.symbols.reduce(function(v,x){return v+Number(x.missing_minutes)},0);
- set('candles',fmt.format(total));set('gaps',fmt.format(gaps));set('dbsize',mb(d.storage.database_bytes));set('tablesize',mb(d.storage.candles_total_bytes));
- var connected=d.stream.connected&&Date.now()-d.stream.lastDataAt<90000;set('status-text',connected?'Collecting':'Stream offline');
- document.getElementById('status').style.cssText=connected?'':'background:#fff0e6;color:#ac5418';
- var container=document.getElementById('coins');container.replaceChildren();
- symbols.forEach(function(symbol){
- var s=d.symbols.find(function(r){return r.symbol===symbol})||{};
- var article=document.createElement('article');article.className='card coin';
- var title=document.createElement('strong');title.textContent=symbol;article.appendChild(title);
- var n=document.createElement('div');n.className='count';n.textContent=fmt.format(Number(s.confirmed||0))+' candles';article.appendChild(n);
- var note=document.createElement('div');note.className='metric-note';note.textContent=Number(s.missing_minutes||0)+' missing minutes · latest: '+(s.last_at?new Date(s.last_at).toISOString().slice(11,16)+' UTC':'none');article.appendChild(note);
- container.appendChild(article)});
- set('updated','Checked '+new Date().toLocaleTimeString());
- }catch(e){set('status-text','API unavailable');document.getElementById('status').style.cssText='background:#ffeded;color:#b73333';set('updated','Cannot reach server')}
- await Promise.all([loadChart(),refreshSignals(),refreshBacktest(),refreshComparison()]);
-}
-document.querySelectorAll('[data-symbol]').forEach(function(el){el.addEventListener('click',function(){active=el.dataset.symbol;document.querySelectorAll('[data-symbol]').forEach(function(tab){tab.classList.toggle('active',tab===el)});void loadChart();void refreshSignals();void refreshBacktest()})});
-document.querySelectorAll('[data-mode]').forEach(function(el){el.addEventListener('click',function(){mode=el.dataset.mode;document.querySelectorAll('[data-mode]').forEach(function(tab){tab.classList.toggle('active',tab===el)});void loadChart()})});
-document.querySelectorAll('[data-period]').forEach(function(el){el.addEventListener('click',function(){period=Number(el.dataset.period);document.querySelectorAll('[data-period]').forEach(function(tab){tab.classList.toggle('active',tab===el)});void loadChart()})});
-document.getElementById('run-backtest').addEventListener('click',function(){void refreshBacktest()});
-document.querySelectorAll('[data-page]').forEach(function(button){button.addEventListener('click',function(){
- var page=button.dataset.page;
- document.getElementById('market-page').hidden=page!=='market';
- document.getElementById('trades-page').hidden=page!=='trades';
- document.querySelectorAll('[data-page]').forEach(function(item){item.classList.toggle('active',item===button);item.setAttribute('aria-selected',String(item===button))});
-})});
-var svg=document.getElementById('plot');
-svg.addEventListener('pointerdown',function(e){
- if(e.pointerType==='touch')touchX=e.clientX;
-});
-svg.addEventListener('pointerup',function(e){
- if(touchX!==null&&Math.abs(e.clientX-touchX)>22){
-  offset+=Math.round((e.clientX-touchX)/Math.max(1,svg.clientWidth)*visibleCount);
-  offset=Math.max(0,Math.min(allRows.length-visibleCount,offset));redraw();touchX=null;return;
- }
- touchX=null;
- var rect=svg.getBoundingClientRect();
- var x=(e.clientX-rect.left)/rect.width*900;
- var rows=viewport();
- if(rows.length){var idx=mode==='candles'?Math.floor((x-20)/860*rows.length):Math.round((x-20)/860*(rows.length-1));inspectIndex(idx)}
-});
-svg.addEventListener('wheel',function(e){
- if(!allRows.length)return;
- e.preventDefault();
- if(e.ctrlKey){visibleCount=Math.max(12,Math.min(allRows.length,visibleCount+(e.deltaY>0?12:-12)))}
- else{offset=Math.max(0,Math.min(allRows.length-visibleCount,offset+(e.deltaY>0?10:-10)))}
- redraw();
-},{passive:false});
-document.getElementById('zoom-in').addEventListener('click',function(){visibleCount=Math.max(12,visibleCount-12);redraw()});
-document.getElementById('zoom-out').addEventListener('click',function(){visibleCount=Math.min(allRows.length,visibleCount+12);redraw()});
-document.getElementById('older').addEventListener('click',function(){offset=Math.min(Math.max(0,allRows.length-visibleCount),offset+Math.max(5,Math.floor(visibleCount/2)));redraw()});
-document.getElementById('latest').addEventListener('click',function(){offset=0;redraw()});
-refresh();setInterval(refresh,30000);
-</script></body></html>`;
