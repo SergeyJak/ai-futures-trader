@@ -102,8 +102,8 @@ function tradeRow(values){
 async function refreshComparison(){
  try{
   var data=await json('/api/backtest-compare'),root=document.getElementById('compare');root.replaceChildren();
-  root.appendChild(tradeRow(['Монета','Свечей','Сделок','Результат']));
-  data.results.forEach(function(item){root.appendChild(tradeRow([item.symbol,item.bars,item.trades,(item.returnPct>=0?'+':'')+item.returnPct.toFixed(2)+'%']))});
+  root.appendChild(tradeRow(['Монета','Стратегия','Сделок','Доходность']));
+  data.results.forEach(function(item){root.appendChild(tradeRow([item.symbol,{momentum:'Импульс',trend:'Тренд',reversal:'Разворот'}[item.strategy]||item.strategy,item.trades,(item.returnPct>=0?'+':'')+item.returnPct.toFixed(2)+'%']))});
  }catch(e){set('compare','Сравнение временно недоступно')}
 }
 async function refreshBacktest(){
