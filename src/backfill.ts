@@ -22,7 +22,7 @@ export function parseBybitHistory(data:unknown,symbol:string,fromMs:number,toMs:
   const ms=Number(start);
   if(!Number.isSafeInteger(ms)||ms%MINUTE!==0||ms<fromMs||ms>toMs)throw new Error('Unexpected candle timestamp');
   for(const value of [open,high,low,close,volume,turnover])
-   if(typeof value!=='string'||!/^\\d+(?:\\.\\d+)?$/.test(value))throw new Error('Invalid history decimal');
+   if(typeof value!=='string'||!/^\d+(?:\.\d+)?$/.test(value))throw new Error('Invalid history decimal');
   return {symbol,startMs:ms,open,high,low,close,volume,turnover,confirmed:true} as Candle;
  });
 }
