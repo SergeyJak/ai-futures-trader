@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {EXPERIMENTS,entryDirection,microQuantity} from '../src/experiments.js';
 import {dashboardHtml} from '../src/dashboard.js';
 test('ten experimental accounts have unique identifiers and different setups',()=>{
- assert.deepEqual(EXPERIMENTS.map(x=>x.id),[2,3,4,5,6,11,7,8,9,10]);
+ assert.deepEqual(EXPERIMENTS.map(x=>x.id),[2,3,4,5,6,7,8,9,10,11]);
  assert.equal(new Set(EXPERIMENTS.map(x=>x.name)).size,10);
  for(const a of EXPERIMENTS){assert.ok(a.maxUsd<=100&&a.maxUsd>0);assert.ok(a.maxMinutes>0);assert.ok(a.stop>0&&a.take>a.stop)}
 });
