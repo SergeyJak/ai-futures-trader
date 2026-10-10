@@ -1,4 +1,4 @@
-import pg from 'pg';import {pairedDiagnostics} from './paired-analysis.js';import {initShadow,tickShadow,shadowReport,shadowAccountDetails} from './shadow.js';import {paperTick} from './paper.js';import {EXPERIMENTS,runExperiments} from './experiments.js';import type {Candle} from './candles.js';
+import pg from 'pg';import {initV3,tickV3,v3Report} from './v3.js';import {pairedDiagnostics} from './paired-analysis.js';import {initShadow,tickShadow,shadowReport,shadowAccountDetails} from './shadow.js';import {paperTick} from './paper.js';import {EXPERIMENTS,runExperiments} from './experiments.js';import type {Candle} from './candles.js';
 export class Database{
  private pool:pg.Pool;
  constructor(url:string){this.pool=new pg.Pool({connectionString:url,max:5});}
@@ -26,6 +26,9 @@ export class Database{
   await this.pool.query('CREATE INDEX IF NOT EXISTS paper_equity_by_time ON paper_equity_snapshots(at DESC)');
   for(const cfg of EXPERIMENTS)await this.pool.query('INSERT INTO paper_variants(id,balance) VALUES($1,100) ON CONFLICT(id) DO NOTHING',[cfg.id]);
  }
+ async initV3(){return initV3(this.pool)}
+ async runV3(){return tickV3(this.pool)}
+ async v3Report(){return v3Report(this.pool)}
  async initShadow(){return initShadow(this.pool)}
  async runShadow(){return tickShadow(this.pool)}
  async shadowReport(){return shadowReport(this.pool)}
