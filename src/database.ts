@@ -16,6 +16,10 @@ export class Database{
   const rows=await this.pool.query<{ms:string}>(`SELECT (EXTRACT(EPOCH FROM start_at)*1000)::bigint::text AS ms FROM market_candles WHERE symbol=$1 AND start_at>=to_timestamp($2::double precision/1000) AND start_at<=to_timestamp($3::double precision/1000) AND confirmed=true ORDER BY start_at`,[symbol,fromMs,toMs]);
   return rows.rows.map(r=>Number(r.ms));
  }
+ async recentCandles(symbol:string,limit:number){
+  const result=await this.pool.query<{start_at:string;open:string;high:string;low:string;close:string;volume:string}>(`SELECT start_at::text,open::text,high::text,low::text,close::text,volume::text FROM market_candles WHERE symbol=$1 AND confirmed=true ORDER BY start_at DESC LIMIT $2`,[symbol,limit]);
+  return result.rows.reverse();
+ }
  async ping(){await this.pool.query('SELECT 1')}
 
  async candleStats(){
