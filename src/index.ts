@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import http from 'node:http';import {backtest} from './backtest.js';
 import {evaluateCandidate} from './research.js';
+import {auditTrade,auditSummary} from './audit.js';
 import {walkForward} from './walkforward.js';import {analyze} from './indicators.js';import {dashboardHtml} from './dashboard.js';import {analyticsHtml,researchHtml,marketHtml} from './extra-pages.js';import {MINUTE,missingRanges,fetchHistory} from './backfill.js';import {Database} from './database.js';import {MarketStream} from './market.js';
 const port=Number(process.env.PORT??3000);const url=process.env.DATABASE_URL;
 const endpoint=process.env.BYBIT_PUBLIC_WS??'wss://stream.bybit.com/v5/public/linear';
@@ -19,6 +20,16 @@ const server=http.createServer(async(req,res)=>{
  if(req.url==='/api/overview'){
   try{const [stats,storage]=await Promise.all([db.candleStats(),db.storageStats()]);res.writeHead(200).end(JSON.stringify({symbols:stats,storage,stream:stream.status,updatedAt:new Date().toISOString()}))}
   catch(e){console.error('Dashboard overview error',e);res.writeHead(503).end(JSON.stringify({error:'Data unavailable'}))}
+  return;
+ }
+ if(req.url==='/api/audit'){
+  try{
+   const history=await db.auditHistory();
+   const bySymbol=history.candles as Record<string,Array<{start_at:string;open:string;high:string;low:string;close:string}>>;
+   const items=history.trades.map(t=>auditTrade(t,bySymbol[t.symbol]??[]));
+   const accounts=Array.from({length:11},(_,i)=>({account:i+1,...auditSummary(items.filter(x=>x.account===i+1))}));
+   res.writeHead(200).end(JSON.stringify({mode:'read-only',sampleLimit:history.sampleLimit,tradesAudited:items.length,summary:auditSummary(items),accounts,flags:items.filter(x=>Math.abs(x.delta)>0.000001||!x.entryBarFound||!x.exitBarFound||!x.entryReferenceInRange||(x.reason==='TIME'&&!x.timeoutExitAtOpen)).slice(0,100),disclaimer:'Historical stored trades unchanged. Slippage estimated from execution price. Candle-range checks do not prove original order execution.'}));
+  }catch(e){console.error('Trade audit error',e);res.writeHead(503).end(JSON.stringify({error:'Audit unavailable'}))}
   return;
  }
  if(req.url?.startsWith('/api/paper-diagnostics?')){
