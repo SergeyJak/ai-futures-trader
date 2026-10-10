@@ -102,8 +102,9 @@ function tradeRow(values){
 async function refreshComparison(){
  try{
   var data=await json('/api/backtest-compare'),root=document.getElementById('compare');root.replaceChildren();
-  root.appendChild(tradeRow(['Монета','Стратегия','Сделок','Доходность']));
-  data.results.forEach(function(item){root.appendChild(tradeRow([item.symbol,{momentum:'Импульс',trend:'Тренд',reversal:'Разворот'}[item.strategy]||item.strategy,item.trades,(item.returnPct>=0?'+':'')+item.returnPct.toFixed(2)+'%']))});
+  root.appendChild(tradeRow(['Монета','Стратегия','Train %','Test %']));
+  data.results.forEach(function(item){root.appendChild(tradeRow([item.symbol,{momentum:'Импульс',trend:'Тренд',reversal:'Разворот'}[item.strategy]||item.strategy,item.holdout.training.returnPct.toFixed(2)+'%',item.holdout.validation.returnPct.toFixed(2)+'%'+(item.holdout.preliminary?' *':'')]))});
+  var note=document.createElement('p');note.className='muted';note.textContent='Train: первые 70% истории; Test: последние 30%. * Недостаточно данных или есть пропуски. Это не прогноз прибыли.';root.appendChild(note);
  }catch(e){set('compare','Сравнение временно недоступно')}
 }
 async function refreshBacktest(){
