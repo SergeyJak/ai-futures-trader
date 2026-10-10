@@ -52,11 +52,16 @@ export async function runExperiments(pool:pg.Pool){
    if(!prev.last_at){await client.query('UPDATE paper_variants SET last_at=$2 WHERE id=$1',[cfg.id,new Date(latest).toISOString()]);await client.query('COMMIT');continue}
    let last=Date.parse(prev.last_at);
    if(latest<=last){await client.query('COMMIT');continue}
-   if(latest-last>10*60000){await client.query('UPDATE paper_variants SET last_at=$2 WHERE id=$1',[cfg.id,new Date(latest).toISOString()]);await client.query('COMMIT');continue}
+   if(latest-last>10*60000){
+    await client.query('INSERT INTO paper_decisions(account_id,at,event,reason,details) VALUES($1,$2,$3,$4,$5)',[cfg.id,new Date(latest).toISOString(),'SKIP','DATA_GAP',JSON.stringify({gapMinutes:(latest-last)/60000})]);
+    await client.query('UPDATE paper_variants SET last_at=$2 WHERE id=$1',[cfg.id,new Date(latest).toISOString()]);await client.query('COMMIT');continue}
    for(let ms=last+60000;ms<=latest;ms+=60000){
     const entries=new Map<string,{bar:Bar;index:number;history:Bar[]}>();
     for(const symbol of cfg.symbols){const a=histories.get(symbol)!;const i=a.findIndex(b=>Date.parse(b.start_at)===ms);if(i>=0)entries.set(symbol,{bar:a[i],index:i,history:a})}
-    if(entries.size!==cfg.symbols.length){last=ms;continue}
+    if(entries.size!==cfg.symbols.length){
+     if(new Date(ms).getUTCMinutes()%15===0)await client.query('INSERT INTO paper_decisions(account_id,at,event,reason,details) VALUES($1,$2,$3,$4,$5)',[cfg.id,new Date(ms).toISOString(),'SKIP','MISSING_CANDLE',JSON.stringify({available:[...entries.keys()]})]);
+     last=ms;continue
+    }
     let exited=false;
     if(position){
      const b=entries.get(position.symbol)!.bar;const lo=Number(b.low),hi=Number(b.high);
@@ -71,22 +76,38 @@ export async function runExperiments(pool:pg.Pool){
       const pnl=gross-position.entry*position.qty*fee-exitFee;
       balance+=gross-exitFee;
       await client.query('INSERT INTO paper_trades(account_id,symbol,side,quantity,entry_price,exit_price,entry_at,exit_at,pnl,reason) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)',[cfg.id,position.symbol,position.side,position.qty,position.entry,price,position.entryAt,new Date(ms).toISOString(),pnl,stop?'STOP':take?'TAKE':'TIME']);
+      await client.query('INSERT INTO paper_decisions(account_id,at,symbol,event,reason,details) VALUES($1,$2,$3,$4,$5,$6)',[cfg.id,new Date(ms).toISOString(),position.symbol,'CLOSE',stop?'STOP':take?'TAKE':'TIME',JSON.stringify({entry:position.entry,exit:price,qty:position.qty,pnl,balance})]);
       position=null;exited=true;
      }
     }
     if(!position&&!exited){
+     let hadSignal=false;
+     let rejected=false;
      for(const symbol of cfg.symbols){
       const e=entries.get(symbol)!;
       const history=e.history.slice(Math.max(0,e.index-240),e.index);
       const side=cfg.id>=7?researchSignal(history,cfg.strategy as 'squeeze'|'regime'|'sweep'|'quarter'):entryDirection(history,cfg.strategy as Strategy);
       if(!side)continue;
+      hadSignal=true;
       const price=Number(e.bar.open)*(side==='LONG'?1+slip:1-slip);
       const qty=cfg.id===6?microQuantity(symbol,price,balance):feasibleQuantity(symbol,price,Math.min(balance,cfg.maxUsd),cfg.risk,cfg.stop,fee);
-      if(!qty)continue;
+      if(!qty){
+       rejected=true;
+       await client.query('INSERT INTO paper_decisions(account_id,at,symbol,event,reason,details) VALUES($1,$2,$3,$4,$5,$6)',[cfg.id,new Date(ms).toISOString(),symbol,'REJECT','MIN_ORDER_OR_RISK_LIMIT',JSON.stringify({side,price,maxUsd:cfg.maxUsd,balance,stop:cfg.stop})]);
+       continue
+      }
       balance-=qty*price*fee;
       position={symbol,side,qty,entry:price,stop:price*(side==='LONG'?1-cfg.stop:1+cfg.stop),take:price*(side==='LONG'?1+cfg.take:1-cfg.take),entryAt:new Date(ms).toISOString()};
+      await client.query('INSERT INTO paper_decisions(account_id,at,symbol,event,reason,details) VALUES($1,$2,$3,$4,$5,$6)',[cfg.id,new Date(ms).toISOString(),symbol,'OPEN','SIGNAL',JSON.stringify({strategy:cfg.strategy,side,qty,price,stop:position.stop,take:position.take,fee:qty*price*fee,balance})]);
       break;
      }
+     if(!position&&!hadSignal&&ms%(15*60000)===0)await client.query('INSERT INTO paper_decisions(account_id,at,event,reason,details) VALUES($1,$2,$3,$4,$5)',[cfg.id,new Date(ms).toISOString(),'SKIP','NO_SIGNAL',JSON.stringify({strategy:cfg.strategy,activeSymbols:cfg.symbols})]);
+    }
+    if(ms%(60000)===0){
+     const currentPosition=position;
+     const quote=currentPosition?Number(entries.get(currentPosition.symbol)!.bar.close):0;
+     const unrealized=currentPosition?(quote-currentPosition.entry)*currentPosition.qty*(currentPosition.side==='LONG'?1:-1)-quote*currentPosition.qty*fee:0;
+     await client.query('INSERT INTO paper_equity_snapshots(account_id,at,balance,equity,unrealized_pnl,position) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(account_id,at) DO NOTHING',[cfg.id,new Date(ms).toISOString(),balance,balance+unrealized,unrealized,JSON.stringify(currentPosition)]);
     }
     last=ms;
    }
