@@ -1,0 +1,3 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {dashboardHtml} from '../src/dashboard.js';import {readFileSync} from 'node:fs';
+test('history rows can launch accessible trade candle modal',()=>{for(const text of ['trade-dialog','showModal()','openTrade(t)','drawTradeChart','api/trade-candles','entry_price','exit_price','trade-dialog-close'])assert.ok(dashboardHtml.includes(text),text)});
+test('historical interval validates symbol and bounded duration on server',()=>{const source=readFileSync('src/index.ts','utf8');assert.match(source,/api\/trade-candles/);assert.match(source,/to-from>1440\*60000/);assert.match(source,/db\.candlesBetween/);});
