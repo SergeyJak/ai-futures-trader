@@ -18,6 +18,10 @@ export const dashboardHtml = `<!doctype html>
 <div class="card"><div class="chart-controls"><div class="control-group"><button class="tab active" data-mode="line">Линия</button><button class="tab" data-mode="candles">Свечи</button></div><div class="control-group"><button class="tab active" data-period="60">1ч</button><button class="tab" data-period="360">6ч</button><button class="tab" data-period="1440">24ч</button></div></div><div class="chart-controls"><span class="muted">Листайте график вбок · нажмите свечу для OHLC</span><div class="zoom-controls"><button class="tab" id="older" aria-label="Ранее">←</button><button class="tab" id="zoom-out" aria-label="Уменьшить">−</button><button class="tab" id="zoom-in" aria-label="Увеличить">+</button><button class="tab" id="latest">Сейчас</button></div></div><div class="charthead"><div class="price" id="price">…</div><span class="muted" id="last-time"></span></div><div class="plot-wrap"><svg id="plot" class="plot" viewBox="0 0 900 260" preserveAspectRatio="none" role="img" aria-label="Price chart"><g id="grid-lines"></g><path id="area" fill="#e6edff"></path><path id="line" fill="none" stroke="#4969d8" stroke-width="3" vector-effect="non-scaling-stroke"></path><g id="candle-bars"></g><line id="crosshair" x1="0" y1="20" x2="0" y2="240" stroke="#7187af" stroke-dasharray="4 3" visibility="hidden" pointer-events="none"></line></svg><div id="plot-empty" class="plot-empty" hidden>Loading candles…</div></div><div class="inspect" id="inspect" aria-live="polite">Коснитесь графика, чтобы увидеть данные свечи</div><div class="chart-meta muted"><span id="chart-range">Последние 60 минут · UTC</span><span id="change">Изменение: …</span></div></div>
 <div class="section"><h2>Индикаторы · <span id="signal-symbol">BTCUSDT</span></h2><span class="muted">1m · информационно</span></div><div class="grid indicator-grid"><div class="card"><div class="metric-label">EMA 9</div><div class="metric-value" id="ema9">…</div></div><div class="card"><div class="metric-label">EMA 21</div><div class="metric-value" id="ema21">…</div></div><div class="card"><div class="metric-label">RSI 14</div><div class="metric-value" id="rsi14">…</div></div><div class="card"><div class="metric-label">Объём / средний</div><div class="metric-value" id="volume-ratio">…</div></div></div><div class="inspect" id="signal">Ожидаем данные…</div></section>
 <section id="trades-page" hidden>
+<div class="section"><h2>Paper Trading · живой рынок</h2><span class="muted">Только виртуальные сделки</span></div>
+<div class="grid"><div class="card"><div class="metric-label">Баланс</div><div class="metric-value" id="paper-balance">…</div></div><div class="card"><div class="metric-label">Результат</div><div class="metric-value" id="paper-pnl">…</div></div><div class="card"><div class="metric-label">Позиция</div><div class="metric-value" id="paper-position">…</div></div><div class="card"><div class="metric-label">Закрыто сделок</div><div class="metric-value" id="paper-count">…</div></div></div>
+<div class="inspect" id="paper-note">Счёт $100. Наблюдаем новые закрытые свечи без реальных ордеров. Комиссии учтены; открытые позиции могут менять текущий результат.</div>
+<div class="section"><h2>Журнал Paper Trading</h2></div><div class="card"><div id="paper-journal" class="muted">Ожидаем данные…</div></div>
 <div class="section"><h2>Бэктест · без реальных сделок</h2><button class="tab" id="run-backtest">Пересчитать</button></div><div class="grid"><div class="card"><div class="metric-label">Итог ($100 старт)</div><div class="metric-value" id="bt-equity">…</div></div><div class="card"><div class="metric-label">Результат</div><div class="metric-value" id="bt-return">…</div></div><div class="card"><div class="metric-label">Сделок / побед</div><div class="metric-value" id="bt-trades">…</div></div><div class="card"><div class="metric-label">Просадка максимум</div><div class="metric-value" id="bt-drawdown">…</div></div></div><div class="inspect" id="bt-note">Тест на доступной истории. Комиссия 0,06% и проскальзывание 0,02% в каждую сторону, стоп 0,6%, цель 1,2%. Результаты не гарантируют доходность.</div><div class="section"><h2>Журнал сделок · <span id="journal-symbol">BTCUSDT</span></h2></div><div class="card"><div id="trade-journal" class="muted">Загружаю сделки…</div></div><div class="section"><h2>Сравнение монет</h2></div><div class="card"><div id="compare" class="muted">Загружаю сравнение…</div></div></section>
 <section id="collection-page">
 <div class="section"><h2>Data collection</h2><span class="muted" id="updated">Updating…</span></div>
@@ -113,6 +117,199 @@ async function refreshComparison(){
   data.results.forEach(function(item){root.appendChild(tradeRow([item.symbol,{momentum:'Импульс',trend:'Тренд',reversal:'Разворот'}[item.strategy]||item.strategy,item.holdout.training.returnPct.toFixed(2)+'%',item.holdout.validation.returnPct.toFixed(2)+'%'+(item.holdout.preliminary?' *':'')]))});
   var note=document.createElement('p');note.className='muted';note.textContent='Train: первые 70% истории; Test: последние 30%. * Недостаточно данных или есть пропуски. Это не прогноз прибыли.';root.appendChild(note);
  }catch(e){set('compare','Сравнение временно недоступно')}
+}
+async function refreshPaper(){
+ try{
+  var d=await json('/api/paper');
+  var balance=Number(d.balance),p=d.position;
+  set('paper-balance','
+ var symbol=active;
+ set('bt-note','Расчёт сделок…');
+ try{
+  var data=await json('/api/backtest?symbol='+encodeURIComponent(symbol));
+  if(active!==symbol)return;
+  set('bt-equity',usd.format(data.equity)+' USD');
+  set('bt-return',(data.returnPct>=0?'+':'')+data.returnPct.toFixed(2)+'%');
+  set('bt-trades',data.trades+' / '+(data.winRate===null?'—':data.winRate.toFixed(1)+'%'));
+  set('bt-drawdown',data.maxDrawdown.toFixed(2)+'%');
+  set('journal-symbol',symbol);
+  var journal=document.getElementById('trade-journal');journal.replaceChildren();
+  journal.appendChild(tradeRow(['Сторона','Вход','Выход','P&L']));
+  if(!data.tradeHistory.length){journal.appendChild(tradeRow(['Сделок нет','','','']))}
+  data.tradeHistory.slice().reverse().forEach(function(t){
+   journal.appendChild(tradeRow([t.side,t.entryAt.slice(5,16),t.exitAt.slice(5,16),t.pnl.toFixed(2)]));
+  });
+  set('bt-note',symbol+': '+data.bars+' свечей; симуляция, не реальные ордера.');
+ }catch(e){if(active===symbol)set('bt-note','Расчёт временно недоступен')}
+}
+async function refreshSignals(){
+ var symbol=active;
+ try{
+  var data=await json('/api/signals?symbol='+encodeURIComponent(symbol));
+  if(symbol!==active)return;
+  set('signal-symbol',symbol);
+  function display(v,n){return v===null||!Number.isFinite(Number(v))?'—':Number(v).toFixed(n)}
+  set('ema9',display(data.ema9,2));set('ema21',display(data.ema21,2));set('rsi14',display(data.rsi14,1));
+  set('volume-ratio',data.volumeRatio===null?'—':display(data.volumeRatio,2)+'×');
+  var labels={BULLISH_WATCH:'Возможный бычий импульс · наблюдение',BEARISH_WATCH:'Возможный медвежий импульс · наблюдение',NEUTRAL:'Нет подтверждённого сигнала',INSUFFICIENT_DATA:'Недостаточно свечей'};
+  set('signal',labels[data.signal]||'Сигнал недоступен');
+ }catch(e){if(symbol===active)set('signal','Индикаторы временно недоступны')}
+}
+async function refresh(){
+ try{
+ var d=await json('/api/overview');var total=d.symbols.reduce(function(v,x){return v+Number(x.confirmed)},0);
+ var gaps=d.symbols.reduce(function(v,x){return v+Number(x.missing_minutes)},0);
+ set('candles',fmt.format(total));set('gaps',fmt.format(gaps));set('dbsize',mb(d.storage.database_bytes));set('tablesize',mb(d.storage.candles_total_bytes));
+ var connected=d.stream.connected&&Date.now()-d.stream.lastDataAt<90000;set('status-text',connected?'Collecting':'Stream offline');
+ document.getElementById('status').style.cssText=connected?'':'background:#fff0e6;color:#ac5418';
+ var container=document.getElementById('coins');container.replaceChildren();
+ symbols.forEach(function(symbol){
+ var s=d.symbols.find(function(r){return r.symbol===symbol})||{};
+ var article=document.createElement('article');article.className='card coin';
+ var title=document.createElement('strong');title.textContent=symbol;article.appendChild(title);
+ var n=document.createElement('div');n.className='count';n.textContent=fmt.format(Number(s.confirmed||0))+' candles';article.appendChild(n);
+ var note=document.createElement('div');note.className='metric-note';note.textContent=Number(s.missing_minutes||0)+' missing minutes · latest: '+(s.last_at?new Date(s.last_at).toISOString().slice(11,16)+' UTC':'none');article.appendChild(note);
+ container.appendChild(article)});
+ set('updated','Checked '+new Date().toLocaleTimeString());
+ }catch(e){set('status-text','API unavailable');document.getElementById('status').style.cssText='background:#ffeded;color:#b73333';set('updated','Cannot reach server')}
+ await Promise.all([loadChart(),refreshSignals(),refreshBacktest(),refreshComparison(),refreshPaper()]);
+}
+document.querySelectorAll('[data-symbol]').forEach(function(el){el.addEventListener('click',function(){active=el.dataset.symbol;document.querySelectorAll('[data-symbol]').forEach(function(tab){tab.classList.toggle('active',tab===el)});void loadChart();void refreshSignals();void refreshBacktest()})});
+document.querySelectorAll('[data-mode]').forEach(function(el){el.addEventListener('click',function(){mode=el.dataset.mode;document.querySelectorAll('[data-mode]').forEach(function(tab){tab.classList.toggle('active',tab===el)});void loadChart()})});
+document.querySelectorAll('[data-period]').forEach(function(el){el.addEventListener('click',function(){period=Number(el.dataset.period);document.querySelectorAll('[data-period]').forEach(function(tab){tab.classList.toggle('active',tab===el)});void loadChart()})});
+document.getElementById('run-backtest').addEventListener('click',function(){void refreshBacktest()});
+document.querySelectorAll('[data-page]').forEach(function(button){button.addEventListener('click',function(){
+ var page=button.dataset.page;
+ document.getElementById('market-page').hidden=page!=='market';
+ document.getElementById('trades-page').hidden=page!=='trades';
+ document.querySelectorAll('[data-page]').forEach(function(item){item.classList.toggle('active',item===button);item.setAttribute('aria-selected',String(item===button))});
+})});
+var svg=document.getElementById('plot');
+svg.addEventListener('pointerdown',function(e){
+ if(e.pointerType==='touch')touchX=e.clientX;
+});
+svg.addEventListener('pointerup',function(e){
+ if(touchX!==null&&Math.abs(e.clientX-touchX)>22){
+  offset+=Math.round((e.clientX-touchX)/Math.max(1,svg.clientWidth)*visibleCount);
+  offset=Math.max(0,Math.min(allRows.length-visibleCount,offset));redraw();touchX=null;return;
+ }
+ touchX=null;
+ var rect=svg.getBoundingClientRect();
+ var x=(e.clientX-rect.left)/rect.width*900;
+ var rows=viewport();
+ if(rows.length){var idx=mode==='candles'?Math.floor((x-20)/860*rows.length):Math.round((x-20)/860*(rows.length-1));inspectIndex(idx)}
+});
+svg.addEventListener('wheel',function(e){
+ if(!allRows.length)return;
+ e.preventDefault();
+ if(e.ctrlKey){visibleCount=Math.max(12,Math.min(allRows.length,visibleCount+(e.deltaY>0?12:-12)))}
+ else{offset=Math.max(0,Math.min(allRows.length-visibleCount,offset+(e.deltaY>0?10:-10)))}
+ redraw();
+},{passive:false});
+document.getElementById('zoom-in').addEventListener('click',function(){visibleCount=Math.max(12,visibleCount-12);redraw()});
+document.getElementById('zoom-out').addEventListener('click',function(){visibleCount=Math.min(allRows.length,visibleCount+12);redraw()});
+document.getElementById('older').addEventListener('click',function(){offset=Math.min(Math.max(0,allRows.length-visibleCount),offset+Math.max(5,Math.floor(visibleCount/2)));redraw()});
+document.getElementById('latest').addEventListener('click',function(){offset=0;redraw()});
+refresh();setInterval(refresh,30000);
+</script></body></html>`;+usd.format(balance));
+  set('paper-pnl',(balance>=100?'+':'')+usd.format(balance-100)+' USD (реализованный)');
+  set('paper-position',p?p.symbol.replace('USDT','')+' '+p.side:'Нет');
+  set('paper-count',String(d.trades.length)+(d.trades.length===50?'+':''));
+  set('paper-note',p?'Открыта '+p.side+' '+p.symbol+', '+p.qty+' по '+usd.format(p.entry)+' USD. Неисполненный P&L не включён в баланс.':'Новых виртуальных позиций нет. Система следит за новыми закрытыми свечами.');
+  var root=document.getElementById('paper-journal');root.replaceChildren();
+  root.appendChild(tradeRow(['Монета','Направление','Закрыта UTC','P&L']));
+  if(!d.trades.length)root.appendChild(tradeRow(['Сделок пока нет','','','']));
+  d.trades.forEach(function(t){root.appendChild(tradeRow([t.symbol,t.side,String(t.exit_at).slice(5,16),Number(t.pnl).toFixed(2)+' 
+ var symbol=active;
+ set('bt-note','Расчёт сделок…');
+ try{
+  var data=await json('/api/backtest?symbol='+encodeURIComponent(symbol));
+  if(active!==symbol)return;
+  set('bt-equity',usd.format(data.equity)+' USD');
+  set('bt-return',(data.returnPct>=0?'+':'')+data.returnPct.toFixed(2)+'%');
+  set('bt-trades',data.trades+' / '+(data.winRate===null?'—':data.winRate.toFixed(1)+'%'));
+  set('bt-drawdown',data.maxDrawdown.toFixed(2)+'%');
+  set('journal-symbol',symbol);
+  var journal=document.getElementById('trade-journal');journal.replaceChildren();
+  journal.appendChild(tradeRow(['Сторона','Вход','Выход','P&L']));
+  if(!data.tradeHistory.length){journal.appendChild(tradeRow(['Сделок нет','','','']))}
+  data.tradeHistory.slice().reverse().forEach(function(t){
+   journal.appendChild(tradeRow([t.side,t.entryAt.slice(5,16),t.exitAt.slice(5,16),t.pnl.toFixed(2)]));
+  });
+  set('bt-note',symbol+': '+data.bars+' свечей; симуляция, не реальные ордера.');
+ }catch(e){if(active===symbol)set('bt-note','Расчёт временно недоступен')}
+}
+async function refreshSignals(){
+ var symbol=active;
+ try{
+  var data=await json('/api/signals?symbol='+encodeURIComponent(symbol));
+  if(symbol!==active)return;
+  set('signal-symbol',symbol);
+  function display(v,n){return v===null||!Number.isFinite(Number(v))?'—':Number(v).toFixed(n)}
+  set('ema9',display(data.ema9,2));set('ema21',display(data.ema21,2));set('rsi14',display(data.rsi14,1));
+  set('volume-ratio',data.volumeRatio===null?'—':display(data.volumeRatio,2)+'×');
+  var labels={BULLISH_WATCH:'Возможный бычий импульс · наблюдение',BEARISH_WATCH:'Возможный медвежий импульс · наблюдение',NEUTRAL:'Нет подтверждённого сигнала',INSUFFICIENT_DATA:'Недостаточно свечей'};
+  set('signal',labels[data.signal]||'Сигнал недоступен');
+ }catch(e){if(symbol===active)set('signal','Индикаторы временно недоступны')}
+}
+async function refresh(){
+ try{
+ var d=await json('/api/overview');var total=d.symbols.reduce(function(v,x){return v+Number(x.confirmed)},0);
+ var gaps=d.symbols.reduce(function(v,x){return v+Number(x.missing_minutes)},0);
+ set('candles',fmt.format(total));set('gaps',fmt.format(gaps));set('dbsize',mb(d.storage.database_bytes));set('tablesize',mb(d.storage.candles_total_bytes));
+ var connected=d.stream.connected&&Date.now()-d.stream.lastDataAt<90000;set('status-text',connected?'Collecting':'Stream offline');
+ document.getElementById('status').style.cssText=connected?'':'background:#fff0e6;color:#ac5418';
+ var container=document.getElementById('coins');container.replaceChildren();
+ symbols.forEach(function(symbol){
+ var s=d.symbols.find(function(r){return r.symbol===symbol})||{};
+ var article=document.createElement('article');article.className='card coin';
+ var title=document.createElement('strong');title.textContent=symbol;article.appendChild(title);
+ var n=document.createElement('div');n.className='count';n.textContent=fmt.format(Number(s.confirmed||0))+' candles';article.appendChild(n);
+ var note=document.createElement('div');note.className='metric-note';note.textContent=Number(s.missing_minutes||0)+' missing minutes · latest: '+(s.last_at?new Date(s.last_at).toISOString().slice(11,16)+' UTC':'none');article.appendChild(note);
+ container.appendChild(article)});
+ set('updated','Checked '+new Date().toLocaleTimeString());
+ }catch(e){set('status-text','API unavailable');document.getElementById('status').style.cssText='background:#ffeded;color:#b73333';set('updated','Cannot reach server')}
+ await Promise.all([loadChart(),refreshSignals(),refreshBacktest(),refreshComparison()]);
+}
+document.querySelectorAll('[data-symbol]').forEach(function(el){el.addEventListener('click',function(){active=el.dataset.symbol;document.querySelectorAll('[data-symbol]').forEach(function(tab){tab.classList.toggle('active',tab===el)});void loadChart();void refreshSignals();void refreshBacktest()})});
+document.querySelectorAll('[data-mode]').forEach(function(el){el.addEventListener('click',function(){mode=el.dataset.mode;document.querySelectorAll('[data-mode]').forEach(function(tab){tab.classList.toggle('active',tab===el)});void loadChart()})});
+document.querySelectorAll('[data-period]').forEach(function(el){el.addEventListener('click',function(){period=Number(el.dataset.period);document.querySelectorAll('[data-period]').forEach(function(tab){tab.classList.toggle('active',tab===el)});void loadChart()})});
+document.getElementById('run-backtest').addEventListener('click',function(){void refreshBacktest()});
+document.querySelectorAll('[data-page]').forEach(function(button){button.addEventListener('click',function(){
+ var page=button.dataset.page;
+ document.getElementById('market-page').hidden=page!=='market';
+ document.getElementById('trades-page').hidden=page!=='trades';
+ document.querySelectorAll('[data-page]').forEach(function(item){item.classList.toggle('active',item===button);item.setAttribute('aria-selected',String(item===button))});
+})});
+var svg=document.getElementById('plot');
+svg.addEventListener('pointerdown',function(e){
+ if(e.pointerType==='touch')touchX=e.clientX;
+});
+svg.addEventListener('pointerup',function(e){
+ if(touchX!==null&&Math.abs(e.clientX-touchX)>22){
+  offset+=Math.round((e.clientX-touchX)/Math.max(1,svg.clientWidth)*visibleCount);
+  offset=Math.max(0,Math.min(allRows.length-visibleCount,offset));redraw();touchX=null;return;
+ }
+ touchX=null;
+ var rect=svg.getBoundingClientRect();
+ var x=(e.clientX-rect.left)/rect.width*900;
+ var rows=viewport();
+ if(rows.length){var idx=mode==='candles'?Math.floor((x-20)/860*rows.length):Math.round((x-20)/860*(rows.length-1));inspectIndex(idx)}
+});
+svg.addEventListener('wheel',function(e){
+ if(!allRows.length)return;
+ e.preventDefault();
+ if(e.ctrlKey){visibleCount=Math.max(12,Math.min(allRows.length,visibleCount+(e.deltaY>0?12:-12)))}
+ else{offset=Math.max(0,Math.min(allRows.length-visibleCount,offset+(e.deltaY>0?10:-10)))}
+ redraw();
+},{passive:false});
+document.getElementById('zoom-in').addEventListener('click',function(){visibleCount=Math.max(12,visibleCount-12);redraw()});
+document.getElementById('zoom-out').addEventListener('click',function(){visibleCount=Math.min(allRows.length,visibleCount+12);redraw()});
+document.getElementById('older').addEventListener('click',function(){offset=Math.min(Math.max(0,allRows.length-visibleCount),offset+Math.max(5,Math.floor(visibleCount/2)));redraw()});
+document.getElementById('latest').addEventListener('click',function(){offset=0;redraw()});
+refresh();setInterval(refresh,30000);
+</script></body></html>`;]))});
+ }catch(e){set('paper-note','Paper Trading временно недоступен')}
 }
 async function refreshBacktest(){
  var symbol=active;
