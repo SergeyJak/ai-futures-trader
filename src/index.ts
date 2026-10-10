@@ -1,5 +1,6 @@
 import 'dotenv/config';
-import http from 'node:http';import {backtest} from './backtest.js';import {analyze} from './indicators.js';import {dashboardHtml} from './dashboard.js';import {MINUTE,missingRanges,fetchHistory} from './backfill.js';import {Database} from './database.js';import {MarketStream} from './market.js';
+import http from 'node:http';import {backtest} from './backtest.js';
+import {walkForward} from './walkforward.js';import {analyze} from './indicators.js';import {dashboardHtml} from './dashboard.js';import {MINUTE,missingRanges,fetchHistory} from './backfill.js';import {Database} from './database.js';import {MarketStream} from './market.js';
 const port=Number(process.env.PORT??3000);const url=process.env.DATABASE_URL;
 const endpoint=process.env.BYBIT_PUBLIC_WS??'wss://stream.bybit.com/v5/public/linear';
 const symbols=(process.env.MARKET_SYMBOLS??'BTCUSDT,ETHUSDT,SOLUSDT').split(',').map(s=>s.trim().toUpperCase());
@@ -21,7 +22,7 @@ const server=http.createServer(async(req,res)=>{
  if(req.url==='/api/backtest-compare'){
   try{
    const results=[];
-   for(const symbol of symbols){const rows=await db.recentCandles(symbol,12000);for(const strategy of ['momentum','trend','reversal'] as const){const result=backtest(rows,1000,strategy);results.push({symbol,bars:rows.length,from:rows[0]?.start_at??null,to:rows.at(-1)?.start_at??null,...result,tradeHistory:undefined})}}
+   for(const symbol of symbols){const rows=await db.recentCandles(symbol,12000);for(const strategy of ['momentum','trend','reversal'] as const){const result=backtest(rows,1000,strategy);results.push({symbol,bars:rows.length,from:rows[0]?.start_at??null,to:rows.at(-1)?.start_at??null,...result,holdout:walkForward(rows,strategy),tradeHistory:undefined})}}
    res.writeHead(200).end(JSON.stringify({results,method:'Momentum versus EMA trend versus RSI reversal; same fee, slippage, stop, take and sizing; 1 position per strategy'}));
   }catch(e){console.error('Backtest comparison error',e);res.writeHead(503).end(JSON.stringify({error:'Comparison unavailable'}))}
   return;
