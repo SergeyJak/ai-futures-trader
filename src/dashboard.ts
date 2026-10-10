@@ -222,4 +222,4 @@ document.getElementById('zoom-out').addEventListener('click',function(){visibleC
 document.getElementById('older').addEventListener('click',function(){offset=Math.min(Math.max(0,allRows.length-visibleCount),offset+Math.max(5,Math.floor(visibleCount/2)));redraw()});
 document.getElementById('latest').addEventListener('click',function(){offset=0;redraw()});
 refresh();setInterval(refresh,30000);
-</script></body></html>`;+usd.format(balance));
+</script></body></html>`;
