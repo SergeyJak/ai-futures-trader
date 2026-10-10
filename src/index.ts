@@ -9,7 +9,7 @@ const symbols=(process.env.MARKET_SYMBOLS??'BTCUSDT,ETHUSDT,SOLUSDT').split(',')
 if(!url)throw new Error('DATABASE_URL required');
 if(!endpoint.startsWith('wss://'))throw new Error('Secure WebSocket required');
 if(!Number.isInteger(port)||port<1||port>65535)throw new Error('Invalid port');
-const db=new Database(url);await db.init();await db.initExperiments();await db.initShadow();const stream=new MarketStream(endpoint,symbols,db);stream.start();
+const db=new Database(url);await db.init();await db.initExperiments();await db.initShadow();await db.initV3();const stream=new MarketStream(endpoint,symbols,db);stream.start();
 const server=http.createServer(async(req,res)=>{
  res.setHeader('cache-control','no-store');
  res.setHeader('x-content-type-options','nosniff');
@@ -27,6 +27,11 @@ const server=http.createServer(async(req,res)=>{
   if(!Number.isInteger(id)||id<1||id>11){res.writeHead(400).end(JSON.stringify({error:'Invalid account'}));return}
   try{res.writeHead(200).end(JSON.stringify(await db.shadowAccountDetails(id)))}
   catch(e){console.error('Shadow account error',e);res.writeHead(503).end(JSON.stringify({error:'Shadow account unavailable'}))}
+  return;
+ }
+ if(req.url==='/api/v3'){
+  try{res.writeHead(200).end(JSON.stringify(await db.v3Report()))}
+  catch(e){console.error('V3 report error',e);res.writeHead(503).end(JSON.stringify({error:'v3 unavailable'}))}
   return;
  }
  if(req.url==='/api/pairs'){
@@ -223,10 +228,10 @@ async function repair(){
 const repairTimer=setInterval(()=>{void repair()},300000);
 setTimeout(()=>{void repair()},10000);
 let paperRunning=false;
-async function runPaper(){if(paperRunning||closing)return;paperRunning=true;try{await db.paperTick(symbols);await db.recordOriginalSnapshot();await db.runExperiments();await db.runShadow()}catch(e){console.error('PAPER_ERROR',e)}finally{paperRunning=false}}
+async function runPaper(){if(paperRunning||closing)return;paperRunning=true;try{await db.paperTick(symbols);await db.recordOriginalSnapshot();await db.runExperiments();await db.runShadow();const v3=await db.runV3();if(v3.opened||v3.closed||v3.gaps)console.info('V3_TICK',JSON.stringify(v3))}catch(e){console.error('PAPER_ERROR',e)}finally{paperRunning=false}}
 const paperTimer=setInterval(()=>{void runPaper()},15000);setTimeout(()=>{void runPaper()},20000);
 async function reportTelemetry(){
- try{console.info('AI_FUTURES_ACCOUNTS',JSON.stringify(await db.telemetrySnapshot()));console.info('AI_FUTURES_PAIRS',JSON.stringify(await db.pairedDiagnostics()))}
+ try{console.info('AI_FUTURES_ACCOUNTS',JSON.stringify(await db.telemetrySnapshot()));console.info('AI_FUTURES_PAIRS',JSON.stringify(await db.pairedDiagnostics()));const v3=await db.v3Report();console.info('AI_FUTURES_V3',JSON.stringify({at:v3.at,configs:v3.configs,accounts:v3.accounts.filter((a:any)=>a.trades>0||a.position).slice(0,12),active:v3.accounts.filter((a:any)=>a.position).length,closed:v3.accounts.reduce((n:number,a:any)=>n+a.trades,0)}))}
  catch(e){console.error('AI_FUTURES_ACCOUNTS_ERROR',e)}
 }
 const telemetryTimer=setInterval(()=>{void reportTelemetry()},300000);
