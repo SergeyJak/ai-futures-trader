@@ -1,4 +1,4 @@
-import pg from 'pg';import {paperTick} from './paper.js';import type {Candle} from './candles.js';
+import pg from 'pg';import {paperTick} from './paper.js';import {EXPERIMENTS,runExperiments} from './experiments.js';import type {Candle} from './candles.js';
 export class Database{
  private pool:pg.Pool;
  constructor(url:string){this.pool=new pg.Pool({connectionString:url,max:5});}
@@ -9,6 +9,18 @@ export class Database{
  await this.pool.query(`CREATE TABLE IF NOT EXISTS paper_account(id INTEGER PRIMARY KEY CHECK(id=1),balance NUMERIC NOT NULL,last_at TIMESTAMPTZ,position JSONB,updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
  await this.pool.query(`INSERT INTO paper_account(id,balance) VALUES(1,100) ON CONFLICT(id) DO NOTHING`);
  await this.pool.query(`CREATE TABLE IF NOT EXISTS paper_trades(id BIGSERIAL PRIMARY KEY,symbol TEXT NOT NULL,side TEXT NOT NULL,quantity NUMERIC NOT NULL,entry_price NUMERIC NOT NULL,exit_price NUMERIC NOT NULL,entry_at TIMESTAMPTZ NOT NULL,exit_at TIMESTAMPTZ NOT NULL,pnl NUMERIC NOT NULL,reason TEXT NOT NULL)`)}
+ async initExperiments(){
+  await this.pool.query('CREATE TABLE IF NOT EXISTS paper_variants(id INTEGER PRIMARY KEY,balance NUMERIC NOT NULL,last_at TIMESTAMPTZ,position JSONB,updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())');
+  await this.pool.query('ALTER TABLE paper_trades ADD COLUMN IF NOT EXISTS account_id INTEGER NOT NULL DEFAULT 1');
+  await this.pool.query('CREATE INDEX IF NOT EXISTS paper_trades_by_account ON paper_trades(account_id,id DESC)');
+  for(const cfg of EXPERIMENTS)await this.pool.query('INSERT INTO paper_variants(id,balance) VALUES($1,100) ON CONFLICT(id) DO NOTHING',[cfg.id]);
+ }
+ async runExperiments(){return runExperiments(this.pool)}
+ async paperAccounts(){
+  const a=await this.pool.query<{balance:string;position:unknown;last_at:string|null}>('SELECT balance::text,position,last_at::text FROM paper_account WHERE id=1');
+  const b=await this.pool.query<{id:number;balance:string;position:unknown;last_at:string|null}>('SELECT id,balance::text,position,last_at::text FROM paper_variants ORDER BY id');
+  return [{id:1,name:'Оригинальная',strategy:'momentum',maxUsd:100,maxMinutes:null,stop:.006,take:.012,initial:100,...a.rows[0]},...b.rows.map(x=>({initial:100,...EXPERIMENTS.find(z=>z.id===x.id),...x}))];
+ }
  async upsert(c:Candle){await this.pool.query(`INSERT INTO market_candles(symbol,start_at,open,high,low,close,volume,turnover,confirmed)
  VALUES($1,to_timestamp($2::double precision/1000),$3,$4,$5,$6,$7,$8,$9)
  ON CONFLICT(symbol,start_at) DO UPDATE SET open=EXCLUDED.open,high=EXCLUDED.high,low=EXCLUDED.low,close=EXCLUDED.close,
@@ -24,7 +36,11 @@ export class Database{
   return result.rows.reverse();
  }
  async paperTick(symbols:string[]){return paperTick(this.pool,symbols)}
- async paperStatus(){const [account,trades]=await Promise.all([this.pool.query('SELECT balance::text,last_at::text,position,updated_at::text FROM paper_account WHERE id=1'),this.pool.query('SELECT symbol,side,quantity::text,entry_price::text,exit_price::text,entry_at::text,exit_at::text,pnl::text,reason FROM paper_trades ORDER BY id DESC LIMIT 50')]);return {initial:100,...account.rows[0],trades:trades.rows}}
+ async paperStatus(id=1){
+  const account=id===1?await this.pool.query('SELECT balance::text,last_at::text,position,updated_at::text FROM paper_account WHERE id=1'):await this.pool.query('SELECT balance::text,last_at::text,position,updated_at::text FROM paper_variants WHERE id=$1',[id]);
+  const trades=await this.pool.query('SELECT symbol,side,quantity::text,entry_price::text,exit_price::text,entry_at::text,exit_at::text,pnl::text,reason FROM paper_trades WHERE account_id=$1 ORDER BY id DESC LIMIT 50',[id]);
+  return {id,initial:100,...account.rows[0],trades:trades.rows};
+ }
  async ping(){await this.pool.query('SELECT 1')}
 
  async candleStats(){
