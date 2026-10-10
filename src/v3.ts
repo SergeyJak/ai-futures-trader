@@ -88,11 +88,23 @@ export async function tickV3(pool:pg.Pool){
  }catch(e){await client.query('ROLLBACK');throw e}finally{client.release()}
 }
 export async function v3Report(pool:pg.Pool){
- const q=await pool.query(`SELECT a.id,a.symbol,a.side,a.dip::float8,a.stop::float8,a.take::float8,a.hold,a.balance::float8,a.last_at::text,a.position,
+ const q=await pool.query(`WITH steps AS (
+ SELECT config_id,id,100+SUM(pnl) OVER (PARTITION BY config_id ORDER BY id) AS equity
+ FROM v3_trades
+ ), peaks AS (
+ SELECT config_id,equity,GREATEST(100,MAX(equity) OVER (PARTITION BY config_id ORDER BY id)) AS peak FROM steps
+ ), drawdowns AS (
+ SELECT config_id,COALESCE(MAX((peak-equity)/NULLIF(peak,0)),0)::float8 AS max_drawdown_closed FROM peaks GROUP BY config_id
+ )
+ SELECT a.id,a.symbol,a.side,a.dip::float8,a.stop::float8,a.take::float8,a.hold,a.balance::float8,a.last_at::text,a.position,
+ COALESCE(d.max_drawdown_closed,0) AS max_drawdown_closed,
  COUNT(t.id)::int AS trades,COUNT(t.id) FILTER(WHERE t.pnl>0)::int AS wins,
  COALESCE(SUM(t.pnl),0)::float8 AS realized_pnl,
  COALESCE(SUM(t.fee_entry+t.fee_exit),0)::float8 AS fees,
- COALESCE(SUM(t.pnl+t.fee_entry+t.fee_exit),0)::float8 AS gross_after_slippage
- FROM v3_accounts a LEFT JOIN v3_trades t ON t.config_id=a.id GROUP BY a.id ORDER BY a.symbol,a.dip,a.stop,a.take,a.hold,a.side`);
+ COALESCE(SUM(t.pnl+t.fee_entry+t.fee_exit),0)::float8 AS gross_after_slippage,
+ COALESCE(SUM(t.pnl) FILTER(WHERE t.pnl>0),0)::float8 AS gross_wins,
+ COALESCE(SUM(t.pnl) FILTER(WHERE t.pnl<0),0)::float8 AS gross_losses
+ FROM v3_accounts a LEFT JOIN v3_trades t ON t.config_id=a.id LEFT JOIN drawdowns d ON d.config_id=a.id
+ GROUP BY a.id,d.max_drawdown_closed ORDER BY a.symbol,a.dip,a.stop,a.take,a.hold,a.side`);
  return {version:'v3-forward-only',at:new Date().toISOString(),initialBalance:100,configs:q.rows.length,accounts:q.rows};
 }
