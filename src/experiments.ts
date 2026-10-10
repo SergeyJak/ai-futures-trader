@@ -7,11 +7,21 @@ export const EXPERIMENTS=[
  {id:3,name:'Следование тренду',strategy:'trend' as Strategy,maxUsd:40,maxMinutes:60,stop:.006,take:.012,risk:.004,symbols:['ETHUSDT','SOLUSDT']},
  {id:4,name:'RSI разворот',strategy:'reversal' as Strategy,maxUsd:20,maxMinutes:15,stop:.004,take:.008,risk:.002,symbols:['SOLUSDT','ETHUSDT']},
  {id:5,name:'Импульс',strategy:'momentum' as Strategy,maxUsd:60,maxMinutes:90,stop:.008,take:.016,risk:.005,symbols:['SOLUSDT','ETHUSDT']},
- {id:6,name:'Микро 5 минут',strategy:'momentum' as Strategy,maxUsd:5,maxMinutes:5,stop:.004,take:.008,risk:.002,symbols:['SOLUSDT','ETHUSDT']}
+ {id:6,name:'Микро 5 минут',strategy:'momentum' as Strategy,maxUsd:5,leverage:5,maxMinutes:5,stop:.004,take:.008,risk:.002,symbols:['SOLUSDT','ETHUSDT']}
 ] as const;
 type Bar={start_at:string;open:string;high:string;low:string;close:string;volume:string};
 type Pos={symbol:string;side:'LONG'|'SHORT';qty:number;entry:number;stop:number;take:number;entryAt:string};
 const fee=.0006,slip=.0002;
+export function microQuantity(symbol:string,price:number,balance:number,marginCap=5,leverage=5,stop=.004,risk=.002){
+ if(!Number.isFinite(balance)||balance<=0||leverage<1||leverage>5)return 0;
+ const margin=Math.min(marginCap,balance);
+ const riskNotional=balance*risk/stop;
+ const maxNotional=Math.min(margin*leverage,riskNotional,(balance-margin)*0+balance*leverage);
+ const rules= symbol==='SOLUSDT'?0.1:symbol==='ETHUSDT'?0.01:0;
+ if(!rules||!Number.isFinite(price)||price<=0)return 0;
+ const qty=Number((Math.floor(maxNotional/price/rules+1e-9)*rules).toFixed(8));
+ return qty*price/leverage+qty*price*fee<=balance+1e-8?qty:0;
+}
 export function entryDirection(rows:Bar[],strategy:Strategy):'LONG'|'SHORT'|null{
  const s=analyze(rows);
  if(strategy==='momentum')return s.signal==='BULLISH_WATCH'?'LONG':s.signal==='BEARISH_WATCH'?'SHORT':null;
@@ -65,7 +75,7 @@ export async function runExperiments(pool:pg.Pool){
       const side=entryDirection(e.history.slice(Math.max(0,e.index-240),e.index),cfg.strategy);
       if(!side)continue;
       const price=Number(e.bar.open)*(side==='LONG'?1+slip:1-slip);
-      const qty=feasibleQuantity(symbol,price,Math.min(balance,cfg.maxUsd),cfg.risk,cfg.stop,fee);
+      const qty=cfg.id===6?microQuantity(symbol,price,balance):feasibleQuantity(symbol,price,Math.min(balance,cfg.maxUsd),cfg.risk,cfg.stop,fee);
       if(!qty)continue;
       balance-=qty*price*fee;
       position={symbol,side,qty,entry:price,stop:price*(side==='LONG'?1-cfg.stop:1+cfg.stop),take:price*(side==='LONG'?1+cfg.take:1-cfg.take),entryAt:new Date(ms).toISOString()};
