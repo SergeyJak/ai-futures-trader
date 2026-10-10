@@ -13,5 +13,20 @@ export class Database{
  WHERE market_candles.confirmed=false OR EXCLUDED.confirmed=true`,
  [c.symbol,c.startMs,c.open,c.high,c.low,c.close,c.volume,c.turnover,c.confirmed])}
  async ping(){await this.pool.query('SELECT 1')}
+
+ async candleStats(){
+  const result=await this.pool.query<{
+   symbol:string; rows:string; confirmed:string; first_at:string|null; last_at:string|null; missing_minutes:string;
+  }>(`WITH ordered AS (
+    SELECT symbol, start_at, confirmed,
+      LAG(start_at) OVER (PARTITION BY symbol ORDER BY start_at) AS previous_at
+    FROM market_candles
+  ) SELECT symbol, COUNT(*)::text AS rows,
+    COUNT(*) FILTER (WHERE confirmed)::text AS confirmed,
+    MIN(start_at)::text AS first_at, MAX(start_at)::text AS last_at,
+    COALESCE(SUM(GREATEST(0, (EXTRACT(EPOCH FROM (start_at-previous_at))/60)::bigint-1)),0)::text AS missing_minutes
+    FROM ordered GROUP BY symbol ORDER BY symbol`);
+  return result.rows;
+ }
  async close(){await this.pool.end()}
 }
