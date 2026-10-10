@@ -7,7 +7,7 @@ const symbols=(process.env.MARKET_SYMBOLS??'BTCUSDT,ETHUSDT,SOLUSDT').split(',')
 if(!url)throw new Error('DATABASE_URL required');
 if(!endpoint.startsWith('wss://'))throw new Error('Secure WebSocket required');
 if(!Number.isInteger(port)||port<1||port>65535)throw new Error('Invalid port');
-const db=new Database(url);await db.init();const stream=new MarketStream(endpoint,symbols,db);stream.start();
+const db=new Database(url);await db.init();await db.initExperiments();const stream=new MarketStream(endpoint,symbols,db);stream.start();
 const server=http.createServer(async(req,res)=>{
  res.setHeader('cache-control','no-store');
  res.setHeader('x-content-type-options','nosniff');
@@ -19,7 +19,12 @@ const server=http.createServer(async(req,res)=>{
   catch(e){console.error('Dashboard overview error',e);res.writeHead(503).end(JSON.stringify({error:'Data unavailable'}))}
   return;
  }
- if(req.url==='/api/paper'){try{const status=await db.paperStatus();res.writeHead(200).end(JSON.stringify(status))}catch(e){console.error('Paper status error',e);res.writeHead(503).end(JSON.stringify({error:'Unavailable'}))}return}
+ if(req.url==='/api/paper-accounts'){try{res.writeHead(200).end(JSON.stringify({accounts:await db.paperAccounts()}))}catch(e){console.error('Paper accounts error',e);res.writeHead(503).end(JSON.stringify({error:'Unavailable'}))}return}
+ if(req.url?.startsWith('/api/paper?')||req.url==='/api/paper'){
+  const id=Number(new URL(req.url,'http://localhost').searchParams.get('account')??'1');
+  if(!Number.isInteger(id)||id<1||id>5){res.writeHead(400).end(JSON.stringify({error:'Invalid account'}));return}
+  try{const status=await db.paperStatus(id);res.writeHead(200).end(JSON.stringify(status))}catch(e){console.error('Paper status error',e);res.writeHead(503).end(JSON.stringify({error:'Unavailable'}))}return
+ }
  if(req.url==='/api/backtest-compare'){
   try{
    const results=[];
@@ -130,7 +135,7 @@ async function repair(){
 const repairTimer=setInterval(()=>{void repair()},300000);
 setTimeout(()=>{void repair()},10000);
 let paperRunning=false;
-async function runPaper(){if(paperRunning||closing)return;paperRunning=true;try{await db.paperTick(symbols)}catch(e){console.error('PAPER_ERROR',e)}finally{paperRunning=false}}
+async function runPaper(){if(paperRunning||closing)return;paperRunning=true;try{await db.paperTick(symbols);await db.runExperiments()}catch(e){console.error('PAPER_ERROR',e)}finally{paperRunning=false}}
 const paperTimer=setInterval(()=>{void runPaper()},15000);setTimeout(()=>{void runPaper()},20000);
 const statsTimer=setInterval(()=>{void reportStats()},60000);
 void reportStats();
