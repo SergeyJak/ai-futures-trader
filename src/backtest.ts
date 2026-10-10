@@ -2,7 +2,7 @@ import {analyze} from './indicators.js';
 export type Bar={start_at:string;open:string;high:string;low:string;close:string;volume:string};
 export type Trade={side:'LONG'|'SHORT';entryAt:string;exitAt:string;entry:number;exit:number;pnl:number;reason:string};
 export type Strategy='momentum'|'trend'|'reversal';
-export function backtest(rows:Bar[],initial=1000,strategy:Strategy='momentum'){
+export function backtest(rows:Bar[],initial=100,strategy:Strategy='momentum'){
  const fee=.0006,slippage=.0002,risk=.005,stopDistance=.006,takeDistance=.012;
  let equity=initial,peak=initial,maxDrawdown=0;const trades:Trade[]=[];
  let position:null|{side:'LONG'|'SHORT';entry:number;stop:number;take:number;quantity:number;entryAt:string}=null;
