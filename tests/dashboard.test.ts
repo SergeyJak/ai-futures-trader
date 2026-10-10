@@ -1,13 +1,5 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {dashboardHtml} from '../src/dashboard.js';
-test('dashboard has responsive viewport and monitored symbols',()=>{
- assert.match(dashboardHtml,/name="viewport"/);
- for(const symbol of ['BTCUSDT','ETHUSDT','SOLUSDT'])assert.ok(dashboardHtml.includes(symbol));
-});
-test('dashboard uses read-only APIs and escapes dynamic content via textContent',()=>{
- assert.match(dashboardHtml,/\/api\/overview/);
- assert.match(dashboardHtml,/\/api\/candles/);
- assert.match(dashboardHtml,/textContent=/);
- assert.doesNotMatch(dashboardHtml,/innerHTML/);
-});
+test('home prioritizes paper account and position with mobile viewport',()=>{assert.match(dashboardHtml,/name="viewport"/);assert.match(dashboardHtml,/id="balance"/);assert.match(dashboardHtml,/id="equity"/);assert.match(dashboardHtml,/id="active-position"/);assert.match(dashboardHtml,/id="trades"/)});
+test('dashboard reads only simulated trades and escapes dynamic fields',()=>{assert.match(dashboardHtml,/\/api\/paper/);assert.match(dashboardHtml,/\/api\/candles/);assert.match(dashboardHtml,/textContent=/);assert.doesNotMatch(dashboardHtml,/innerHTML/)});
