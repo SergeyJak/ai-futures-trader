@@ -1,3 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {dashboardHtml} from '../src/dashboard.js';import {readFileSync} from 'node:fs';
 test('dashboard exposes distinct v1 and v2 with all 11 accounts',()=>{for(const v of ['version-v1','version-v2','v1-view','v2-view','shadow-comparison','shadow-trades','shadowAccountId','switchVersion','/api/shadow-compare','/api/shadow-account?account='])assert.ok(dashboardHtml.includes(v),v);assert.ok(dashboardHtml.includes('a.account_id'))});
 test('v2 endpoints remain bounded read-only',()=>{const source=readFileSync('src/index.ts','utf8');assert.ok(source.includes('/api/shadow-account?'));assert.ok(source.includes('db.shadowAccountDetails(id)'));assert.ok(source.includes('id>11'))});
+
+test('dashboard initializes DOM lookup before switch listeners execute',()=>{const helper=dashboardHtml.indexOf('const el=id=>document.getElementById(id)');const listener=dashboardHtml.indexOf("el('version-v1').addEventListener");assert.ok(helper>=0&&listener>helper,'DOM helper must exist before handlers execute');});
