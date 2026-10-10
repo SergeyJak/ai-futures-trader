@@ -1,4 +1,4 @@
-import pg from 'pg';import {initShadow,tickShadow,shadowReport} from './shadow.js';import {paperTick} from './paper.js';import {EXPERIMENTS,runExperiments} from './experiments.js';import type {Candle} from './candles.js';
+import pg from 'pg';import {initShadow,tickShadow,shadowReport,shadowAccountDetails} from './shadow.js';import {paperTick} from './paper.js';import {EXPERIMENTS,runExperiments} from './experiments.js';import type {Candle} from './candles.js';
 export class Database{
  private pool:pg.Pool;
  constructor(url:string){this.pool=new pg.Pool({connectionString:url,max:5});}
@@ -29,6 +29,7 @@ export class Database{
  async initShadow(){return initShadow(this.pool)}
  async runShadow(){return tickShadow(this.pool)}
  async shadowReport(){return shadowReport(this.pool)}
+ async shadowAccountDetails(id:number){return shadowAccountDetails(this.pool,id)}
  async runExperiments(){return runExperiments(this.pool)}
  async paperAccounts(){
   const a=await this.pool.query<{balance:string;position:unknown;last_at:string|null}>('SELECT balance::text,position,last_at::text FROM paper_account WHERE id=1');
