@@ -231,7 +231,26 @@ async function reportTelemetry(){
 }
 const telemetryTimer=setInterval(()=>{void reportTelemetry()},300000);
 setTimeout(()=>{void reportTelemetry()},25000);
+async function reportBounceResearch(){
+ try{
+  const results=[];
+  for(const symbol of ['SOLUSDT','ETHUSDT','BTCUSDT']){
+   const rows=await db.recentCandles(symbol,4000);
+   const split=Math.floor(rows.length*.7);
+   const train=researchThirtyMinuteBounce(rows.slice(0,split)).results;
+   const validation=researchThirtyMinuteBounce(rows.slice(split)).results;
+   const ranked=validation.flatMap((cfg,i)=>[
+    {direction:'LONG',...cfg,long:undefined,short:undefined,validation:cfg.long,training:train[i].long},
+    {direction:'SHORT',...cfg,long:undefined,short:undefined,validation:cfg.short,training:train[i].short}
+   ]).filter(x=>x.validation.trades>=3).sort((a,b)=>(b.validation.avgNetPct??-Infinity)-(a.validation.avgNetPct??-Infinity));
+   results.push({symbol,candles:rows.length,trainingBars:split,validationBars:rows.length-split,bestValidation:ranked.slice(0,5).map(x=>({side:x.direction,dipPct:x.dipPct,stopPct:x.stopPct,takePct:x.takePct,training:x.training,validation:x.validation})),tested:54});
+  }
+  console.info('AI_FUTURES_BOUNCE30',JSON.stringify({at:new Date().toISOString(),method:'read-only 30m threshold-touch stop-first OHLC backtest; validation ranking is exploratory and subject to selection bias',results}));
+ }catch(e){console.error('AI_FUTURES_BOUNCE30_ERROR',e)}
+}
+const bounceResearchTimer=setInterval(()=>{void reportBounceResearch()},3600000);
+setTimeout(()=>{void reportBounceResearch()},45000);
 const statsTimer=setInterval(()=>{void reportStats()},60000);
 void reportStats();
-let closing=false;async function stop(){if(closing)return;closing=true;clearInterval(statsTimer);clearInterval(storageTimer);clearInterval(repairTimer);clearInterval(historyTimer);clearInterval(paperTimer);clearInterval(telemetryTimer);server.close();await stream.stop();await db.close();}
+let closing=false;async function stop(){if(closing)return;closing=true;clearInterval(statsTimer);clearInterval(storageTimer);clearInterval(repairTimer);clearInterval(historyTimer);clearInterval(paperTimer);clearInterval(telemetryTimer);clearInterval(bounceResearchTimer);server.close();await stream.stop();await db.close();}
 for(const sig of ['SIGINT','SIGTERM'] as const)process.on(sig,()=>{void stop().then(()=>process.exit(0))});
