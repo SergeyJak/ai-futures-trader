@@ -22,7 +22,7 @@ const server=http.createServer(async(req,res)=>{
  if(req.url==='/api/backtest-compare'){
   try{
    const results=[];
-   for(const symbol of symbols){const rows=await db.recentCandles(symbol,12000);for(const strategy of ['momentum','trend','reversal'] as const){const result=backtest(rows,100,strategy);results.push({symbol,bars:rows.length,from:rows[0]?.start_at??null,to:rows.at(-1)?.start_at??null,...result,holdout:walkForward(rows,strategy),tradeHistory:undefined})}}
+   for(const symbol of symbols){const rows=await db.recentCandles(symbol,12000);for(const strategy of ['momentum','trend','reversal'] as const){const result=backtest(rows,100,strategy,symbol);results.push({symbol,bars:rows.length,from:rows[0]?.start_at??null,to:rows.at(-1)?.start_at??null,...result,holdout:walkForward(rows,strategy,symbol),tradeHistory:undefined})}}
    res.writeHead(200).end(JSON.stringify({results,method:'Momentum versus EMA trend versus RSI reversal; same fee, slippage, stop, take and sizing; 1 position per strategy'}));
   }catch(e){console.error('Backtest comparison error',e);res.writeHead(503).end(JSON.stringify({error:'Comparison unavailable'}))}
   return;
@@ -30,7 +30,7 @@ const server=http.createServer(async(req,res)=>{
  if(req.url?.startsWith('/api/backtest?')){
   const u=new URL(req.url,'http://localhost');const symbol=u.searchParams.get('symbol')??'';
   if(!symbols.includes(symbol)){res.writeHead(400).end(JSON.stringify({error:'Invalid symbol'}));return}
-  try{const rows=await db.recentCandles(symbol,12000);res.writeHead(200).end(JSON.stringify({symbol,from:rows[0]?.start_at??null,to:rows.at(-1)?.start_at??null,bars:rows.length,...backtest(rows)}))}
+  try{const rows=await db.recentCandles(symbol,12000);res.writeHead(200).end(JSON.stringify({symbol,from:rows[0]?.start_at??null,to:rows.at(-1)?.start_at??null,bars:rows.length,...backtest(rows,100,'momentum',symbol)}))}
   catch(e){console.error('Backtest error',e);res.writeHead(503).end(JSON.stringify({error:'Backtest unavailable'}))}
   return;
  }
