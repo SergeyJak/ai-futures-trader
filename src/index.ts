@@ -22,6 +22,13 @@ const server=http.createServer(async(req,res)=>{
   catch(e){console.error('Dashboard overview error',e);res.writeHead(503).end(JSON.stringify({error:'Data unavailable'}))}
   return;
  }
+ if(req.url?.startsWith('/api/shadow-account?')){
+  const id=Number(new URL(req.url,'http://localhost').searchParams.get('account'));
+  if(!Number.isInteger(id)||id<1||id>11){res.writeHead(400).end(JSON.stringify({error:'Invalid account'}));return}
+  try{res.writeHead(200).end(JSON.stringify(await db.shadowAccountDetails(id)))}
+  catch(e){console.error('Shadow account error',e);res.writeHead(503).end(JSON.stringify({error:'Shadow account unavailable'}))}
+  return;
+ }
  if(req.url==='/api/shadow-compare'){
   try{
    const [shadow,original]=await Promise.all([db.shadowReport(),db.paperAccounts()]);
