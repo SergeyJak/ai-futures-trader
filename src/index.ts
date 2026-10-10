@@ -229,8 +229,21 @@ async function repair(){
 const repairTimer=setInterval(()=>{void repair()},300000);
 setTimeout(()=>{void repair()},10000);
 let paperRunning=false;
-async function runPaper(){if(paperRunning||closing)return;paperRunning=true;try{await db.paperTick(symbols);await db.recordOriginalSnapshot();await db.runExperiments();await db.runShadow();const v3=await db.runV3();if(v3.opened||v3.closed||v3.gaps)console.info('V3_TICK',JSON.stringify(v3))}catch(e){console.error('PAPER_ERROR',e)}finally{paperRunning=false}}
+async function runPaper(){if(paperRunning||closing)return;paperRunning=true;try{await db.paperTick(symbols);await db.recordOriginalSnapshot();await db.runExperiments();await db.runShadow()}catch(e){console.error('PAPER_ERROR',e)}finally{paperRunning=false}}
 const paperTimer=setInterval(()=>{void runPaper()},15000);setTimeout(()=>{void runPaper()},20000);
+let v3Running=false;
+async function runIndependentV3(){
+ if(v3Running||closing)return;
+ v3Running=true;
+ try{
+  const result=await db.runV3();
+  if(result.changed||result.opened||result.closed||result.gaps)console.info('V3_TICK',JSON.stringify({at:new Date().toISOString(),...result}));
+ }catch(e){console.error('V3_TICK_ERROR',e)}
+ finally{v3Running=false}
+}
+const v3Timer=setInterval(()=>{void runIndependentV3()},15000);
+setTimeout(()=>{void runIndependentV3()},12000);
+
 async function reportTelemetry(){
  try{console.info('AI_FUTURES_ACCOUNTS',JSON.stringify(await db.telemetrySnapshot()));console.info('AI_FUTURES_PAIRS',JSON.stringify(await db.pairedDiagnostics()));const v3=await db.v3Report();console.info('AI_FUTURES_V3',JSON.stringify({at:v3.at,configs:v3.configs,accounts:v3.accounts.filter((a:any)=>a.trades>0||a.position).slice(0,12),active:v3.accounts.filter((a:any)=>a.position).length,closed:v3.accounts.reduce((n:number,a:any)=>n+a.trades,0),processed:v3.accounts.filter((a:any)=>a.last_at).length,lastAt:v3.accounts.reduce((max:string,a:any)=>a.last_at&&a.last_at>max?a.last_at:max,'')}))}
  catch(e){console.error('AI_FUTURES_ACCOUNTS_ERROR',e)}
@@ -258,5 +271,5 @@ const bounceResearchTimer=setInterval(()=>{void reportBounceResearch()},3600000)
 setTimeout(()=>{void reportBounceResearch()},45000);
 const statsTimer=setInterval(()=>{void reportStats()},60000);
 void reportStats();
-let closing=false;async function stop(){if(closing)return;closing=true;clearInterval(statsTimer);clearInterval(storageTimer);clearInterval(repairTimer);clearInterval(historyTimer);clearInterval(paperTimer);clearInterval(telemetryTimer);clearInterval(bounceResearchTimer);server.close();await stream.stop();await db.close();}
+let closing=false;async function stop(){if(closing)return;closing=true;clearInterval(statsTimer);clearInterval(storageTimer);clearInterval(repairTimer);clearInterval(historyTimer);clearInterval(paperTimer);clearInterval(telemetryTimer);clearInterval(bounceResearchTimer);clearInterval(v3Timer);server.close();await stream.stop();await db.close();}
 for(const sig of ['SIGINT','SIGTERM'] as const)process.on(sig,()=>{void stop().then(()=>process.exit(0))});
