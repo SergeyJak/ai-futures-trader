@@ -71,6 +71,22 @@ export class Database{
   }
   return {trades:q.rows,candles:Object.fromEntries(candles),sampleLimit:5000};
  }
+ async telemetrySnapshot(){
+  const [original,variants,shadow,v1Trades,v2Trades]=await Promise.all([
+   this.pool.query('SELECT balance::text,position,last_at::text FROM paper_account WHERE id=1'),
+   this.pool.query('SELECT id,balance::text,position,last_at::text FROM paper_variants ORDER BY id'),
+   this.pool.query('SELECT account_id,balance::text,position,last_at::text FROM shadow_accounts ORDER BY account_id'),
+   this.pool.query('SELECT account_id,COUNT(*)::int AS trades,COUNT(*) FILTER(WHERE pnl>0)::int AS wins,COALESCE(SUM(pnl),0)::text AS pnl FROM paper_trades GROUP BY account_id'),
+   this.pool.query('SELECT account_id,COUNT(*)::int AS trades,COUNT(*) FILTER(WHERE pnl>0)::int AS wins,COALESCE(SUM(pnl),0)::text AS pnl FROM shadow_trades GROUP BY account_id')
+  ]);
+  const make=(id:number,row:{balance:string;position:unknown;last_at:string|null},trades:typeof v1Trades.rows)=>{
+   const stat=trades.find(x=>x.account_id===id);
+   return {id,balance:Number(row.balance),pnlFrom100:Number(row.balance)-100,trades:stat?.trades??0,wins:stat?.wins??0,realizedPnl:Number(stat?.pnl??0),position:row.position,lastAt:row.last_at};
+  };
+  const first=original.rows[0];const v1=[make(1,first,v1Trades.rows),...variants.rows.map(a=>make(a.id,a,v1Trades.rows))];
+  const v2=shadow.rows.map(a=>make(a.account_id,a,v2Trades.rows));
+  return {at:new Date().toISOString(),v1,v2};
+ }
  async paperDiagnostics(id:number){
   if(!Number.isInteger(id)||id<1||id>11)throw Error('Invalid account');
   const [events,counts,equity,stats]=await Promise.all([
