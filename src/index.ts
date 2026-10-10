@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import http from 'node:http';import {analyze} from './indicators.js';import {dashboardHtml} from './dashboard.js';import {MINUTE,missingRanges,fetchHistory} from './backfill.js';import {Database} from './database.js';import {MarketStream} from './market.js';
+import http from 'node:http';import {backtest} from './backtest.js';import {analyze} from './indicators.js';import {dashboardHtml} from './dashboard.js';import {MINUTE,missingRanges,fetchHistory} from './backfill.js';import {Database} from './database.js';import {MarketStream} from './market.js';
 const port=Number(process.env.PORT??3000);const url=process.env.DATABASE_URL;
 const endpoint=process.env.BYBIT_PUBLIC_WS??'wss://stream.bybit.com/v5/public/linear';
 const symbols=(process.env.MARKET_SYMBOLS??'BTCUSDT,ETHUSDT,SOLUSDT').split(',').map(s=>s.trim().toUpperCase());
@@ -16,6 +16,13 @@ const server=http.createServer(async(req,res)=>{
  if(req.url==='/api/overview'){
   try{const [stats,storage]=await Promise.all([db.candleStats(),db.storageStats()]);res.writeHead(200).end(JSON.stringify({symbols:stats,storage,stream:stream.status,updatedAt:new Date().toISOString()}))}
   catch(e){console.error('Dashboard overview error',e);res.writeHead(503).end(JSON.stringify({error:'Data unavailable'}))}
+  return;
+ }
+ if(req.url?.startsWith('/api/backtest?')){
+  const u=new URL(req.url,'http://localhost');const symbol=u.searchParams.get('symbol')??'';
+  if(!symbols.includes(symbol)){res.writeHead(400).end(JSON.stringify({error:'Invalid symbol'}));return}
+  try{const rows=await db.recentCandles(symbol,1500);res.writeHead(200).end(JSON.stringify({symbol,from:rows[0]?.start_at??null,to:rows.at(-1)?.start_at??null,bars:rows.length,...backtest(rows)}))}
+  catch(e){console.error('Backtest error',e);res.writeHead(503).end(JSON.stringify({error:'Backtest unavailable'}))}
   return;
  }
  if(req.url?.startsWith('/api/signals?')){
