@@ -36,6 +36,7 @@ export const dashboardHtml = `<!doctype html>
 <dialog id="trade-dialog" class="trade-dialog" aria-labelledby="trade-dialog-title"><div class="dialog-body"><div class="dialog-top"><div><h2 id="trade-dialog-title">Детали сделки</h2><div id="trade-dialog-meta" class="trade-info"></div></div><button class="dialog-close" id="trade-dialog-close" type="button" aria-label="Закрыть окно" title="Закрыть">×</button></div><div id="trade-dialog-chart" class="trade-chart">Загрузка свечей…</div><div class="trade-key"><span>● Синий: вход</span><span id="trade-exit-key">● Оранжевый: выход</span><span>Синяя линия: цена исполнения входа · маленькие пустые кружки: цена до проскальзывания</span></div><p class="trade-info" id="trade-dialog-note"></p></div></dialog><p class="foot" id="updated">Данные обновляются каждые 15 секунд. Только симуляция, реальные деньги не используются.</p>
 </main><script>
 'use strict';
+const el=id=>document.getElementById(id);
 let accountId=1;let currentAccounts=[];let requestId=0;
 let activeVersion='v1',shadowAccountId=1,shadowRequest=0,shadowAccounts=[];
 function switchVersion(v){
@@ -84,7 +85,7 @@ async function loadShadowDetails(){
 
 const money=new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',minimumFractionDigits:2,maximumFractionDigits:2});
 const quantity=new Intl.NumberFormat('en-US',{maximumFractionDigits:6});
-const el=id=>document.getElementById(id);
+
 const set=(id,value)=>el(id).textContent=String(value);
 function currencyClass(node,n){node.classList.remove('positive','negative');if(n>0)node.classList.add('positive');if(n<0)node.classList.add('negative')}
 function cell(row,text,className){const e=document.createElement('div');e.textContent=String(text);if(className)e.className=className;row.appendChild(e);return e}
