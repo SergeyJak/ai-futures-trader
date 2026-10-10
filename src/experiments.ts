@@ -77,7 +77,8 @@ export async function runExperiments(pool:pg.Pool){
     if(!position&&!exited){
      for(const symbol of cfg.symbols){
       const e=entries.get(symbol)!;
-      const side=entryDirection(e.history.slice(Math.max(0,e.index-240),e.index),cfg.strategy);
+      const history=e.history.slice(Math.max(0,e.index-240),e.index);
+      const side=cfg.id>=7?researchSignal(history,cfg.strategy as 'squeeze'|'regime'|'sweep'|'quarter'):entryDirection(history,cfg.strategy as Strategy);
       if(!side)continue;
       const price=Number(e.bar.open)*(side==='LONG'?1+slip:1-slip);
       const qty=cfg.id===6?microQuantity(symbol,price,balance):feasibleQuantity(symbol,price,Math.min(balance,cfg.maxUsd),cfg.risk,cfg.stop,fee);
