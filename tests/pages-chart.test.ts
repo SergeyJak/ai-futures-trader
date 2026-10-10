@@ -8,3 +8,5 @@ test('research page charts use independent holdout',()=>{assert.match(researchHt
 test('market chart supports zoom pan and per-account trade overlays',()=>{for(const token of ['zoom-in','zoom-out','pan-left','pan-right','latest','entry_price','exit_price','Stop Loss','Take Profit','api/paper?account='])assert.ok(marketHtml.includes(token),token)});
 
 test('mobile chart auto scales from candles and clips distant levels',()=>{assert.match(marketHtml,/candleHigh\+margin/);assert.match(marketHtml,/clampY\(price\)/);assert.match(marketHtml,/chart-controls/);assert.match(marketHtml,/pinchDistance/);assert.match(marketHtml,/touchmove/)});
+
+test('trade summary and compact clipping labels appear on market chart',()=>{assert.match(marketHtml,/id="trade-summary"/);assert.match(marketHtml,/function tradeSummary/);assert.match(marketHtml,/draw\(p\.stop.*'SL'/);assert.match(marketHtml,/draw\(p\.take.*'TP'/);assert.match(marketHtml,/left===Infinity/)});
