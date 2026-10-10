@@ -26,8 +26,8 @@ const server=http.createServer(async(req,res)=>{
   try{
    const [shadow,original]=await Promise.all([db.shadowReport(),db.paperAccounts()]);
    const originals=new Map(original.map(a=>[a.id,a]));
-   const accounts=shadow.accounts.map(a=>{const live=originals.get(a.account_id);return {...a,originalBalance:live?.balance??null,originalPosition:live?.position??null,originalLastAt:live?.last_at??null,originalVsShadowBalanceDelta:live?Number(a.balance)-Number(live.balance):null}});
-   res.writeHead(200).end(JSON.stringify({mode:'separate-forward-only-no-real-orders',version:shadow.version,accounts}));
+   const accounts=shadow.accounts.map(a=>{const live=originals.get(a.account_id);return {...a,originalBalance:live?.balance??null,originalPosition:live?.position??null,originalLastAt:live?.last_at??null}});
+   res.writeHead(200).end(JSON.stringify({mode:'separate-forward-only-no-real-orders',version:shadow.version,comparisonNote:'v2 begins with fresh $100 at its start; v1 already has historical P&L. Compare changes from the same start time, not absolute balances.',accounts}));
   }catch(e){console.error('Shadow comparison error',e);res.writeHead(503).end(JSON.stringify({error:'Shadow comparison unavailable'}))}
   return;
  }
