@@ -18,10 +18,18 @@ const server=http.createServer(async(req,res)=>{
   catch(e){console.error('Dashboard overview error',e);res.writeHead(503).end(JSON.stringify({error:'Data unavailable'}))}
   return;
  }
+ if(req.url==='/api/backtest-compare'){
+  try{
+   const results=[];
+   for(const symbol of symbols){const rows=await db.recentCandles(symbol,12000);const result=backtest(rows);results.push({symbol,bars:rows.length,from:rows[0]?.start_at??null,to:rows.at(-1)?.start_at??null,...result,tradeHistory:undefined})}
+   res.writeHead(200).end(JSON.stringify({results,method:'EMA9/21+RSI14+relative volume; fixed stop/take; one position at a time'}));
+  }catch(e){console.error('Backtest comparison error',e);res.writeHead(503).end(JSON.stringify({error:'Comparison unavailable'}))}
+  return;
+ }
  if(req.url?.startsWith('/api/backtest?')){
   const u=new URL(req.url,'http://localhost');const symbol=u.searchParams.get('symbol')??'';
   if(!symbols.includes(symbol)){res.writeHead(400).end(JSON.stringify({error:'Invalid symbol'}));return}
-  try{const rows=await db.recentCandles(symbol,1500);res.writeHead(200).end(JSON.stringify({symbol,from:rows[0]?.start_at??null,to:rows.at(-1)?.start_at??null,bars:rows.length,...backtest(rows)}))}
+  try{const rows=await db.recentCandles(symbol,12000);res.writeHead(200).end(JSON.stringify({symbol,from:rows[0]?.start_at??null,to:rows.at(-1)?.start_at??null,bars:rows.length,...backtest(rows)}))}
   catch(e){console.error('Backtest error',e);res.writeHead(503).end(JSON.stringify({error:'Backtest unavailable'}))}
   return;
  }
