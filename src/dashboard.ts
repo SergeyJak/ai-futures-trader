@@ -48,7 +48,7 @@ function drawTradeChart(bars,trade){
  const left=60,right=780,width=right-left,w=width/bars.length;
  const first=Date.parse(bars[0].start_at),last=Date.parse(bars.at(-1).start_at);
  const xFor=time=>left+Math.max(0,Math.min(1,(time-first)/Math.max(60000,last-first)))*width;
- let svg='<svg viewBox="0 0 850 300" preserveAspectRatio="none" role="img" aria-label="Свечи выбранной сделки с входом и выходом">';
+ let svg='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 850 300" preserveAspectRatio="none" role="img" aria-label="Свечи выбранной сделки с входом и выходом">';
  for(let i=0;i<5;i++){const level=hi-(hi-lo)*i/4,yy=y(level);svg+='<line x1="60" x2="790" y1="'+yy+'" y2="'+yy+'" stroke="#e5ecf4"/><text x="2" y="'+(yy+5)+'" font-size="14" fill="#697992">'+level.toFixed(2)+'</text>'}
  bars.forEach((b,i)=>{const x=left+(i+.5)*w,o=Number(b.open),close=Number(b.close),col=close>=o?'#149a70':'#d45869';svg+='<line x1="'+x+'" x2="'+x+'" y1="'+y(b.high)+'" y2="'+y(b.low)+'" stroke="'+col+'" stroke-width="1.5"/><rect x="'+(x-Math.max(1,w*.32))+'" y="'+Math.min(y(o),y(close))+'" width="'+Math.max(2,w*.64)+'" height="'+Math.max(1,Math.abs(y(o)-y(close)))+'" fill="'+col+'"><title>'+b.start_at+' O '+o+' C '+close+'</title></rect>'});
  const entryX=xFor(Date.parse(trade.entry_at)),exitX=xFor(Date.parse(trade.exit_at));
@@ -57,7 +57,7 @@ function drawTradeChart(bars,trade){
  svg+='<circle cx="'+entryX+'" cy="'+ey+'" r="6" fill="#4266d3"><title>Вход '+trade.entry_price+'</title></circle>';
  svg+='<circle cx="'+exitX+'" cy="'+xy+'" r="6" fill="#ee9238"><title>Выход '+trade.exit_price+'</title></circle>';
  svg+='<text x="60" y="280" font-size="14" fill="#697992">'+String(bars[0].start_at).slice(5,16)+'</text><text x="790" y="280" text-anchor="end" font-size="14" fill="#697992">'+String(bars.at(-1).start_at).slice(5,16)+'</text></svg>';
- const doc=new DOMParser().parseFromString(svg,'image/svg+xml');chart.replaceChildren(document.importNode(doc.documentElement,true));
+ const doc=new DOMParser().parseFromString(svg,'image/svg+xml');if(doc.querySelector('parsererror')){chart.textContent='Ошибка построения SVG-графика';return}chart.replaceChildren(document.importNode(doc.documentElement,true));
 }
 async function openTrade(trade){
  const seq=++modalSeq;
