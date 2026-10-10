@@ -119,3 +119,12 @@ export async function shadowReport(pool:pg.Pool){
   GROUP BY s.account_id,s.version,s.balance,s.last_at,s.position ORDER BY s.account_id`);
  return {version:SHADOW_VERSION,start:'forward-only; separate $100 capital',accounts:q.rows};
 }
+
+export async function shadowAccountDetails(pool:pg.Pool,id:number){
+ if(!Number.isInteger(id)||id<1||id>11)throw Error('Invalid shadow account');
+ const [account,trades]=await Promise.all([
+  pool.query('SELECT account_id,version,balance::text,last_at::text,position FROM shadow_accounts WHERE account_id=$1',[id]),
+  pool.query('SELECT symbol,side,quantity::text,entry_price::text,exit_price::text,entry_at::text,exit_at::text,pnl::text,reason FROM shadow_trades WHERE account_id=$1 ORDER BY id DESC LIMIT 50',[id])
+ ]);
+ return {id,initial:100,...account.rows[0],trades:trades.rows};
+}
