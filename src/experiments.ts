@@ -16,7 +16,7 @@ export function microQuantity(symbol:string,price:number,balance:number,marginCa
  if(!Number.isFinite(balance)||balance<=0||leverage<1||leverage>5)return 0;
  const margin=Math.min(marginCap,balance);
  const riskNotional=balance*risk/stop;
- const maxNotional=Math.min(margin*leverage,riskNotional,(balance-margin)*0+balance*leverage);
+ const maxNotional=Math.min(margin*leverage,riskNotional,balance*leverage);
  const rules= symbol==='SOLUSDT'?0.1:symbol==='ETHUSDT'?0.01:0;
  if(!rules||!Number.isFinite(price)||price<=0)return 0;
  const qty=Number((Math.floor(maxNotional/price/rules+1e-9)*rules).toFixed(8));
