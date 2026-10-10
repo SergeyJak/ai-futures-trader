@@ -1,4 +1,4 @@
-import pg from 'pg';import {initShadow,tickShadow,shadowReport,shadowAccountDetails} from './shadow.js';import {paperTick} from './paper.js';import {EXPERIMENTS,runExperiments} from './experiments.js';import type {Candle} from './candles.js';
+import pg from 'pg';import {pairedDiagnostics} from './paired-analysis.js';import {initShadow,tickShadow,shadowReport,shadowAccountDetails} from './shadow.js';import {paperTick} from './paper.js';import {EXPERIMENTS,runExperiments} from './experiments.js';import type {Candle} from './candles.js';
 export class Database{
  private pool:pg.Pool;
  constructor(url:string){this.pool=new pg.Pool({connectionString:url,max:5});}
@@ -71,6 +71,7 @@ export class Database{
   }
   return {trades:q.rows,candles:Object.fromEntries(candles),sampleLimit:5000};
  }
+ async pairedDiagnostics(){return pairedDiagnostics(this.pool)}
  async telemetrySnapshot(){
   const [original,variants,shadow,v1Trades,v2Trades]=await Promise.all([
    this.pool.query('SELECT balance::text,position,last_at::text FROM paper_account WHERE id=1'),
