@@ -3,7 +3,7 @@ export const dashboardHtml = `<!doctype html>
 <style>
 :root{font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;color:#172338;background:#f6f8fc}*{box-sizing:border-box}body{margin:0}.wrap{max-width:980px;margin:auto;padding:22px 16px 70px}header{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:30px}.brand{font-weight:850;letter-spacing:-.5px;font-size:23px}.brand span{color:#506ddd}.badge{display:inline-flex;align-items:center;gap:7px;border-radius:30px;padding:8px 12px;background:#eaf6ee;color:#13724b;font-size:12px;font-weight:750}.dot{width:8px;height:8px;background:currentColor;border-radius:50%}h1{font-size:clamp(26px,5vw,36px);margin:0 0 5px}h2{font-size:19px;margin:0}.sub{font-size:13px;color:#718099;margin:0}.heading{margin-bottom:22px}.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:13px}.card{background:#fff;border:1px solid #e4eaf5;border-radius:17px;padding:19px;box-shadow:0 2px 11px #0e224006}.label{color:#6c7b90;font-size:13px}.value{font-size:25px;font-weight:800;margin-top:10px;letter-spacing:-.4px;font-variant-numeric:tabular-nums}.note{font-size:12px;color:#8190a4;margin-top:5px}.section-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:27px 0 13px}.status-line{display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:750;color:#687992}.status-line .dot{color:#15956c}[hidden]{display:none!important}.position{display:grid;grid-template-columns:1.5fr repeat(3,1fr);gap:16px}.position-primary{font-size:23px;font-weight:850;margin-top:9px}.empty{padding:25px 4px;text-align:center;color:#748399;font-size:14px}.row{display:grid;grid-template-columns:1.2fr .7fr .9fr .9fr .9fr .7fr;gap:10px;align-items:center;border-bottom:1px solid #edf1f7;padding:14px 0;font-size:13px;min-width:675px}.row:last-child{border-bottom:0}.row.header{color:#8290a6;font-size:12px;font-weight:700;padding-top:4px}.table-scroll{overflow-x:auto}.positive{color:#118059}.negative{color:#c04650}.muted{color:#718099}.pill{font-size:11px;font-weight:800;border-radius:20px;padding:5px 9px;background:#eff3fa;color:#566883;display:inline-block}.foot{margin-top:30px;text-align:center;font-size:12px;color:#8490a2}.error{color:#b93442;background:#fff0f1;padding:12px;border-radius:10px}.meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap}@media(max-width:750px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.position{grid-template-columns:repeat(2,minmax(0,1fr))}.wrap{padding:18px 13px 50px}.card{padding:15px}.value{font-size:22px}header{margin-bottom:24px}}@media(max-width:360px){.value{font-size:20px}.position{grid-template-columns:1fr 1fr}}
 .account-tabs{display:flex;gap:9px;flex-wrap:wrap;margin-bottom:14px}.account-tab{border:1px solid #dce5f1;background:white;color:#42516c;border-radius:12px;padding:12px 14px;font-weight:750;cursor:pointer;flex:1;min-width:135px}.account-tab.selected{background:#4969d8;color:#fff;border-color:#4969d8}.compare-card{margin-bottom:19px}.compare-row{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;gap:10px;border-bottom:1px solid #edf1f7;padding:12px 0;font-size:13px;cursor:pointer}.compare-row:last-child{border-bottom:0}.compare-row.selected{font-weight:750;color:#4969d8}.compare-row.head{color:#8290a6;cursor:default;font-size:12px;font-weight:700}@media(max-width:750px){.account-tab{min-width:120px;padding:10px 9px}.compare-row{grid-template-columns:1.4fr .8fr .8fr .7fr;font-size:12px}}
-nav{display:flex;flex-wrap:wrap;gap:15px;margin:0 0 23px}nav a{font-size:14px;text-decoration:none;color:#4261b9;font-weight:700}nav a.active{color:#172338}</style></head><body><main class="wrap">
+.row.trade-row{cursor:pointer}.row.trade-row:hover{background:#f2f6ff}.row.trade-row:focus-visible{outline:2px solid #4969d8}.trade-dialog{border:0;border-radius:18px;width:min(94vw,820px);max-height:92dvh;padding:0;box-shadow:0 15px 60px #14243b44;color:#172338}.trade-dialog::backdrop{background:#17233899}.dialog-body{padding:22px}.dialog-top{display:flex;align-items:flex-start;justify-content:space-between;gap:15px}.dialog-close{cursor:pointer;border:1px solid #dae2ef;border-radius:9px;background:white;padding:8px 12px}.trade-chart{height:300px;width:100%;margin:14px 0;overflow:hidden}.trade-chart svg{width:100%;height:100%;display:block}.trade-info{color:#62728b;font-size:13px;line-height:1.7}.trade-key{display:flex;gap:16px;flex-wrap:wrap;color:#64748b;font-size:12px}@media(max-width:700px){.dialog-body{padding:14px}.trade-chart{height:265px}}nav{display:flex;flex-wrap:wrap;gap:15px;margin:0 0 23px}nav a{font-size:14px;text-decoration:none;color:#4261b9;font-weight:700}nav a.active{color:#172338}</style></head><body><main class="wrap">
 <header><div class="brand">AI <span>Futures</span></div><span class="badge" id="server-status"><span class="dot"></span><span id="status-text">Подключение…</span></span></header>
 <nav><a class="active" href="/">Тестовая торговля</a><a href="/analytics">Аналитика</a><a href="/market">Рынок и сигналы</a><a href="/research">Новые стратегии</a></nav><div class="heading"><h1>Тестовая торговля</h1><p class="sub">Виртуальный счёт · Bybit USDT Perpetual · без настоящих ордеров</p></div>
 <div class="section-head"><h2>Десять стратегий · по $100</h2><span class="sub">Параллельный эксперимент</span></div>
@@ -25,7 +25,7 @@ nav{display:flex;flex-wrap:wrap;gap:15px;margin:0 0 23px}nav a{font-size:14px;te
 </div></div>
 <div class="section-head"><h2>Завершённые сделки</h2><span class="sub">Последние 50 · сначала новые</span></div>
 <div class="card"><div class="table-scroll" id="trades"><div class="empty">Загрузка истории…</div></div></div>
-<p class="foot" id="updated">Данные обновляются каждые 15 секунд. Только симуляция, реальные деньги не используются.</p>
+<dialog id="trade-dialog" class="trade-dialog" aria-labelledby="trade-dialog-title"><div class="dialog-body"><div class="dialog-top"><div><h2 id="trade-dialog-title">Детали сделки</h2><div id="trade-dialog-meta" class="trade-info"></div></div><button class="dialog-close" id="trade-dialog-close" type="button">Закрыть ×</button></div><div id="trade-dialog-chart" class="trade-chart">Загрузка свечей…</div><div class="trade-key"><span>● Синий: вход</span><span>● Оранжевый: выход</span><span>Линия: время удержания</span></div><p class="trade-info" id="trade-dialog-note"></p></div></dialog><p class="foot" id="updated">Данные обновляются каждые 15 секунд. Только симуляция, реальные деньги не используются.</p>
 </main><script>
 'use strict';
 let accountId=1;let currentAccounts=[];let requestId=0;
@@ -35,11 +35,52 @@ const el=id=>document.getElementById(id);
 const set=(id,value)=>el(id).textContent=String(value);
 function currencyClass(node,n){node.classList.remove('positive','negative');if(n>0)node.classList.add('positive');if(n<0)node.classList.add('negative')}
 function cell(row,text,className){const e=document.createElement('div');e.textContent=String(text);if(className)e.className=className;row.appendChild(e);return e}
+let modalSeq=0;
+const modal=el('trade-dialog');
+el('trade-dialog-close').addEventListener('click',()=>modal.close());
+modal.addEventListener('click',e=>{if(e.target===modal)modal.close()});
+function drawTradeChart(bars,trade){
+ const chart=el('trade-dialog-chart');if(!bars.length){chart.textContent='Минутные свечи за период этой сделки пока отсутствуют в базе.';return}
+ const highs=bars.map(b=>Number(b.high)),lows=bars.map(b=>Number(b.low));
+ const max=Math.max(...highs,Number(trade.entry_price),Number(trade.exit_price)),min=Math.min(...lows,Number(trade.entry_price),Number(trade.exit_price));
+ const padding=Math.max((max-min)*.14,max*.00002),hi=max+padding,lo=min-padding;
+ const y=v=>245-(Number(v)-lo)/(hi-lo)*205;
+ const left=60,right=780,width=right-left,w=width/bars.length;
+ const first=Date.parse(bars[0].start_at),last=Date.parse(bars.at(-1).start_at);
+ const xFor=time=>left+Math.max(0,Math.min(1,(time-first)/Math.max(60000,last-first)))*width;
+ let svg='<svg viewBox="0 0 850 300" preserveAspectRatio="none" role="img" aria-label="Свечи выбранной сделки с входом и выходом">';
+ for(let i=0;i<5;i++){const level=hi-(hi-lo)*i/4,yy=y(level);svg+='<line x1="60" x2="790" y1="'+yy+'" y2="'+yy+'" stroke="#e5ecf4"/><text x="2" y="'+(yy+5)+'" font-size="14" fill="#697992">'+level.toFixed(2)+'</text>'}
+ bars.forEach((b,i)=>{const x=left+(i+.5)*w,o=Number(b.open),close=Number(b.close),col=close>=o?'#149a70':'#d45869';svg+='<line x1="'+x+'" x2="'+x+'" y1="'+y(b.high)+'" y2="'+y(b.low)+'" stroke="'+col+'" stroke-width="1.5"/><rect x="'+(x-Math.max(1,w*.32))+'" y="'+Math.min(y(o),y(close))+'" width="'+Math.max(2,w*.64)+'" height="'+Math.max(1,Math.abs(y(o)-y(close)))+'" fill="'+col+'"><title>'+b.start_at+' O '+o+' C '+close+'</title></rect>'});
+ const entryX=xFor(Date.parse(trade.entry_at)),exitX=xFor(Date.parse(trade.exit_at));
+ const ey=y(trade.entry_price),xy=y(trade.exit_price);
+ svg+='<line x1="'+entryX+'" x2="'+exitX+'" y1="'+ey+'" y2="'+xy+'" stroke="#8795ad" stroke-dasharray="5 4" stroke-width="2"/>';
+ svg+='<circle cx="'+entryX+'" cy="'+ey+'" r="6" fill="#4266d3"><title>Вход '+trade.entry_price+'</title></circle>';
+ svg+='<circle cx="'+exitX+'" cy="'+xy+'" r="6" fill="#ee9238"><title>Выход '+trade.exit_price+'</title></circle>';
+ svg+='<text x="60" y="280" font-size="14" fill="#697992">'+String(bars[0].start_at).slice(5,16)+'</text><text x="790" y="280" text-anchor="end" font-size="14" fill="#697992">'+String(bars.at(-1).start_at).slice(5,16)+'</text></svg>';
+ chart.innerHTML=svg;
+}
+async function openTrade(trade){
+ const seq=++modalSeq;
+ const entry=Date.parse(trade.entry_at),exit=Date.parse(trade.exit_at),duration=Math.round((exit-entry)/60000);
+ const name=currentAccounts.find(x=>x.id===accountId)?.name||'Счёт '+accountId;
+ set('trade-dialog-title',trade.symbol+' · '+trade.side);
+ set('trade-dialog-meta',name+' · '+String(trade.entry_at).slice(0,16)+' → '+String(trade.exit_at).slice(0,16)+' UTC · '+duration+' мин · P&L '+money.format(Number(trade.pnl)));
+ set('trade-dialog-note','Вход '+money.format(Number(trade.entry_price))+' · выход '+money.format(Number(trade.exit_price))+' · объём '+quantity.format(Number(trade.quantity))+' · '+trade.reason);
+ set('trade-dialog-chart','Загрузка минутных свечей…');if(!modal.open)modal.showModal();
+ try{
+  const pad=Math.min(30,Math.max(5,Math.round(duration*.3)));
+  const from=new Date(entry-pad*60000).toISOString(),to=new Date(exit+pad*60000).toISOString();
+  const url='/api/trade-candles?symbol='+encodeURIComponent(trade.symbol)+'&from='+encodeURIComponent(from)+'&to='+encodeURIComponent(to);
+  const response=await fetch(url,{cache:'no-store'});if(!response.ok)throw Error('HTTP '+response.status);
+  const result=await response.json();if(seq!==modalSeq||!modal.open)return;
+  drawTradeChart(result.candles||[],trade);
+ }catch(e){if(seq===modalSeq)set('trade-dialog-chart','Не удалось загрузить свечи: '+String(e))}
+}
 function renderTrades(trades){
  const root=el('trades');root.replaceChildren();
  if(!trades.length){const empty=document.createElement('div');empty.className='empty';empty.textContent='Закрытых сделок пока нет. Они появятся здесь после первого виртуального выхода из позиции.';root.appendChild(empty);return}
  let head=document.createElement('div');head.className='row header';['Монета','Направление','Открыта UTC','Закрыта UTC','Причина','Результат'].forEach(t=>cell(head,t));root.appendChild(head);
- trades.forEach(t=>{const r=document.createElement('div');r.className='row';const pnl=Number(t.pnl);cell(r,t.symbol);cell(r,t.side==='LONG'?'LONG':'SHORT');cell(r,String(t.entry_at).slice(5,16).replace(' ',' '));cell(r,String(t.exit_at).slice(5,16));cell(r,t.reason==='STOP'?'Стоп':t.reason==='TIME'?'Время':'Цель');cell(r,(pnl>=0?'+':'')+money.format(pnl),pnl>0?'positive':pnl<0?'negative':'');root.appendChild(r)})
+ trades.forEach(t=>{const r=document.createElement('div');r.className='row trade-row';r.tabIndex=0;r.setAttribute('role','button');r.setAttribute('aria-label','Открыть график сделки '+t.symbol);r.addEventListener('click',()=>openTrade(t));r.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openTrade(t)}});const pnl=Number(t.pnl);cell(r,t.symbol);cell(r,t.side==='LONG'?'LONG':'SHORT');cell(r,String(t.entry_at).slice(5,16).replace(' ',' '));cell(r,String(t.exit_at).slice(5,16));cell(r,t.reason==='STOP'?'Стоп':t.reason==='TIME'?'Время':'Цель');cell(r,(pnl>=0?'+':'')+money.format(pnl),pnl>0?'positive':pnl<0?'negative':'');root.appendChild(r)})
 }
 function chooseAccount(id){accountId=id;el('active-position').hidden=true;el('empty-position').hidden=false;set('bot-status','Загрузка счёта…');renderAccounts();void refresh()}
 function renderAccounts(){
