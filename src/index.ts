@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import http from 'node:http';import {backtest} from './backtest.js';
 import {evaluateCandidate} from './research.js';
-import {walkForward} from './walkforward.js';import {analyze} from './indicators.js';import {dashboardHtml} from './dashboard.js';import {MINUTE,missingRanges,fetchHistory} from './backfill.js';import {Database} from './database.js';import {MarketStream} from './market.js';
+import {walkForward} from './walkforward.js';import {analyze} from './indicators.js';import {dashboardHtml} from './dashboard.js';import {analyticsHtml,researchHtml,marketHtml} from './extra-pages.js';import {MINUTE,missingRanges,fetchHistory} from './backfill.js';import {Database} from './database.js';import {MarketStream} from './market.js';
 const port=Number(process.env.PORT??3000);const url=process.env.DATABASE_URL;
 const endpoint=process.env.BYBIT_PUBLIC_WS??'wss://stream.bybit.com/v5/public/linear';
 const symbols=(process.env.MARKET_SYMBOLS??'BTCUSDT,ETHUSDT,SOLUSDT').split(',').map(s=>s.trim().toUpperCase());
@@ -14,6 +14,7 @@ const server=http.createServer(async(req,res)=>{
  res.setHeader('x-content-type-options','nosniff');
  res.setHeader('referrer-policy','no-referrer');
  if(req.url==='/'||req.url==='/dashboard'){res.setHeader('content-type','text/html; charset=utf-8');res.setHeader('content-security-policy',"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'");res.writeHead(200).end(dashboardHtml);return}
+ if(req.url==='/analytics'||req.url==='/research'||req.url==='/market'){res.setHeader('content-type','text/html; charset=utf-8');res.setHeader('content-security-policy',"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'");res.writeHead(200).end(req.url==='/analytics'?analyticsHtml:req.url==='/research'?researchHtml:marketHtml);return}
  res.setHeader('content-type','application/json');
  if(req.url==='/api/overview'){
   try{const [stats,storage]=await Promise.all([db.candleStats(),db.storageStats()]);res.writeHead(200).end(JSON.stringify({symbols:stats,storage,stream:stream.status,updatedAt:new Date().toISOString()}))}
