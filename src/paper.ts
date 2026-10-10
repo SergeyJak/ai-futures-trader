@@ -52,23 +52,30 @@ export async function paperTick(pool:pg.Pool,symbols:string[]){
      const pnl=gross-p.entry*p.qty*fee-exitFee;
      state.balance+=gross-exitFee;
      await client.query('INSERT INTO paper_trades(symbol,side,quantity,entry_price,exit_price,entry_at,exit_at,pnl,reason) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)',[p.symbol,p.side,p.qty,p.entry,price,p.entryAt,new Date(ms).toISOString(),pnl,stopped?'STOP':'TAKE']);
+     await client.query('INSERT INTO paper_decisions(account_id,at,symbol,event,reason,details) VALUES(1,$1,$2,$3,$4,$5)',[new Date(ms).toISOString(),p.symbol,'CLOSE',stopped?'STOP':'TAKE',JSON.stringify({entry:p.entry,exit:price,qty:p.qty,pnl,balance:state.balance})]);
      state.position=null;exited=true;
     }
    }
    if(!state.position&&!exited){
+    let foundSignal=false;
     for(const symbol of symbols){
      const x=activeBars.get(symbol)!;
      const signal=analyze(x.history.slice(Math.max(0,x.index-241),x.index)).signal;
      const side=signal==='BULLISH_WATCH'?'LONG':signal==='BEARISH_WATCH'?'SHORT':null;
      if(!side)continue;
+     foundSignal=true;
      const price=Number(x.bar.open)*(side==='LONG'?1+slippage:1-slippage);
      const qty=feasibleQuantity(symbol,price,state.balance,.005,.006,fee);
-     if(!qty)continue;
+     if(!qty){
+      await client.query('INSERT INTO paper_decisions(account_id,at,symbol,event,reason,details) VALUES(1,$1,$2,$3,$4,$5)',[new Date(ms).toISOString(),symbol,'REJECT','MIN_ORDER_OR_RISK_LIMIT',JSON.stringify({side,price,balance:state.balance})]);continue
+     }
      const entryFee=price*qty*fee;
      state.balance-=entryFee;
      state.position={symbol,side,qty,entry:price,stop:price*(side==='LONG'?.994:1.006),take:price*(side==='LONG'?1.012:.988),entryAt:new Date(ms).toISOString()};
+     await client.query('INSERT INTO paper_decisions(account_id,at,symbol,event,reason,details) VALUES(1,$1,$2,$3,$4,$5)',[new Date(ms).toISOString(),symbol,'OPEN','SIGNAL',JSON.stringify({side,qty,entry:price,fee:entryFee,balance:state.balance})]);
      break;
     }
+    if(!foundSignal&&!state.position&&ms%(15*60000)===0)await client.query('INSERT INTO paper_decisions(account_id,at,event,reason) VALUES(1,$1,$2,$3)',[new Date(ms).toISOString(),'SKIP','NO_SIGNAL']);
    }
    state.lastAt=new Date(ms).toISOString();
   }
