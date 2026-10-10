@@ -54,5 +54,5 @@ export function backtest(rows:Bar[],initial=100,strategy:Strategy='momentum',sym
   }
  }
  const wins=trades.filter(t=>t.pnl>0);
- return {strategy,symbol,rejectedOrders,initial,equity,netPnl:equity-initial,returnPct:(equity/initial-1)*100,trades:trades.length,winRate:trades.length?wins.length/trades.length*100:null,maxDrawdown,feesPerSidePct:fee*100,slippagePerSidePct:slippage*100,openPosition:position!==null,tradeHistory:trades.slice(-30)};
+ return {strategy,rejectedOrders,initial,equity,netPnl:equity-initial,returnPct:(equity/initial-1)*100,trades:trades.length,winRate:trades.length?wins.length/trades.length*100:null,maxDrawdown,feesPerSidePct:fee*100,slippagePerSidePct:slippage*100,openPosition:position!==null,tradeHistory:trades.slice(-30)};
 }
