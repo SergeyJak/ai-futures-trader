@@ -19,6 +19,7 @@ const server=http.createServer(async(req,res)=>{
   catch(e){console.error('Dashboard overview error',e);res.writeHead(503).end(JSON.stringify({error:'Data unavailable'}))}
   return;
  }
+ if(req.url==='/api/paper'){try{const status=await db.paperStatus();res.writeHead(200).end(JSON.stringify(status))}catch(e){console.error('Paper status error',e);res.writeHead(503).end(JSON.stringify({error:'Unavailable'}))}return}
  if(req.url==='/api/backtest-compare'){
   try{
    const results=[];
@@ -128,7 +129,10 @@ async function repair(){
 }
 const repairTimer=setInterval(()=>{void repair()},300000);
 setTimeout(()=>{void repair()},10000);
+let paperRunning=false;
+async function runPaper(){if(paperRunning||closing)return;paperRunning=true;try{await db.paperTick(symbols)}catch(e){console.error('PAPER_ERROR',e)}finally{paperRunning=false}}
+const paperTimer=setInterval(()=>{void runPaper()},15000);setTimeout(()=>{void runPaper()},20000);
 const statsTimer=setInterval(()=>{void reportStats()},60000);
 void reportStats();
-let closing=false;async function stop(){if(closing)return;closing=true;clearInterval(statsTimer);clearInterval(storageTimer);clearInterval(repairTimer);clearInterval(historyTimer);server.close();await stream.stop();await db.close();}
+let closing=false;async function stop(){if(closing)return;closing=true;clearInterval(statsTimer);clearInterval(storageTimer);clearInterval(repairTimer);clearInterval(historyTimer);clearInterval(paperTimer);server.close();await stream.stop();await db.close();}
 for(const sig of ['SIGINT','SIGTERM'] as const)process.on(sig,()=>{void stop().then(()=>process.exit(0))});
