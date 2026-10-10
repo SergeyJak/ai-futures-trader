@@ -14,7 +14,7 @@ export const dashboardHtml = `<!doctype html>
 </div>
 <div class="section"><h2>Price history</h2><div class="symbols"><button class="tab active" data-symbol="BTCUSDT">BTC</button><button class="tab" data-symbol="ETHUSDT">ETH</button><button class="tab" data-symbol="SOLUSDT">SOL</button></div></div>
 <div class="card"><div class="chart-controls"><div class="control-group"><button class="tab active" data-mode="line">Линия</button><button class="tab" data-mode="candles">Свечи</button></div><div class="control-group"><button class="tab active" data-period="60">1ч</button><button class="tab" data-period="360">6ч</button><button class="tab" data-period="1440">24ч</button></div></div><div class="chart-controls"><span class="muted">Листайте график вбок · нажмите свечу для OHLC</span><div class="zoom-controls"><button class="tab" id="older" aria-label="Ранее">←</button><button class="tab" id="zoom-out" aria-label="Уменьшить">−</button><button class="tab" id="zoom-in" aria-label="Увеличить">+</button><button class="tab" id="latest">Сейчас</button></div></div><div class="charthead"><div class="price" id="price">…</div><span class="muted" id="last-time"></span></div><div class="plot-wrap"><svg id="plot" class="plot" viewBox="0 0 900 260" preserveAspectRatio="none" role="img" aria-label="Price chart"><g id="grid-lines"></g><path id="area" fill="#e6edff"></path><path id="line" fill="none" stroke="#4969d8" stroke-width="3" vector-effect="non-scaling-stroke"></path><g id="candle-bars"></g><line id="crosshair" x1="0" y1="20" x2="0" y2="240" stroke="#7187af" stroke-dasharray="4 3" visibility="hidden" pointer-events="none"></line></svg><div id="plot-empty" class="plot-empty" hidden>Loading candles…</div></div><div class="inspect" id="inspect" aria-live="polite">Коснитесь графика, чтобы увидеть данные свечи</div><div class="chart-meta muted"><span id="chart-range">Последние 60 минут · UTC</span><span id="change">Изменение: …</span></div></div>
-<div class="section"><h2>Data collection</h2><span class="muted" id="updated">Updating…</span></div>
+<div class="section"><h2>Индикаторы · <span id="signal-symbol">BTCUSDT</span></h2><span class="muted">1m · информационно</span></div><div class="grid indicator-grid"><div class="card"><div class="metric-label">EMA 9</div><div class="metric-value" id="ema9">…</div></div><div class="card"><div class="metric-label">EMA 21</div><div class="metric-value" id="ema21">…</div></div><div class="card"><div class="metric-label">RSI 14</div><div class="metric-value" id="rsi14">…</div></div><div class="card"><div class="metric-label">Объём / средний</div><div class="metric-value" id="volume-ratio">…</div></div></div><div class="inspect" id="signal">Ожидаем данные…</div><div class="section"><h2>Data collection</h2><span class="muted" id="updated">Updating…</span></div>
 <div class="coin-list" id="coins"></div>
 <div class="foot">Market monitoring only. No orders, account access or trading enabled. Refreshes every 30 seconds.</div>
 </div>
@@ -94,6 +94,19 @@ async function loadChart(){
   allRows=aggregate(data.candles,minutes===60?1:minutes===360?5:15);offset=0;visibleCount=Math.min(60,allRows.length);document.getElementById('crosshair').setAttribute('visibility','hidden');set('inspect','Коснитесь графика, чтобы увидеть данные свечи');redraw();
  }catch(e){if(request===chartRequest){document.getElementById('plot-empty').hidden=false;set('plot-empty','График недоступен')}}
 }
+async function refreshSignals(){
+ var symbol=active;
+ try{
+  var data=await json('/api/signals?symbol='+encodeURIComponent(symbol));
+  if(symbol!==active)return;
+  set('signal-symbol',symbol);
+  function display(v,n){return v===null||!Number.isFinite(Number(v))?'—':Number(v).toFixed(n)}
+  set('ema9',display(data.ema9,2));set('ema21',display(data.ema21,2));set('rsi14',display(data.rsi14,1));
+  set('volume-ratio',data.volumeRatio===null?'—':display(data.volumeRatio,2)+'×');
+  var labels={BULLISH_WATCH:'Возможный бычий импульс · наблюдение',BEARISH_WATCH:'Возможный медвежий импульс · наблюдение',NEUTRAL:'Нет подтверждённого сигнала',INSUFFICIENT_DATA:'Недостаточно свечей'};
+  set('signal',labels[data.signal]||'Сигнал недоступен');
+ }catch(e){if(symbol===active)set('signal','Индикаторы временно недоступны')}
+}
 async function refresh(){
  try{
  var d=await json('/api/overview');var total=d.symbols.reduce(function(v,x){return v+Number(x.confirmed)},0);
@@ -111,9 +124,9 @@ async function refresh(){
  container.appendChild(article)});
  set('updated','Checked '+new Date().toLocaleTimeString());
  }catch(e){set('status-text','API unavailable');document.getElementById('status').style.cssText='background:#ffeded;color:#b73333';set('updated','Cannot reach server')}
- await loadChart();
+ await Promise.all([loadChart(),refreshSignals()]);
 }
-document.querySelectorAll('[data-symbol]').forEach(function(el){el.addEventListener('click',function(){active=el.dataset.symbol;document.querySelectorAll('[data-symbol]').forEach(function(tab){tab.classList.toggle('active',tab===el)});void loadChart()})});
+document.querySelectorAll('[data-symbol]').forEach(function(el){el.addEventListener('click',function(){active=el.dataset.symbol;document.querySelectorAll('[data-symbol]').forEach(function(tab){tab.classList.toggle('active',tab===el)});void loadChart();void refreshSignals()})});
 document.querySelectorAll('[data-mode]').forEach(function(el){el.addEventListener('click',function(){mode=el.dataset.mode;document.querySelectorAll('[data-mode]').forEach(function(tab){tab.classList.toggle('active',tab===el)});void loadChart()})});
 document.querySelectorAll('[data-period]').forEach(function(el){el.addEventListener('click',function(){period=Number(el.dataset.period);document.querySelectorAll('[data-period]').forEach(function(tab){tab.classList.toggle('active',tab===el)});void loadChart()})});
 var svg=document.getElementById('plot');
