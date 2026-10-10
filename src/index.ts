@@ -11,7 +11,7 @@ const symbols=(process.env.MARKET_SYMBOLS??'BTCUSDT,ETHUSDT,SOLUSDT').split(',')
 if(!url)throw new Error('DATABASE_URL required');
 if(!endpoint.startsWith('wss://'))throw new Error('Secure WebSocket required');
 if(!Number.isInteger(port)||port<1||port>65535)throw new Error('Invalid port');
-const db=new Database(url);await db.init();await db.initExperiments();await db.initShadow();await db.initV3();const stream=new MarketStream(endpoint,symbols,db);stream.start();
+const db=new Database(url);await db.init();await db.initExperiments();await db.initShadow();await db.initV3();await db.initV4();const stream=new MarketStream(endpoint,symbols,db);stream.start();
 const server=http.createServer(async(req,res)=>{
  res.setHeader('cache-control','no-store');
  res.setHeader('x-content-type-options','nosniff');
@@ -43,6 +43,11 @@ const server=http.createServer(async(req,res)=>{
    }
    res.writeHead(200).end(JSON.stringify({type:'research-only',version:'v4-exit-study',selection:'fixed entry stream, compare exit methods without changing existing accounts',chronologicalSplit:'70/30',results}));
   }catch(e){console.error('V4 exit research error',e);res.writeHead(503).end(JSON.stringify({error:'v4 exit study unavailable'}))}
+  return;
+ }
+ if(req.url==='/api/v4'){
+  try{res.writeHead(200).end(JSON.stringify(await db.v4Report()))}
+  catch(e){console.error('V4 report error',e);res.writeHead(503).end(JSON.stringify({error:'v4 unavailable'}))}
   return;
  }
  if(req.url==='/api/v3'){
@@ -256,6 +261,16 @@ async function runIndependentV3(){
  }catch(e){console.error('V3_TICK_ERROR',e)}
  finally{v3Running=false}
 }
+let v4Running=false;
+async function runIndependentV4(){
+ if(v4Running||closing)return;
+ v4Running=true;
+ try{const result=await db.runV4();if(result.changed||result.opened||result.closed||result.gaps)console.info('V4_TICK',JSON.stringify({at:new Date().toISOString(),...result}))}
+ catch(e){console.error('V4_TICK_ERROR',e)}
+ finally{v4Running=false}
+}
+const v4Timer=setInterval(()=>{void runIndependentV4()},15000);
+setTimeout(()=>{void runIndependentV4()},14000);
 const v3Timer=setInterval(()=>{void runIndependentV3()},15000);
 setTimeout(()=>{void runIndependentV3()},12000);
 
@@ -286,5 +301,5 @@ const bounceResearchTimer=setInterval(()=>{void reportBounceResearch()},3600000)
 setTimeout(()=>{void reportBounceResearch()},45000);
 const statsTimer=setInterval(()=>{void reportStats()},60000);
 void reportStats();
-let closing=false;async function stop(){if(closing)return;closing=true;clearInterval(statsTimer);clearInterval(storageTimer);clearInterval(repairTimer);clearInterval(historyTimer);clearInterval(paperTimer);clearInterval(telemetryTimer);clearInterval(bounceResearchTimer);clearInterval(v3Timer);server.close();await stream.stop();await db.close();}
+let closing=false;async function stop(){if(closing)return;closing=true;clearInterval(statsTimer);clearInterval(storageTimer);clearInterval(repairTimer);clearInterval(historyTimer);clearInterval(paperTimer);clearInterval(telemetryTimer);clearInterval(bounceResearchTimer);clearInterval(v3Timer);clearInterval(v4Timer);server.close();await stream.stop();await db.close();}
 for(const sig of ['SIGINT','SIGTERM'] as const)process.on(sig,()=>{void stop().then(()=>process.exit(0))});
