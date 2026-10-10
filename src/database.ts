@@ -57,7 +57,7 @@ export class Database{
   return {id,initial:100,...account.rows[0],trades:trades.rows};
  }
  async paperDiagnostics(id:number){
-  if(!Number.isInteger(id)||id<1||id>10)throw Error('Invalid account');
+  if(!Number.isInteger(id)||id<1||id>11)throw Error('Invalid account');
   const [events,counts,equity,stats]=await Promise.all([
    this.pool.query('SELECT at::text,symbol,event,reason,details FROM paper_decisions WHERE account_id=$1 ORDER BY at DESC,id DESC LIMIT 150',[id]),
    this.pool.query('SELECT event,reason,COUNT(*)::int AS count FROM paper_decisions WHERE account_id=$1 GROUP BY event,reason ORDER BY count DESC',[id]),
