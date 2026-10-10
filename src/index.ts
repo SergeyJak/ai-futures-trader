@@ -17,5 +17,11 @@ const server=http.createServer(async(req,res)=>{
  res.writeHead(404).end(JSON.stringify({error:'Not found'}));
 });
 server.listen(port,'0.0.0.0',()=>console.log('Listening on',port));
-let closing=false;async function stop(){if(closing)return;closing=true;server.close();await stream.stop();await db.close();}
+async function reportStats(){
+ try { const stats=await db.candleStats(); console.info('CANDLE_STATS',JSON.stringify({at:new Date().toISOString(),symbols:stats})); }
+ catch(e){console.error('CANDLE_STATS_ERROR',e);}
+}
+const statsTimer=setInterval(()=>{void reportStats()},60000);
+void reportStats();
+let closing=false;async function stop(){if(closing)return;closing=true;clearInterval(statsTimer);server.close();await stream.stop();await db.close();}
 for(const sig of ['SIGINT','SIGTERM'] as const)process.on(sig,()=>{void stop().then(()=>process.exit(0))});
