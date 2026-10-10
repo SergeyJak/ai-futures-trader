@@ -196,7 +196,13 @@ setTimeout(()=>{void repair()},10000);
 let paperRunning=false;
 async function runPaper(){if(paperRunning||closing)return;paperRunning=true;try{await db.paperTick(symbols);await db.recordOriginalSnapshot();await db.runExperiments();await db.runShadow()}catch(e){console.error('PAPER_ERROR',e)}finally{paperRunning=false}}
 const paperTimer=setInterval(()=>{void runPaper()},15000);setTimeout(()=>{void runPaper()},20000);
+async function reportTelemetry(){
+ try{console.info('AI_FUTURES_ACCOUNTS',JSON.stringify(await db.telemetrySnapshot()))}
+ catch(e){console.error('AI_FUTURES_ACCOUNTS_ERROR',e)}
+}
+const telemetryTimer=setInterval(()=>{void reportTelemetry()},300000);
+setTimeout(()=>{void reportTelemetry()},25000);
 const statsTimer=setInterval(()=>{void reportStats()},60000);
 void reportStats();
-let closing=false;async function stop(){if(closing)return;closing=true;clearInterval(statsTimer);clearInterval(storageTimer);clearInterval(repairTimer);clearInterval(historyTimer);clearInterval(paperTimer);server.close();await stream.stop();await db.close();}
+let closing=false;async function stop(){if(closing)return;closing=true;clearInterval(statsTimer);clearInterval(storageTimer);clearInterval(repairTimer);clearInterval(historyTimer);clearInterval(paperTimer);clearInterval(telemetryTimer);server.close();await stream.stop();await db.close();}
 for(const sig of ['SIGINT','SIGTERM'] as const)process.on(sig,()=>{void stop().then(()=>process.exit(0))});
