@@ -86,7 +86,20 @@ async function extendHistory(){
     const bars=await fetchHistory(symbol,start,last);
     for(const bar of bars){await db.upsert(bar);added++}
    }
-   console.info('HISTORY_STATS',JSON.stringify({symbol,added,daysTarget:historyDays}));
+   // Repair holes within the already collected history without pulling all seven days at once.
+   const current=await db.candleStats();
+   const earliest=current.find(x=>x.symbol===symbol)?.first_at;
+   let fixed=0;
+   if(earliest){
+    const begin=Date.parse(earliest);
+    const existing=await db.existingMinutes(symbol,begin,end);
+    const gaps=missingRanges(existing,begin,end).slice(0,2);
+    for(const gap of gaps){
+     const bars=await fetchHistory(symbol,gap.start,gap.end);
+     for(const bar of bars){await db.upsert(bar);fixed++}
+    }
+   }
+   console.info('HISTORY_STATS',JSON.stringify({symbol,added,fixed,daysTarget:historyDays}));
   }
  }catch(e){console.error('HISTORY_ERROR',e)}finally{historyBusy=false}
 }
