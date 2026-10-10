@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import http from 'node:http';import {backtest} from './backtest.js';
+import {evaluateCandidate} from './research.js';
 import {walkForward} from './walkforward.js';import {analyze} from './indicators.js';import {dashboardHtml} from './dashboard.js';import {MINUTE,missingRanges,fetchHistory} from './backfill.js';import {Database} from './database.js';import {MarketStream} from './market.js';
 const port=Number(process.env.PORT??3000);const url=process.env.DATABASE_URL;
 const endpoint=process.env.BYBIT_PUBLIC_WS??'wss://stream.bybit.com/v5/public/linear';
@@ -24,6 +25,20 @@ const server=http.createServer(async(req,res)=>{
   const id=Number(new URL(req.url,'http://localhost').searchParams.get('account')??'1');
   if(!Number.isInteger(id)||id<1||id>6){res.writeHead(400).end(JSON.stringify({error:'Invalid account'}));return}
   try{const status=await db.paperStatus(id);res.writeHead(200).end(JSON.stringify(status))}catch(e){console.error('Paper status error',e);res.writeHead(503).end(JSON.stringify({error:'Unavailable'}))}return
+ }
+ if(req.url==='/api/research'){
+  try{
+   const results=[];
+   for(const symbol of symbols){
+    const rows=await db.recentCandles(symbol,12000);
+    for(const candidate of ['squeeze','regime'] as const){
+     const split=Math.floor(rows.length*.7);
+     results.push({symbol,candidate,training:evaluateCandidate(rows.slice(0,split),candidate,symbol),validation:evaluateCandidate(rows.slice(split),candidate,symbol)});
+    }
+   }
+   res.writeHead(200).end(JSON.stringify({type:'research-only',independentPaperAccounts:false,split:'chronological 70/30',results}));
+  }catch(e){console.error('Research error',e);res.writeHead(503).end(JSON.stringify({error:'Research unavailable'}))}
+  return;
  }
  if(req.url==='/api/backtest-compare'){
   try{
