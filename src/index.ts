@@ -23,14 +23,14 @@ const server=http.createServer(async(req,res)=>{
  }
  if(req.url?.startsWith('/api/paper-diagnostics?')){
   const id=Number(new URL(req.url,'http://localhost').searchParams.get('account'));
-  if(!Number.isInteger(id)||id<1||id>10){res.writeHead(400).end(JSON.stringify({error:'Invalid account'}));return}
+  if(!Number.isInteger(id)||id<1||id>11){res.writeHead(400).end(JSON.stringify({error:'Invalid account'}));return}
   try{res.writeHead(200).end(JSON.stringify(await db.paperDiagnostics(id)))}catch(e){console.error('Diagnostics error',e);res.writeHead(503).end(JSON.stringify({error:'Unavailable'}))}
   return;
  }
  if(req.url==='/api/paper-accounts'){try{res.writeHead(200).end(JSON.stringify({accounts:await db.paperAccounts()}))}catch(e){console.error('Paper accounts error',e);res.writeHead(503).end(JSON.stringify({error:'Unavailable'}))}return}
  if(req.url?.startsWith('/api/paper?')||req.url==='/api/paper'){
   const id=Number(new URL(req.url,'http://localhost').searchParams.get('account')??'1');
-  if(!Number.isInteger(id)||id<1||id>10){res.writeHead(400).end(JSON.stringify({error:'Invalid account'}));return}
+  if(!Number.isInteger(id)||id<1||id>11){res.writeHead(400).end(JSON.stringify({error:'Invalid account'}));return}
   try{const status=await db.paperStatus(id);res.writeHead(200).end(JSON.stringify(status))}catch(e){console.error('Paper status error',e);res.writeHead(503).end(JSON.stringify({error:'Unavailable'}))}return
  }
  if(req.url==='/api/research'){
