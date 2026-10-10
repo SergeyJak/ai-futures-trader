@@ -7,13 +7,13 @@ export const dashboardHtml = `<!doctype html>
 <header><div class="brand">AI <span>Futures</span></div><span class="badge" id="server-status"><span class="dot"></span><span id="status-text">Подключение…</span></span></header>
 <nav><a class="active" href="/">Тестовая торговля</a><a href="/analytics">Аналитика</a><a href="/market">Рынок и сигналы</a><a href="/research">Новые стратегии</a><a href="/experiments">Парные эксперименты v3</a></nav><div class="heading"><h1>Тестовая торговля</h1><p class="sub">Виртуальный счёт · Bybit USDT Perpetual · без настоящих ордеров</p></div>
 <div class="section-head"><h2>Одиннадцать стратегий · по $100</h2><span class="sub">Параллельный эксперимент</span></div>
-<div class="version-switch" role="group" aria-label="Версия симулятора"><button id="version-v1" type="button" class="selected" aria-pressed="true">v1 · Основная</button><button id="version-v2" type="button" aria-pressed="false">v2 · Теневая</button></div>
-<div id="v2-view" hidden>
+<div class="version-switch" role="group" aria-label="Версия симулятора"><button id="version-v1" type="button" aria-pressed="false">v1 · Архив</button><button id="version-v2" type="button" class="selected" aria-pressed="true">v2 · Теневая</button></div>
+<div id="v2-view">
  <p class="sub">v2 работает параллельно с v1 с отдельными начальными $100. Балансы разных версий нельзя сравнивать напрямую до выравнивания периода.</p>
  <div class="card"><div class="label">11 стратегий · теневой симулятор v2</div><div id="shadow-comparison" class="table-scroll"><div class="empty">Загрузка v2…</div></div><p class="shadow-status" id="shadow-refreshed"></p></div>
  <div class="card shadow-details"><h2 id="shadow-title">Выбери стратегию v2</h2><div class="grid" style="margin:14px 0"><div><div class="label">Баланс</div><div class="value" id="shadow-balance">—</div></div><div><div class="label">Результат</div><div class="value" id="shadow-pnl">—</div></div><div><div class="label">Закрытых сделок</div><div class="value" id="shadow-count">—</div></div><div><div class="label">Позиция</div><div class="value" id="shadow-position" style="font-size:16px">—</div></div></div><h2>Последние сделки v2</h2><div class="table-scroll" id="shadow-trades"><div class="empty">Выбери счёт</div></div></div>
 </div>
-<div id="v1-view">
+<div id="v1-view" hidden>
 <div id="account-tabs" class="account-tabs" role="group" aria-label="Виртуальные счета"></div>
 <div class="card compare-card"><div class="label">Сравнение экспериментов</div><div class="table-scroll" id="account-comparison"><div class="empty">Загрузка результатов…</div></div></div>
 <div class="heading" style="margin-top:24px"><h2 id="account-title">Счёт 1 · Оригинальная стратегия</h2><p class="sub" id="account-description">Исходный эксперимент, история сохранена</p></div>
@@ -38,7 +38,7 @@ export const dashboardHtml = `<!doctype html>
 'use strict';
 const el=id=>document.getElementById(id);
 let accountId=1;let currentAccounts=[];let requestId=0;
-let activeVersion='v1',shadowAccountId=1,shadowRequest=0,shadowAccounts=[];
+let activeVersion='v2',shadowAccountId=1,shadowRequest=0,shadowAccounts=[];
 function switchVersion(v){
  activeVersion=v;
  el('version-v1').classList.toggle('selected',v==='v1');el('version-v2').classList.toggle('selected',v==='v2');
