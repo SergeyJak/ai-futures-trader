@@ -21,8 +21,8 @@ const server=http.createServer(async(req,res)=>{
  if(req.url==='/api/backtest-compare'){
   try{
    const results=[];
-   for(const symbol of symbols){const rows=await db.recentCandles(symbol,12000);const result=backtest(rows);results.push({symbol,bars:rows.length,from:rows[0]?.start_at??null,to:rows.at(-1)?.start_at??null,...result,tradeHistory:undefined})}
-   res.writeHead(200).end(JSON.stringify({results,method:'EMA9/21+RSI14+relative volume; fixed stop/take; one position at a time'}));
+   for(const symbol of symbols){const rows=await db.recentCandles(symbol,12000);for(const strategy of ['momentum','trend','reversal'] as const){const result=backtest(rows,1000,strategy);results.push({symbol,bars:rows.length,from:rows[0]?.start_at??null,to:rows.at(-1)?.start_at??null,...result,tradeHistory:undefined})}}
+   res.writeHead(200).end(JSON.stringify({results,method:'Momentum versus EMA trend versus RSI reversal; same fee, slippage, stop, take and sizing; 1 position per strategy'}));
   }catch(e){console.error('Backtest comparison error',e);res.writeHead(503).end(JSON.stringify({error:'Comparison unavailable'}))}
   return;
  }
