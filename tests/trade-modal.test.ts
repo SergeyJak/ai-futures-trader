@@ -9,3 +9,5 @@ test('open position supports chart modal and current quote with risk lines',()=>
 test('mobile modal simplifies current quote and close control',()=>{assert.ok(dashboardHtml.includes('aria-label="Закрыть окно"'));assert.ok(dashboardHtml.includes('font-size="18" fill="#4c5e79"'));assert.ok(dashboardHtml.includes("el('trade-exit-key').hidden=true"));});
 
 test('trade entry level is a thin solid horizontal blue line',()=>{assert.ok(dashboardHtml.includes('stroke="#4266d3" stroke-width="1.4"'));assert.ok(dashboardHtml.includes('Синяя линия: уровень входа'));assert.ok(dashboardHtml.includes('y2="'+ "'+ey+'" +'"'));});
+
+test('trade fills preserve simulated slippage and match candle centres',()=>{for(const s of ['entryFill/(trade.side','exitPrice/(trade.side','xForBar(entryAt)','xForBar(exitAt)','Рыночная цена входа','Рыночная цена выхода','side:p.side'])assert.ok(dashboardHtml.includes(s),s)});
