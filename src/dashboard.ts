@@ -57,7 +57,7 @@ function drawTradeChart(bars,trade){
  svg+='<circle cx="'+entryX+'" cy="'+ey+'" r="6" fill="#4266d3"><title>Вход '+trade.entry_price+'</title></circle>';
  svg+='<circle cx="'+exitX+'" cy="'+xy+'" r="6" fill="#ee9238"><title>Выход '+trade.exit_price+'</title></circle>';
  svg+='<text x="60" y="280" font-size="14" fill="#697992">'+String(bars[0].start_at).slice(5,16)+'</text><text x="790" y="280" text-anchor="end" font-size="14" fill="#697992">'+String(bars.at(-1).start_at).slice(5,16)+'</text></svg>';
- chart.innerHTML=svg;
+ const doc=new DOMParser().parseFromString(svg,'image/svg+xml');chart.replaceChildren(document.importNode(doc.documentElement,true));
 }
 async function openTrade(trade){
  const seq=++modalSeq;
