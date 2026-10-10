@@ -23,7 +23,7 @@ const server=http.createServer(async(req,res)=>{
  if(req.url==='/api/paper-accounts'){try{res.writeHead(200).end(JSON.stringify({accounts:await db.paperAccounts()}))}catch(e){console.error('Paper accounts error',e);res.writeHead(503).end(JSON.stringify({error:'Unavailable'}))}return}
  if(req.url?.startsWith('/api/paper?')||req.url==='/api/paper'){
   const id=Number(new URL(req.url,'http://localhost').searchParams.get('account')??'1');
-  if(!Number.isInteger(id)||id<1||id>6){res.writeHead(400).end(JSON.stringify({error:'Invalid account'}));return}
+  if(!Number.isInteger(id)||id<1||id>10){res.writeHead(400).end(JSON.stringify({error:'Invalid account'}));return}
   try{const status=await db.paperStatus(id);res.writeHead(200).end(JSON.stringify(status))}catch(e){console.error('Paper status error',e);res.writeHead(503).end(JSON.stringify({error:'Unavailable'}))}return
  }
  if(req.url==='/api/research'){
@@ -31,7 +31,7 @@ const server=http.createServer(async(req,res)=>{
    const results=[];
    for(const symbol of symbols){
     const rows=await db.recentCandles(symbol,12000);
-    for(const candidate of ['squeeze','regime'] as const){
+    for(const candidate of ['squeeze','regime','sweep','quarter'] as const){
      const split=Math.floor(rows.length*.7);
      results.push({symbol,candidate,training:evaluateCandidate(rows.slice(0,split),candidate,symbol),validation:evaluateCandidate(rows.slice(split),candidate,symbol)});
     }
