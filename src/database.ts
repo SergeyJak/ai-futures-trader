@@ -28,5 +28,13 @@ export class Database{
     FROM ordered GROUP BY symbol ORDER BY symbol`);
   return result.rows;
  }
+ async storageStats(){
+  const result=await this.pool.query<{database_bytes:string;candles_total_bytes:string;candles_heap_bytes:string;candles_indexes_bytes:string}>(`SELECT
+    pg_database_size(current_database())::text AS database_bytes,
+    pg_total_relation_size('market_candles')::text AS candles_total_bytes,
+    pg_relation_size('market_candles')::text AS candles_heap_bytes,
+    pg_indexes_size('market_candles')::text AS candles_indexes_bytes`);
+  return result.rows[0];
+ }
  async close(){await this.pool.end()}
 }
