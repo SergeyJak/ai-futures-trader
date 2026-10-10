@@ -56,6 +56,17 @@ export class Database{
   const trades=await this.pool.query('SELECT symbol,side,quantity::text,entry_price::text,exit_price::text,entry_at::text,exit_at::text,pnl::text,reason FROM paper_trades WHERE account_id=$1 ORDER BY id DESC LIMIT 50',[id]);
   return {id,initial:100,...account.rows[0],trades:trades.rows};
  }
+ async auditHistory(){
+  const q=await this.pool.query('SELECT id::text,account_id,symbol,side,quantity::text,entry_price::text,exit_price::text,entry_at::text,exit_at::text,pnl::text,reason FROM paper_trades ORDER BY id DESC LIMIT 5000');
+  const earliest=new Map<string,number>(),latest=new Map<string,number>();
+  for(const t of q.rows){const a=Date.parse(t.entry_at),b=Date.parse(t.exit_at),s=t.symbol;earliest.set(s,Math.min(earliest.get(s)??a,a));latest.set(s,Math.max(latest.get(s)??b,b))}
+  const candles=new Map<string,unknown[]>();
+  for(const [symbol,from] of earliest){
+   const result=await this.pool.query('SELECT start_at::text,open::text,high::text,low::text,close::text FROM market_candles WHERE symbol=$1 AND confirmed=true AND start_at >= to_timestamp($2::double precision/1000) AND start_at <= to_timestamp($3::double precision/1000) ORDER BY start_at',[symbol,from,latest.get(symbol)]);
+   candles.set(symbol,result.rows);
+  }
+  return {trades:q.rows,candles:Object.fromEntries(candles),sampleLimit:5000};
+ }
  async paperDiagnostics(id:number){
   if(!Number.isInteger(id)||id<1||id>11)throw Error('Invalid account');
   const [events,counts,equity,stats]=await Promise.all([
