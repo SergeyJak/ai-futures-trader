@@ -21,6 +21,12 @@ const server=http.createServer(async(req,res)=>{
   catch(e){console.error('Dashboard overview error',e);res.writeHead(503).end(JSON.stringify({error:'Data unavailable'}))}
   return;
  }
+ if(req.url?.startsWith('/api/paper-diagnostics?')){
+  const id=Number(new URL(req.url,'http://localhost').searchParams.get('account'));
+  if(!Number.isInteger(id)||id<1||id>10){res.writeHead(400).end(JSON.stringify({error:'Invalid account'}));return}
+  try{res.writeHead(200).end(JSON.stringify(await db.paperDiagnostics(id)))}catch(e){console.error('Diagnostics error',e);res.writeHead(503).end(JSON.stringify({error:'Unavailable'}))}
+  return;
+ }
  if(req.url==='/api/paper-accounts'){try{res.writeHead(200).end(JSON.stringify({accounts:await db.paperAccounts()}))}catch(e){console.error('Paper accounts error',e);res.writeHead(503).end(JSON.stringify({error:'Unavailable'}))}return}
  if(req.url?.startsWith('/api/paper?')||req.url==='/api/paper'){
   const id=Number(new URL(req.url,'http://localhost').searchParams.get('account')??'1');
@@ -151,7 +157,7 @@ async function repair(){
 const repairTimer=setInterval(()=>{void repair()},300000);
 setTimeout(()=>{void repair()},10000);
 let paperRunning=false;
-async function runPaper(){if(paperRunning||closing)return;paperRunning=true;try{await db.paperTick(symbols);await db.runExperiments()}catch(e){console.error('PAPER_ERROR',e)}finally{paperRunning=false}}
+async function runPaper(){if(paperRunning||closing)return;paperRunning=true;try{await db.paperTick(symbols);await db.recordOriginalSnapshot();await db.runExperiments()}catch(e){console.error('PAPER_ERROR',e)}finally{paperRunning=false}}
 const paperTimer=setInterval(()=>{void runPaper()},15000);setTimeout(()=>{void runPaper()},20000);
 const statsTimer=setInterval(()=>{void reportStats()},60000);
 void reportStats();
