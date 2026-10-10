@@ -9,11 +9,11 @@ export const EXPERIMENTS=[
  {id:4,name:'RSI разворот',strategy:'reversal' as Strategy,maxUsd:20,maxMinutes:15,stop:.004,take:.008,risk:.002,symbols:['SOLUSDT','ETHUSDT']},
  {id:5,name:'Импульс',strategy:'momentum' as Strategy,maxUsd:60,maxMinutes:90,stop:.008,take:.016,risk:.005,symbols:['SOLUSDT','ETHUSDT']},
  {id:6,name:'Микро 5 минут',strategy:'momentum' as Strategy,maxUsd:5,leverage:5,maxMinutes:5,stop:.004,take:.008,risk:.002,symbols:['SOLUSDT','ETHUSDT']},
- {id:11,name:'Микро 5 минут · наоборот',strategy:'momentum' as Strategy,maxUsd:5,leverage:5,maxMinutes:5,stop:.004,take:.008,risk:.002,symbols:['SOLUSDT','ETHUSDT']},
  {id:7,name:'Volatility Squeeze',strategy:'squeeze',maxUsd:35,maxMinutes:30,stop:.006,take:.012,risk:.004,symbols:['SOLUSDT','ETHUSDT']},
  {id:8,name:'Regime Switching',strategy:'regime',maxUsd:40,maxMinutes:45,stop:.006,take:.012,risk:.004,symbols:['ETHUSDT','SOLUSDT']},
  {id:9,name:'Liquidity Sweep',strategy:'sweep',maxUsd:25,maxMinutes:15,stop:.005,take:.01,risk:.003,symbols:['SOLUSDT','ETHUSDT']},
- {id:10,name:'Quarter-Hour',strategy:'quarter',maxUsd:20,maxMinutes:15,stop:.005,take:.01,risk:.003,symbols:['SOLUSDT','ETHUSDT']}
+ {id:10,name:'Quarter-Hour',strategy:'quarter',maxUsd:20,maxMinutes:15,stop:.005,take:.01,risk:.003,symbols:['SOLUSDT','ETHUSDT']},
+ {id:11,name:'Микро 5 минут · наоборот',strategy:'momentum' as Strategy,maxUsd:5,leverage:5,maxMinutes:5,stop:.004,take:.008,risk:.002,symbols:['SOLUSDT','ETHUSDT']},
 ] as const;
 type Bar={start_at:string;open:string;high:string;low:string;close:string;volume:string};
 type Pos={symbol:string;side:'LONG'|'SHORT';qty:number;entry:number;stop:number;take:number;entryAt:string};
