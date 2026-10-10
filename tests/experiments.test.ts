@@ -22,3 +22,5 @@ test('home exposes account switching and independent paper status',()=>{
 
 test('five-dollar margin with 5x caps micro trade to 25 USD',()=>{const qty=microQuantity('SOLUSDT',110,100);assert.equal(qty,0.2);assert.ok(qty*110<=25);assert.ok(qty*110/5<=5)});
 test('micro trade cannot exceed 5x or minimum step',()=>{assert.equal(microQuantity('SOLUSDT',110,100,5,6),0);assert.equal(microQuantity('SOLUSDT',400,100),0);assert.equal(microQuantity('ETHUSDT',2500,100),0.01)});
+
+test('inactive position hidden and account switch clears stale card',()=>{assert.match(dashboardHtml,/\[hidden\]\{display:none!important\}/);assert.match(dashboardHtml,/function chooseAccount\(id\).*active-position.*hidden=true/)});
