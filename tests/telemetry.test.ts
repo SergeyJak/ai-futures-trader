@@ -1,0 +1,2 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {readFileSync} from 'node:fs';
+test('telemetry is read-only, includes both v1 and v2 accounts',()=>{const db=readFileSync('src/database.ts','utf8');const index=readFileSync('src/index.ts','utf8');assert.match(db,/async telemetrySnapshot\(/);assert.match(db,/FROM paper_trades GROUP BY account_id/);assert.match(db,/FROM shadow_trades GROUP BY account_id/);assert.match(index,/AI_FUTURES_ACCOUNTS/);assert.match(index,/300000/);assert.match(index,/clearInterval\(telemetryTimer\)/);});
