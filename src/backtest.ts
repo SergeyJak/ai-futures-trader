@@ -1,12 +1,13 @@
+import {feasibleQuantity} from './contracts.js';
 import {analyze} from './indicators.js';
 export type Bar={start_at:string;open:string;high:string;low:string;close:string;volume:string};
 export type Trade={side:'LONG'|'SHORT';entryAt:string;exitAt:string;entry:number;exit:number;pnl:number;reason:string};
 export type Strategy='momentum'|'trend'|'reversal';
-export function backtest(rows:Bar[],initial=100,strategy:Strategy='momentum'){
+export function backtest(rows:Bar[],initial=100,strategy:Strategy='momentum',symbol='BTCUSDT'){
  const fee=.0006,slippage=.0002,risk=.005,stopDistance=.006,takeDistance=.012;
  let equity=initial,peak=initial,maxDrawdown=0;const trades:Trade[]=[];
  let position:null|{side:'LONG'|'SHORT';entry:number;stop:number;take:number;quantity:number;entryAt:string}=null;
- let pending:null|'LONG'|'SHORT'=null;
+ let pending:null|'LONG'|'SHORT'=null;let rejectedOrders=0;
  for(let i=30;i<rows.length;i++){
   const b=rows[i],open=Number(b.open),high=Number(b.high),low=Number(b.low),close=Number(b.close);
   if(![open,high,low,close].every(x=>Number.isFinite(x)&&x>0)||low>high||open<low||open>high||close<low||close>high)throw Error('Invalid OHLC');
@@ -27,8 +28,9 @@ export function backtest(rows:Bar[],initial=100,strategy:Strategy='momentum'){
    const side=pending;pending=null;const entry=open*(side==='LONG'?1+slippage:1-slippage);
    const stop=entry*(side==='LONG'?1-stopDistance:1+stopDistance);
    const take=entry*(side==='LONG'?1+takeDistance:1-takeDistance);
-   const quantity=Math.min((equity*risk)/(entry*stopDistance),equity/entry);
+   const quantity=feasibleQuantity(symbol,entry,equity,risk,stopDistance,fee);
    if(quantity>0)position={side,entry,stop,take,quantity,entryAt:b.start_at};
+   else rejectedOrders++;
   }
   if(!position&&i<rows.length-1){
    const window=rows.slice(Math.max(0,i-240),i+1);
@@ -52,5 +54,5 @@ export function backtest(rows:Bar[],initial=100,strategy:Strategy='momentum'){
   }
  }
  const wins=trades.filter(t=>t.pnl>0);
- return {strategy,initial,equity,netPnl:equity-initial,returnPct:(equity/initial-1)*100,trades:trades.length,winRate:trades.length?wins.length/trades.length*100:null,maxDrawdown,feesPerSidePct:fee*100,slippagePerSidePct:slippage*100,openPosition:position!==null,tradeHistory:trades.slice(-30)};
+ return {strategy,symbol,rejectedOrders,initial,equity,netPnl:equity-initial,returnPct:(equity/initial-1)*100,trades:trades.length,winRate:trades.length?wins.length/trades.length*100:null,maxDrawdown,feesPerSidePct:fee*100,slippagePerSidePct:slippage*100,openPosition:position!==null,tradeHistory:trades.slice(-30)};
 }
