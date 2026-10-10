@@ -25,7 +25,7 @@ export const dashboardHtml = `<!doctype html>
 </div></div>
 <div class="section-head"><h2>Завершённые сделки</h2><span class="sub">Последние 50 · сначала новые</span></div>
 <div class="card"><div class="table-scroll" id="trades"><div class="empty">Загрузка истории…</div></div></div>
-<dialog id="trade-dialog" class="trade-dialog" aria-labelledby="trade-dialog-title"><div class="dialog-body"><div class="dialog-top"><div><h2 id="trade-dialog-title">Детали сделки</h2><div id="trade-dialog-meta" class="trade-info"></div></div><button class="dialog-close" id="trade-dialog-close" type="button" aria-label="Закрыть окно" title="Закрыть">×</button></div><div id="trade-dialog-chart" class="trade-chart">Загрузка свечей…</div><div class="trade-key"><span>● Синий: вход</span><span id="trade-exit-key">● Оранжевый: выход</span><span>Синяя линия: уровень входа</span></div><p class="trade-info" id="trade-dialog-note"></p></div></dialog><p class="foot" id="updated">Данные обновляются каждые 15 секунд. Только симуляция, реальные деньги не используются.</p>
+<dialog id="trade-dialog" class="trade-dialog" aria-labelledby="trade-dialog-title"><div class="dialog-body"><div class="dialog-top"><div><h2 id="trade-dialog-title">Детали сделки</h2><div id="trade-dialog-meta" class="trade-info"></div></div><button class="dialog-close" id="trade-dialog-close" type="button" aria-label="Закрыть окно" title="Закрыть">×</button></div><div id="trade-dialog-chart" class="trade-chart">Загрузка свечей…</div><div class="trade-key"><span>● Синий: вход</span><span id="trade-exit-key">● Оранжевый: выход</span><span>Синяя линия: цена исполнения входа · маленькие пустые кружки: цена до проскальзывания</span></div><p class="trade-info" id="trade-dialog-note"></p></div></dialog><p class="foot" id="updated">Данные обновляются каждые 15 секунд. Только симуляция, реальные деньги не используются.</p>
 </main><script>
 'use strict';
 let accountId=1;let currentAccounts=[];let requestId=0;
@@ -51,11 +51,23 @@ function drawTradeChart(bars,trade,open=false){
  let svg='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 850 300" preserveAspectRatio="none" role="img" aria-label="Свечи выбранной сделки с входом и выходом">';
  for(let i=0;i<5;i++){const level=hi-(hi-lo)*i/4,yy=y(level);svg+='<line x1="60" x2="790" y1="'+yy+'" y2="'+yy+'" stroke="#e5ecf4"/><text x="2" y="'+(yy+5)+'" font-size="18" fill="#4c5e79">'+level.toFixed(2)+'</text>'}
  bars.forEach((b,i)=>{const x=left+(i+.5)*w,o=Number(b.open),close=Number(b.close),col=close>=o?'#149a70':'#d45869';svg+='<line x1="'+x+'" x2="'+x+'" y1="'+y(b.high)+'" y2="'+y(b.low)+'" stroke="'+col+'" stroke-width="1.5"/><rect x="'+(x-Math.max(1,w*.32))+'" y="'+Math.min(y(o),y(close))+'" width="'+Math.max(2,w*.64)+'" height="'+Math.max(1,Math.abs(y(o)-y(close)))+'" fill="'+col+'"><title>'+b.start_at+' O '+o+' C '+close+'</title></rect>'});
- const entryX=xFor(Date.parse(trade.entry_at)),exitX=open?xFor(last):xFor(Date.parse(trade.exit_at));
- const ey=y(trade.entry_price),xy=y(exitPrice);
+ // Simulation fills include 0.02% slippage. Plot the trade fill
+ // and the corresponding unslipped reference price separately.
+ const slip=.0002,entryAt=Date.parse(trade.entry_at),exitAt=Date.parse(trade.exit_at);
+ const xForBar=time=>{const i=bars.findIndex(b=>Date.parse(b.start_at)===time);return i>=0?left+(i+.5)*w:xFor(time)};
+ const entryX=xForBar(entryAt),exitX=open?left+(bars.length-.5)*w:xForBar(exitAt);
+ const entryFill=Number(trade.entry_price),entryReference=entryFill/(trade.side==='SHORT'?1-slip:1+slip);
+ const ey=y(entryFill),xy=y(exitPrice);
  svg+='<line x1="'+entryX+'" x2="'+exitX+'" y1="'+ey+'" y2="'+ey+'" stroke="#4266d3" stroke-width="1.4"/>';
- svg+='<circle cx="'+entryX+'" cy="'+ey+'" r="6" fill="#4266d3"><title>Вход '+trade.entry_price+'</title></circle>';
- if(!open)svg+='<circle cx="'+exitX+'" cy="'+xy+'" r="6" fill="#ee9238"><title>Выход '+exitPrice+'</title></circle>';if(open){for(const [price,label,color] of [[trade.stop,'SL','#d45b65'],[trade.take,'TP','#14885e']]){const value=Number(price);if(!Number.isFinite(value))continue;const yLevel=Math.max(25,Math.min(250,y(value)));svg+='<line x1="'+entryX+'" x2="790" y1="'+yLevel+'" y2="'+yLevel+'" stroke="'+color+'" stroke-dasharray="5 5" stroke-width="2"><title>'+label+' '+value+'</title></line>';}}
+ svg+='<line x1="'+entryX+'" x2="'+entryX+'" y1="'+y(entryReference)+'" y2="'+ey+'" stroke="#4266d3" stroke-width="1.5" stroke-dasharray="3 3"/>';
+ svg+='<circle cx="'+entryX+'" cy="'+y(entryReference)+'" r="3.5" fill="white" stroke="#4266d3" stroke-width="2"><title>Рыночная цена входа (до проскальзывания) '+entryReference.toFixed(3)+'</title></circle>';
+ svg+='<circle cx="'+entryX+'" cy="'+ey+'" r="5" fill="#4266d3"><title>Исполнение входа '+entryFill+'</title></circle>';
+ if(!open){
+  const exitReference=exitPrice/(trade.side==='SHORT'?1+slip:1-slip);
+  svg+='<line x1="'+exitX+'" x2="'+exitX+'" y1="'+y(exitReference)+'" y2="'+xy+'" stroke="#ee9238" stroke-width="1.5" stroke-dasharray="3 3"/>';
+  svg+='<circle cx="'+exitX+'" cy="'+y(exitReference)+'" r="3.5" fill="white" stroke="#ee9238" stroke-width="2"><title>Рыночная цена выхода (до проскальзывания) '+exitReference.toFixed(3)+'</title></circle>';
+  svg+='<circle cx="'+exitX+'" cy="'+xy+'" r="5" fill="#ee9238"><title>Исполнение выхода '+exitPrice+'</title></circle>';
+ }if(open){for(const [price,label,color] of [[trade.stop,'SL','#d45b65'],[trade.take,'TP','#14885e']]){const value=Number(price);if(!Number.isFinite(value))continue;const yLevel=Math.max(25,Math.min(250,y(value)));svg+='<line x1="'+entryX+'" x2="790" y1="'+yLevel+'" y2="'+yLevel+'" stroke="'+color+'" stroke-dasharray="5 5" stroke-width="2"><title>'+label+' '+value+'</title></line>';}}
  svg+='<text x="60" y="280" font-size="18" fill="#4c5e79">'+String(bars[0].start_at).slice(5,16)+'</text><text x="790" y="280" text-anchor="end" font-size="18" fill="#4c5e79">'+String(bars.at(-1).start_at).slice(5,16)+'</text></svg>';
  const doc=new DOMParser().parseFromString(svg,'image/svg+xml');if(doc.querySelector('parsererror')){chart.textContent='Ошибка построения SVG-графика';return}chart.replaceChildren(document.importNode(doc.documentElement,true));
 }
@@ -91,6 +103,7 @@ async function openTrade(trade){
  set('trade-dialog-title',trade.symbol+' · '+trade.side);
  set('trade-dialog-meta',name+' · '+String(trade.entry_at).slice(0,16)+' → '+String(trade.exit_at).slice(0,16)+' UTC · '+duration+' мин · P&L '+money.format(Number(trade.pnl)));
  set('trade-dialog-note','Вход '+money.format(Number(trade.entry_price))+' · выход '+money.format(Number(trade.exit_price))+' · объём '+quantity.format(Number(trade.quantity))+' · '+trade.reason);
+ set('trade-dialog-note',el('trade-dialog-note').textContent+' · Проскальзывание 0,02% при входе и выходе (модель симуляции)');
  set('trade-dialog-chart','Загрузка минутных свечей…');if(!modal.open)modal.showModal();
  try{
   const pad=Math.min(30,Math.max(5,Math.round(duration*.3)));
