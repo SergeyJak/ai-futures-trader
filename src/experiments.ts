@@ -1,5 +1,6 @@
 import type pg from 'pg';
 import {analyze} from './indicators.js';
+import {researchSignal} from './research.js';
 import {feasibleQuantity} from './contracts.js';
 import type {Strategy} from './backtest.js';
 export const EXPERIMENTS=[
@@ -7,7 +8,11 @@ export const EXPERIMENTS=[
  {id:3,name:'Следование тренду',strategy:'trend' as Strategy,maxUsd:40,maxMinutes:60,stop:.006,take:.012,risk:.004,symbols:['ETHUSDT','SOLUSDT']},
  {id:4,name:'RSI разворот',strategy:'reversal' as Strategy,maxUsd:20,maxMinutes:15,stop:.004,take:.008,risk:.002,symbols:['SOLUSDT','ETHUSDT']},
  {id:5,name:'Импульс',strategy:'momentum' as Strategy,maxUsd:60,maxMinutes:90,stop:.008,take:.016,risk:.005,symbols:['SOLUSDT','ETHUSDT']},
- {id:6,name:'Микро 5 минут',strategy:'momentum' as Strategy,maxUsd:5,leverage:5,maxMinutes:5,stop:.004,take:.008,risk:.002,symbols:['SOLUSDT','ETHUSDT']}
+ {id:6,name:'Микро 5 минут',strategy:'momentum' as Strategy,maxUsd:5,leverage:5,maxMinutes:5,stop:.004,take:.008,risk:.002,symbols:['SOLUSDT','ETHUSDT']},
+ {id:7,name:'Volatility Squeeze',strategy:'squeeze',maxUsd:35,maxMinutes:30,stop:.006,take:.012,risk:.004,symbols:['SOLUSDT','ETHUSDT']},
+ {id:8,name:'Regime Switching',strategy:'regime',maxUsd:40,maxMinutes:45,stop:.006,take:.012,risk:.004,symbols:['ETHUSDT','SOLUSDT']},
+ {id:9,name:'Liquidity Sweep',strategy:'sweep',maxUsd:25,maxMinutes:15,stop:.005,take:.01,risk:.003,symbols:['SOLUSDT','ETHUSDT']},
+ {id:10,name:'Quarter-Hour',strategy:'quarter',maxUsd:20,maxMinutes:15,stop:.005,take:.01,risk:.003,symbols:['SOLUSDT','ETHUSDT']}
 ] as const;
 type Bar={start_at:string;open:string;high:string;low:string;close:string;volume:string};
 type Pos={symbol:string;side:'LONG'|'SHORT';qty:number;entry:number;stop:number;take:number;entryAt:string};
@@ -34,7 +39,7 @@ export async function runExperiments(pool:pg.Pool){
   const q=await pool.query<Bar>('SELECT start_at::text,open::text,high::text,low::text,close::text,volume::text FROM market_candles WHERE symbol=$1 AND confirmed=true ORDER BY start_at DESC LIMIT 280',[symbol]);
   histories.set(symbol,q.rows.reverse());
  }
- if([...histories.values()].some(x=>x.length<35))return;
+ if([...histories.values()].some(x=>x.length<65))return;
  const latest=Math.min(...[...histories.values()].map(a=>Date.parse(a.at(-1)!.start_at)));
  if(!Number.isFinite(latest))return;
  for(const cfg of EXPERIMENTS){
