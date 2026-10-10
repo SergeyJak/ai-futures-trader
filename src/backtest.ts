@@ -1,7 +1,8 @@
 import {analyze} from './indicators.js';
 export type Bar={start_at:string;open:string;high:string;low:string;close:string;volume:string};
 export type Trade={side:'LONG'|'SHORT';entryAt:string;exitAt:string;entry:number;exit:number;pnl:number;reason:string};
-export function backtest(rows:Bar[],initial=1000){
+export type Strategy='momentum'|'trend'|'reversal';
+export function backtest(rows:Bar[],initial=1000,strategy:Strategy='momentum'){
  const fee=.0006,slippage=.0002,risk=.005,stopDistance=.006,takeDistance=.012;
  let equity=initial,peak=initial,maxDrawdown=0;const trades:Trade[]=[];
  let position:null|{side:'LONG'|'SHORT';entry:number;stop:number;take:number;quantity:number;entryAt:string}=null;
@@ -32,10 +33,24 @@ export function backtest(rows:Bar[],initial=1000){
   if(!position&&i<rows.length-1){
    const window=rows.slice(Math.max(0,i-240),i+1);
    const signal=analyze(window).signal;
-   if(signal==='BULLISH_WATCH')pending='LONG';
-   if(signal==='BEARISH_WATCH')pending='SHORT';
+   if(strategy==='momentum'){
+    if(signal==='BULLISH_WATCH')pending='LONG';
+    if(signal==='BEARISH_WATCH')pending='SHORT';
+   }else if(strategy==='trend'){
+    const s=analyze(window);
+    if(s.ema9!==null&&s.ema21!==null&&s.rsi14!==null){
+     if(s.ema9>s.ema21&&s.rsi14>=55&&s.rsi14<75)pending='LONG';
+     if(s.ema9<s.ema21&&s.rsi14<=45&&s.rsi14>25)pending='SHORT';
+    }
+   }else{
+    const s=analyze(window);
+    if(s.rsi14!==null){
+     if(s.rsi14<30)pending='LONG';
+     if(s.rsi14>70)pending='SHORT';
+    }
+   }
   }
  }
  const wins=trades.filter(t=>t.pnl>0);
- return {initial,equity,netPnl:equity-initial,returnPct:(equity/initial-1)*100,trades:trades.length,winRate:trades.length?wins.length/trades.length*100:null,maxDrawdown,feesPerSidePct:fee*100,slippagePerSidePct:slippage*100,openPosition:position!==null,tradeHistory:trades.slice(-30)};
+ return {strategy,initial,equity,netPnl:equity-initial,returnPct:(equity/initial-1)*100,trades:trades.length,winRate:trades.length?wins.length/trades.length*100:null,maxDrawdown,feesPerSidePct:fee*100,slippagePerSidePct:slippage*100,openPosition:position!==null,tradeHistory:trades.slice(-30)};
 }
