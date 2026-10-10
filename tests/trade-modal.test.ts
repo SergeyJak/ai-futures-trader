@@ -5,3 +5,5 @@ test('historical interval validates symbol and bounded duration on server',()=>{
 test('trade chart SVG uses namespace and rejects parser errors',()=>{assert.match(dashboardHtml,/xmlns="http:\/\/www\.w3\.org\/2000\/svg"/);assert.match(dashboardHtml,/querySelector\('parsererror'\)/)});
 
 test('open position supports chart modal and current quote with risk lines',()=>{for(const s of ['openCurrentPosition','active-position','trade-exit-key','Текущая цена','trade.stop','trade.take'])assert.ok(dashboardHtml.includes(s),s)});
+
+test('mobile modal simplifies current quote and close control',()=>{assert.ok(dashboardHtml.includes('aria-label="Закрыть окно"'));assert.ok(dashboardHtml.includes('font-size="18" fill="#4c5e79"'));assert.ok(dashboardHtml.includes("el('trade-exit-key').hidden=true"));});
