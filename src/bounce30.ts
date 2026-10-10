@@ -15,8 +15,14 @@ function evaluate(b:Bar[],dip:number,stop:number,take:number,side:'LONG'|'SHORT'
   const marketEntry=trigger,entry=marketEntry*(1+direction*.0002);
   const stopPrice=entry*(1-direction*stop),takePrice=entry*(1+direction*take);
   let raw=0,reason='TIME',valid=true;
+  // On the trigger minute, the LONG stop is necessarily after crossing the entry
+  // if its level is below the trigger; for SHORT use adverse stop-first bound
+  // because minute OHLC cannot tell whether the high was before or after entry.
+  const entryBar=b[i];
+  const immediateStop=direction===1?entryBar.low<=stopPrice:entryBar.high>=stopPrice;
+  if(immediateStop){raw=stopPrice;reason='STOP'}
   // Exit at the first minute open after 30 minutes, unless a stop or target triggers sooner.
-  for(let j=i+1;j<=i+31;j++){
+  for(let j=i+1;!raw&&j<=i+31;j++){
    const candle=b[j];if(candle.ms-b[j-1].ms!==60000){valid=false;break}
    if(j===i+31){raw=candle.open;break}
    const stopHit=direction===1?candle.low<=stopPrice:candle.high>=stopPrice;
@@ -44,5 +50,5 @@ export function researchThirtyMinuteBounce(rows:Candle[]){
     const long=evaluate(b,dip,stop,take,'LONG'),short=evaluate(b,dip,stop,take,'SHORT');
     results.push({dipPct:dip*100,stopPct:stop*100,takePct:take*100,maxMinutes:30,long,short});
    }
- return {type:'research-only',hypothesis:'Entry is modeled at the instant a minute candle touches the specified drawdown from the previous 30-minute high (without rebound confirmation). Minute OHLC cannot reconstruct exact intrabar sequence, so entry-candle exits are not simulated, a known optimistic limitation. Both directions share the same trigger; stop/target or 30-minute exit. Research only.',results};
+ return {type:'research-only',hypothesis:'Entry is modeled at the instant a minute candle touches the specified drawdown from the previous 30-minute high (without rebound confirmation). Entry-candle stops are charged immediately using stop-first conservative assumptions; entry-candle take is NOT credited because intrabar ordering is unknown. Minute OHLC remains an approximation. Both directions share the same trigger; stop/target or 30-minute exit. Research only.',results};
 }
