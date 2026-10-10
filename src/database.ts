@@ -12,6 +12,10 @@ export class Database{
  volume=EXCLUDED.volume,turnover=EXCLUDED.turnover,confirmed=EXCLUDED.confirmed,updated_at=NOW()
  WHERE market_candles.confirmed=false OR EXCLUDED.confirmed=true`,
  [c.symbol,c.startMs,c.open,c.high,c.low,c.close,c.volume,c.turnover,c.confirmed])}
+ async existingMinutes(symbol:string,fromMs:number,toMs:number):Promise<number[]>{
+  const rows=await this.pool.query<{ms:string}>(`SELECT (EXTRACT(EPOCH FROM start_at)*1000)::bigint::text AS ms FROM market_candles WHERE symbol=$1 AND start_at>=to_timestamp($2::double precision/1000) AND start_at<=to_timestamp($3::double precision/1000) AND confirmed=true ORDER BY start_at`,[symbol,fromMs,toMs]);
+  return rows.rows.map(r=>Number(r.ms));
+ }
  async ping(){await this.pool.query('SELECT 1')}
 
  async candleStats(){
