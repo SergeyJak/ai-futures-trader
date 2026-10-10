@@ -60,7 +60,31 @@ async function reportStorage(){
 }
 const storageTimer=setInterval(()=>{void reportStorage()},3600000);
 void reportStorage();
-let repairing=false;
+let repairing=false;let historyBusy=false;const historyDays=7;
+async function extendHistory(){
+ if(historyBusy||closing)return;historyBusy=true;
+ try{
+  const end=Math.floor(Date.now()/MINUTE)*MINUTE-MINUTE;
+  const oldest=end-historyDays*1440*MINUTE;
+  for(const symbol of symbols){
+   const stats=await db.candleStats();const row=stats.find(x=>x.symbol===symbol);
+   let cursor=row?.first_at?Date.parse(row.first_at):end;
+   if(!Number.isFinite(cursor))continue;
+   // Backfill at most 4h per symbol per 5m cycle to limit API and database load.
+   const lower=Math.max(oldest,cursor-240*MINUTE);
+   let added=0;
+   for(let start=lower;start<cursor;start+=200*MINUTE){
+    const last=Math.min(cursor-MINUTE,start+199*MINUTE);
+    const bars=await fetchHistory(symbol,start,last);
+    for(const bar of bars){await db.upsert(bar);added++}
+   }
+   console.info('HISTORY_STATS',JSON.stringify({symbol,added,daysTarget:historyDays}));
+  }
+ }catch(e){console.error('HISTORY_ERROR',e)}finally{historyBusy=false}
+}
+const historyTimer=setInterval(()=>{void extendHistory()},300000);
+setTimeout(()=>{void extendHistory()},30000);
+
 async function repair(){
  if(repairing||closing)return;
  repairing=true;
@@ -84,5 +108,5 @@ const repairTimer=setInterval(()=>{void repair()},300000);
 setTimeout(()=>{void repair()},10000);
 const statsTimer=setInterval(()=>{void reportStats()},60000);
 void reportStats();
-let closing=false;async function stop(){if(closing)return;closing=true;clearInterval(statsTimer);clearInterval(storageTimer);clearInterval(repairTimer);server.close();await stream.stop();await db.close();}
+let closing=false;async function stop(){if(closing)return;closing=true;clearInterval(statsTimer);clearInterval(storageTimer);clearInterval(repairTimer);clearInterval(historyTimer);server.close();await stream.stop();await db.close();}
 for(const sig of ['SIGINT','SIGTERM'] as const)process.on(sig,()=>{void stop().then(()=>process.exit(0))});
