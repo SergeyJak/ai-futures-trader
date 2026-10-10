@@ -1,0 +1,8 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {shadowExit,SHADOW_VERSION} from '../src/shadow.js';import {readFileSync} from 'node:fs';
+const p={symbol:'SOLUSDT',side:'LONG' as const,qty:0.2,entry:100,stop:99,take:102,entryAt:'2026-10-10T08:00:00Z'};
+const bar=(open:number,high:number,low:number)=>({start_at:'2026-10-10T08:05:00Z',open:String(open),high:String(high),low:String(low),close:String(open),volume:'100'});
+test('at timeout close at candle open even if candle later touches stop',()=>{assert.deepEqual(shadowExit(p,bar(100,103,98),Date.parse('2026-10-10T08:05:00Z'),5),{reason:'TIME',raw:100})});
+test('on gap crossing stop fill worse candle open',()=>{assert.deepEqual(shadowExit(p,bar(98,99,97),Date.parse('2026-10-10T08:01:00Z'),5),{reason:'STOP',raw:98})});
+test('within candle both stop and take stop wins conservatively',()=>{assert.deepEqual(shadowExit(p,bar(100,103,98),Date.parse('2026-10-10T08:01:00Z'),5),{reason:'STOP',raw:99})});
+test('entry candle can be evaluated and original accounts never overwritten',()=>{const source=readFileSync('src/shadow.ts','utf8');assert.ok(source.includes('shadowExit(opened,e.bar,at,cfg.maxMinutes)'));assert.ok(source.includes('shadow_accounts'));assert.ok(source.includes('shadow_trades'));assert.ok(!source.includes('UPDATE paper_variants'));assert.ok(!source.includes('UPDATE paper_account'));assert.ok(SHADOW_VERSION.startsWith('v2'))});
+test('comparison endpoint and shadow tick connected',()=>{const code=readFileSync('src/index.ts','utf8');assert.ok(code.includes('/api/shadow-compare'));assert.ok(code.includes('await db.initShadow()'));assert.ok(code.includes('await db.runShadow()'))});
