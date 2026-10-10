@@ -8,9 +8,11 @@ function evaluate(b:Bar[],dip:number,stop:number,take:number,side:'LONG'|'SHORT'
   if(window.some((x,j)=>j>0&&x.ms-window[j-1].ms!==60000))continue;
   if(b[i].ms-b[i-1].ms!==60000||b[i+1].ms-b[i].ms!==60000)continue;
   const peak=Math.max(...window.map(x=>x.high));
-  // A completed dip signal, followed by execution at the NEXT candle open.
-  if(b[i].close>peak*(1-dip)||b[i].close<peak*(1-dip*1.8))continue;
-  const marketEntry=b[i+1].open,entry=marketEntry*(1+direction*.0002);
+  // Enter when the minute candle first touches the drawdown threshold. Minute OHLC
+  // does not reveal the intrabar path; treat this as a threshold-touch approximation.
+  const trigger=peak*(1-dip);
+  if(b[i-1].close<=trigger||b[i].low>trigger||b[i].open<trigger)continue;
+  const marketEntry=trigger,entry=marketEntry*(1+direction*.0002);
   const stopPrice=entry*(1-direction*stop),takePrice=entry*(1+direction*take);
   let raw=0,reason='TIME',valid=true;
   // Exit at the first minute open after 30 minutes, unless a stop or target triggers sooner.
@@ -42,5 +44,5 @@ export function researchThirtyMinuteBounce(rows:Candle[]){
     const long=evaluate(b,dip,stop,take,'LONG'),short=evaluate(b,dip,stop,take,'SHORT');
     results.push({dipPct:dip*100,stopPct:stop*100,takePct:take*100,maxMinutes:30,long,short});
    }
- return {type:'research-only',hypothesis:'30-minute rolling peak followed by a completed dip of 0.2-0.6%, buy bounce or sell continuation at the next candle open; stop/target or 30-minute exit. One-position-at-a-time and conservative stop-first when minute OHLC is ambiguous.',results};
+ return {type:'research-only',hypothesis:'Entry is modeled at the instant a minute candle touches the specified drawdown from the previous 30-minute high (without rebound confirmation). Minute OHLC cannot reconstruct exact intrabar sequence, so entry-candle exits are not simulated, a known optimistic limitation. Both directions share the same trigger; stop/target or 30-minute exit. Research only.',results};
 }
