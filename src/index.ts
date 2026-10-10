@@ -69,6 +69,16 @@ const server=http.createServer(async(req,res)=>{
   catch(e){console.error('Signal calculation error',e);res.writeHead(503).end(JSON.stringify({error:'Signals unavailable'}))}
   return;
  }
+ if(req.url?.startsWith('/api/trade-candles?')){
+  const u=new URL(req.url,'http://localhost'),symbol=u.searchParams.get('symbol')??'';
+  const from=Date.parse(u.searchParams.get('from')??''),to=Date.parse(u.searchParams.get('to')??'');
+  if(!symbols.includes(symbol)||!Number.isFinite(from)||!Number.isFinite(to)||to<from||to-from>1440*60000||from>Date.now()+60000){
+   res.writeHead(400).end(JSON.stringify({error:'Invalid symbol or time range'}));return
+  }
+  try{res.writeHead(200).end(JSON.stringify({symbol,candles:await db.candlesBetween(symbol,from,to)}))}
+  catch(e){console.error('Trade candle error',e);res.writeHead(503).end(JSON.stringify({error:'Candles unavailable'}))}
+  return;
+ }
  if(req.url?.startsWith('/api/candles?')){
   const u=new URL(req.url,'http://localhost');
   const symbol=u.searchParams.get('symbol')??'';
