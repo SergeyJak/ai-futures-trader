@@ -21,7 +21,13 @@ async function reportStats(){
  try { const stats=await db.candleStats(); console.info('CANDLE_STATS',JSON.stringify({at:new Date().toISOString(),symbols:stats})); }
  catch(e){console.error('CANDLE_STATS_ERROR',e);}
 }
+async function reportStorage(){
+ try { console.info('STORAGE_STATS',JSON.stringify({at:new Date().toISOString(),...await db.storageStats()})); }
+ catch(e){console.error('STORAGE_STATS_ERROR',e);}
+}
+const storageTimer=setInterval(()=>{void reportStorage()},3600000);
+void reportStorage();
 const statsTimer=setInterval(()=>{void reportStats()},60000);
 void reportStats();
-let closing=false;async function stop(){if(closing)return;closing=true;clearInterval(statsTimer);server.close();await stream.stop();await db.close();}
+let closing=false;async function stop(){if(closing)return;closing=true;clearInterval(statsTimer);clearInterval(storageTimer);server.close();await stream.stop();await db.close();}
 for(const sig of ['SIGINT','SIGTERM'] as const)process.on(sig,()=>{void stop().then(()=>process.exit(0))});
