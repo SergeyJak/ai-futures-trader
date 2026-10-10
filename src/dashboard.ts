@@ -90,7 +90,7 @@ async function openCurrentPosition(){
   set('trade-dialog-meta',name+' · вход '+String(p.entryAt).slice(0,16)+' UTC · '+Math.max(0,Math.round((now-entry)/60000))+' мин · текущий P&L '+(unrealized===null?'нет цены':money.format(unrealized)));
   set('trade-dialog-note','Вход '+money.format(Number(p.entry))+' · текущая цена '+(Number.isFinite(price)?money.format(price):'нет котировки')+' · SL '+money.format(Number(p.stop))+' · TP '+money.format(Number(p.take))+' · объём '+quantity.format(qty)+(from>entry?' · показаны последние 24 часа':''));
   el('trade-exit-key').hidden=true;
-  drawTradeChart(bars,{entry_at:p.entryAt,entry_price:p.entry,stop:p.stop,take:p.take},true);
+  drawTradeChart(bars,{entry_at:p.entryAt,entry_price:p.entry,side:p.side,stop:p.stop,take:p.take},true);
  }catch(e){if(seq===modalSeq)set('trade-dialog-chart','Не удалось загрузить график: '+String(e))}
 }
 el('active-position').addEventListener('click',openCurrentPosition);
