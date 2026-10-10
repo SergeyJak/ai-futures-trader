@@ -23,7 +23,7 @@ const server=http.createServer(async(req,res)=>{
   const symbol=u.searchParams.get('symbol')??'';
   const rawLimit=u.searchParams.get('limit')??'180';
   const limit=Number(rawLimit);
-  if(!symbols.includes(symbol)||!Number.isInteger(limit)||limit<1||limit>500){res.writeHead(400).end(JSON.stringify({error:'Invalid symbol or limit'}));return}
+  if(!symbols.includes(symbol)||!Number.isInteger(limit)||limit<1||limit>1500){res.writeHead(400).end(JSON.stringify({error:'Invalid symbol or limit'}));return}
   try{const candles=await db.recentCandles(symbol,limit);res.writeHead(200).end(JSON.stringify({symbol,candles}))}
   catch(e){console.error('Dashboard candle error',e);res.writeHead(503).end(JSON.stringify({error:'Data unavailable'}))}
   return;
