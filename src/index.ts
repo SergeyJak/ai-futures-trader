@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import http from 'node:http';import {backtest} from './backtest.js';
 import {evaluateCandidate} from './research.js';
-import {auditTrade,auditSummary} from './audit.js';import {researchThirtyMinuteRange} from './range30.js';
+import {auditTrade,auditSummary} from './audit.js';import {researchThirtyMinuteRange} from './range30.js';import {researchThirtyMinuteBounce} from './bounce30.js';
 import {walkForward} from './walkforward.js';import {analyze} from './indicators.js';import {dashboardHtml} from './dashboard.js';import {analyticsHtml,researchHtml,marketHtml} from './extra-pages.js';import {MINUTE,missingRanges,fetchHistory} from './backfill.js';import {Database} from './database.js';import {MarketStream} from './market.js';
 const port=Number(process.env.PORT??3000);const url=process.env.DATABASE_URL;
 const endpoint=process.env.BYBIT_PUBLIC_WS??'wss://stream.bybit.com/v5/public/linear';
@@ -32,6 +32,18 @@ const server=http.createServer(async(req,res)=>{
  if(req.url==='/api/pairs'){
   try{res.writeHead(200).end(JSON.stringify(await db.pairedDiagnostics()))}
   catch(e){console.error('Pair diagnostics error',e);res.writeHead(503).end(JSON.stringify({error:'Pair diagnostics unavailable'}))}
+  return;
+ }
+ if(req.url==='/api/bounce30'){
+  try{
+   const results=[];
+   for(const symbol of ['SOLUSDT','ETHUSDT','BTCUSDT']){
+    const rows=await db.recentCandles(symbol,10000);
+    const split=Math.floor(rows.length*.7);
+    results.push({symbol,training:researchThirtyMinuteBounce(rows.slice(0,split)),validation:researchThirtyMinuteBounce(rows.slice(split))});
+   }
+   res.writeHead(200).end(JSON.stringify({type:'research-only',strategy:'30-minute dip bounce versus short continuation',chronologicalSplit:'70/30',noOrders:true,results}));
+  }catch(e){console.error('Bounce 30 research error',e);res.writeHead(503).end(JSON.stringify({error:'Bounce research unavailable'}))}
   return;
  }
  if(req.url==='/api/range30'){
