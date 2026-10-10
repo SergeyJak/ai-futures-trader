@@ -3,7 +3,14 @@ type Bar={start_at:string;open:string;high:string;low:string;close:string};
 type Position={symbol:string;side:'LONG'|'SHORT';entry:number;qty:number;entryAt:string;stop:number;take:number;entryFee:number};
 type State={id:string;symbol:string;side:'LONG'|'SHORT';dip:number;stop:number;take:number;hold:number;balance:number;lastAt:string|null;position:Position|null};
 const FEE=.0006,SLIP=.0002;
-export const V3_CONFIGS=['BTCUSDT','ETHUSDT','SOLUSDT'].flatMap(symbol=>[.002,.004].flatMap(dip=>[.002,.004].flatMap(stop=>[.003,.006].flatMap(take=>[5,15,30].flatMap(hold=>['LONG','SHORT'].map(side=>({id:[symbol,side,'d'+dip,'s'+stop,'t'+take,'h'+hold].join('_'),symbol,side:side as 'LONG'|'SHORT',dip,stop,take,hold}))))));
+export const V3_CONFIGS:(Pick<State,'id'|'symbol'|'side'|'dip'|'stop'|'take'|'hold'>)[]=[];
+for(const symbol of ['BTCUSDT','ETHUSDT','SOLUSDT'])
+ for(const dip of [.002,.004])
+  for(const stop of [.002,.004])
+   for(const take of [.003,.006])
+    for(const hold of [5,15,30])
+     for(const side of ['LONG','SHORT'] as const)
+      V3_CONFIGS.push({id:[symbol,side,'d'+dip,'s'+stop,'t'+take,'h'+hold].join('_'),symbol,side,dip,stop,take,hold});
 export function v3Advance(state:State,history:Bar[]):{state:State;trade:Record<string,unknown>|null;event:string}{
  const s:{[key:string]:any}={...state},bars=history.map(x=>({...x,ms:Date.parse(x.start_at),o:Number(x.open),h:Number(x.high),l:Number(x.low),c:Number(x.close)}));
  const now=bars.at(-1);if(!now||!Number.isFinite(now.ms)||!Number.isFinite(now.o))return {state,event:'INVALID',trade:null};
