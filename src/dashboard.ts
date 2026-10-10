@@ -48,7 +48,7 @@ function renderAccounts(){
  const overview=el('account-comparison');overview.replaceChildren();
  const head=document.createElement('div');head.className='compare-row head';['Стратегия','Баланс','Позиция','P&L'].forEach(t=>cell(head,t));overview.appendChild(head);
  for(const a of currentAccounts){const row=document.createElement('div');row.className='compare-row'+(a.id===accountId?' selected':'');row.addEventListener('click',()=>chooseAccount(a.id));const gain=Number(a.balance)-100;cell(row,a.id+'. '+a.name);cell(row,money.format(Number(a.balance)));cell(row,a.position?a.position.symbol.replace('USDT','')+' '+a.position.side:'Нет');cell(row,(gain>=0?'+':'')+money.format(gain),gain>0?'positive':gain<0?'negative':'');overview.appendChild(row)}
- const chosen=currentAccounts.find(a=>a.id===accountId);if(chosen){set('account-title','Счёт '+chosen.id+' · '+chosen.name);set('account-description',chosen.id===1?'Исходный эксперимент, существующие позиции и сделки сохранены':'Стратегия: '+chosen.strategy+' · максимум '+money.format(chosen.maxUsd)+' на позицию · удержание до '+chosen.maxMinutes+' минут · стоп '+(chosen.stop*100).toFixed(1)+'% · цель '+(chosen.take*100).toFixed(1)+'%')}
+ const chosen=currentAccounts.find(a=>a.id===accountId);if(chosen){set('account-title','Счёт '+chosen.id+' · '+chosen.name);set('account-description',chosen.id===1?'Исходный эксперимент, существующие позиции и сделки сохранены':'Стратегия: '+chosen.strategy+' · '+(chosen.id===6?'маржа до $5 · плечо до 5× · номинал до $25':'позиция до '+money.format(chosen.maxUsd))+' · удержание до '+chosen.maxMinutes+' минут · стоп '+(chosen.stop*100).toFixed(1)+'% · цель '+(chosen.take*100).toFixed(1)+'%')}
 }
 async function refresh(){const run=++requestId;
  try{
