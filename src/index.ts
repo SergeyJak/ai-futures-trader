@@ -70,7 +70,7 @@ async function reportStorage(){
 }
 const storageTimer=setInterval(()=>{void reportStorage()},3600000);
 void reportStorage();
-let repairing=false;let historyBusy=false;const historyDays=7;
+let repairing=false;let historyBusy=false;const historyDays=90;
 async function extendHistory(){
  if(historyBusy||closing)return;historyBusy=true;
  try{
