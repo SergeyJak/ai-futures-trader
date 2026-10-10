@@ -1,3 +1,4 @@
+import {feasibleQuantity} from './contracts.js';
 import {analyze} from './indicators.js';
 import type {Bar} from './backtest.js';
 export type Candidate='squeeze'|'regime';
@@ -28,5 +29,31 @@ export function researchSignal(rows:Bar[],candidate:Candidate):'LONG'|'SHORT'|nu
 }
 export function evaluateCandidate(rows:Bar[],candidate:Candidate,symbol:string){
  const fee=.0006,slippage=.0002,initial=100,stop=.006,take=.012,maxMinutes=30;
- return {candidate,symbol,rows:rows.length,initial,fee,slippage,stop,take,maxMinutes};
+ let balance=initial,opened:null|{side:'LONG'|'SHORT';entry:number;qty:number;stop:number;take:number;at:number}=null;
+ let count=0,wins=0,skipped=0,peak=initial,drawdown=0;
+ for(let i=61;i<rows.length;i++){
+  const b=rows[i],open=Number(b.open),high=Number(b.high),low=Number(b.low);
+  if(![open,high,low].every(n=>Number.isFinite(n)&&n>0))continue;
+  if(opened){
+   const p=opened;const stopHit=p.side==='LONG'?low<=p.stop:high>=p.stop;
+   const takeHit=p.side==='LONG'?high>=p.take:low<=p.take;
+   const timedOut=i-p.at>=maxMinutes;
+   if(stopHit||takeHit||timedOut){
+    const raw=stopHit?p.stop:takeHit?p.take:open;
+    const exit=raw*(p.side==='LONG'?1-slippage:1+slippage);
+    const pnl=(exit-p.entry)*p.qty*(p.side==='LONG'?1:-1)-fee*p.qty*(p.entry+exit);
+    balance+=pnl;count++;if(pnl>0)wins++;peak=Math.max(peak,balance);
+    drawdown=Math.max(drawdown,(peak-balance)/peak*100);opened=null;
+   }
+  }
+  if(!opened&&i<rows.length-1){
+   const side=researchSignal(rows.slice(Math.max(0,i-61),i),candidate);
+   if(!side)continue;
+   const entry=open*(side==='LONG'?1+slippage:1-slippage);
+   const qty=feasibleQuantity(symbol,entry,balance,.005,stop,fee);
+   if(!qty){skipped++;continue}
+   opened={side,entry,qty,stop:entry*(side==='LONG'?1-stop:1+stop),take:entry*(side==='LONG'?1+take:1-take),at:i};
+  }
+ }
+ return {candidate,symbol,bars:rows.length,initial,balance,returnPct:(balance/initial-1)*100,trades:count,wins,skipped,maxDrawdown:drawdown,openAtEnd:Boolean(opened),costs:{feePerSidePct:fee*100,slippagePerSidePct:slippage*100},provisional:rows.length<2880};
 }
