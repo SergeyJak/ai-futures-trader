@@ -46,6 +46,10 @@ export class Database{
   const result=await this.pool.query<{start_at:string;open:string;high:string;low:string;close:string;volume:string}>(`SELECT start_at::text,open::text,high::text,low::text,close::text,volume::text FROM market_candles WHERE symbol=$1 AND confirmed=true ORDER BY start_at DESC LIMIT $2`,[symbol,limit]);
   return result.rows.reverse();
  }
+ async candlesBetween(symbol:string,fromMs:number,toMs:number){
+  const result=await this.pool.query('SELECT start_at::text,open::text,high::text,low::text,close::text,volume::text FROM market_candles WHERE symbol=$1 AND confirmed=true AND start_at>=to_timestamp($2::double precision/1000) AND start_at<=to_timestamp($3::double precision/1000) ORDER BY start_at LIMIT 1500',[symbol,fromMs,toMs]);
+  return result.rows;
+ }
  async paperTick(symbols:string[]){return paperTick(this.pool,symbols)}
  async paperStatus(id=1){
   const account=id===1?await this.pool.query('SELECT balance::text,last_at::text,position,updated_at::text FROM paper_account WHERE id=1'):await this.pool.query('SELECT balance::text,last_at::text,position,updated_at::text FROM paper_variants WHERE id=$1',[id]);
