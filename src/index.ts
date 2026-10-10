@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import http from 'node:http';import {backtest} from './backtest.js';
 import {evaluateCandidate} from './research.js';
-import {auditTrade,auditSummary} from './audit.js';
+import {auditTrade,auditSummary} from './audit.js';import {researchThirtyMinuteRange} from './range30.js';
 import {walkForward} from './walkforward.js';import {analyze} from './indicators.js';import {dashboardHtml} from './dashboard.js';import {analyticsHtml,researchHtml,marketHtml} from './extra-pages.js';import {MINUTE,missingRanges,fetchHistory} from './backfill.js';import {Database} from './database.js';import {MarketStream} from './market.js';
 const port=Number(process.env.PORT??3000);const url=process.env.DATABASE_URL;
 const endpoint=process.env.BYBIT_PUBLIC_WS??'wss://stream.bybit.com/v5/public/linear';
@@ -27,6 +27,23 @@ const server=http.createServer(async(req,res)=>{
   if(!Number.isInteger(id)||id<1||id>11){res.writeHead(400).end(JSON.stringify({error:'Invalid account'}));return}
   try{res.writeHead(200).end(JSON.stringify(await db.shadowAccountDetails(id)))}
   catch(e){console.error('Shadow account error',e);res.writeHead(503).end(JSON.stringify({error:'Shadow account unavailable'}))}
+  return;
+ }
+ if(req.url==='/api/pairs'){
+  try{res.writeHead(200).end(JSON.stringify(await db.pairedDiagnostics()))}
+  catch(e){console.error('Pair diagnostics error',e);res.writeHead(503).end(JSON.stringify({error:'Pair diagnostics unavailable'}))}
+  return;
+ }
+ if(req.url==='/api/range30'){
+  try{
+   const results=[];
+   for(const symbol of ['SOLUSDT','ETHUSDT','BTCUSDT']){
+    const rows=await db.recentCandles(symbol,5000);
+    const split=Math.floor(rows.length*.7);
+    results.push({symbol,train:researchThirtyMinuteRange(rows.slice(0,split)),validation:researchThirtyMinuteRange(rows.slice(split))});
+   }
+   res.writeHead(200).end(JSON.stringify({type:'research-only',chronologicalSplit:'70/30',noOrders:true,results}));
+  }catch(e){console.error('Range 30 research error',e);res.writeHead(503).end(JSON.stringify({error:'Range research unavailable'}))}
   return;
  }
  if(req.url==='/api/shadow-compare'){
