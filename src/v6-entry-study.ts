@@ -19,7 +19,41 @@ export async function studyV6Entries(pool:pg.Pool){
  e.close::float8 AS entry,p.close::float8 AS prev,
  EXTRACT(EPOCH FROM (t.opened_at-(e.start_at+interval '1 minute'))) AS entry_lag_seconds,
  EXTRACT(EPOCH FROM (t.opened_at-interval '15 minutes'-(p.start_at+interval '1 minute'))) AS prior_lag_seconds
- FROM v6_position_observations o
+ FROM (SELECT DISTINCT ON (trader_id,raw->>'symbol',raw->>'side',raw->>'opened_time',raw->>'closed_time') trader_id,raw,id FROM v6_position_observations WHERE kind='history' AND raw->>'opened_time' ~ '^[0-9]{13} (SELECT to_timestamp((o.raw->>'opened_time')::float8/1000) AS opened_at) t
+ LEFT JOIN LATERAL (SELECT close,start_at FROM market_candles WHERE symbol=o.raw->>'symbol' AND confirmed=true AND start_at+interval '1 minute'<=t.opened_at ORDER BY start_at DESC LIMIT 1) e ON true
+ LEFT JOIN LATERAL (SELECT close,start_at FROM market_candles WHERE symbol=o.raw->>'symbol' AND confirmed=true AND start_at+interval '1 minute'<=t.opened_at-interval '15 minutes' ORDER BY start_at DESC LIMIT 1) p ON true
+ WHERE o.kind='history' AND o.raw->>'opened_time' ~ '^[0-9]{13}$'
+ AND o.raw->>'closed_time' ~ '^[0-9]{13}$'
+ AND UPPER(COALESCE(o.raw->>'status','')) !~ 'PARTIAL|OPEN|ACTIVE|PENDING'
+ ORDER BY o.id DESC LIMIT 300`);
+ const by=new Map<string,{count:number;covered:number;against:number;withTrend:number;flat:number;uncovered:number}>();
+ for(const r of deduplicateV6EntryRows(q.rows)){
+ const a=by.get(r.trader_id)??{count:0,covered:0,against:0,withTrend:0,flat:0,uncovered:0};a.count++;
+ const fresh=r.entry_lag_seconds!==null&&r.prior_lag_seconds!==null&&Number(r.entry_lag_seconds)>=0&&Number(r.prior_lag_seconds)>=0&&Number(r.entry_lag_seconds)<=180&&Number(r.prior_lag_seconds)<=180;
+ const category=fresh?classifyV6Entry(r.side,r.entry,r.prev):'unknown';
+ if(category==='unknown')a.uncovered++;else{a.covered++;if(category==='dip')a.against++;if(category==='momentum')a.withTrend++;if(category==='flat')a.flat++}
+ by.set(r.trader_id,a);
+ }
+ return {traders:[...by].map(([id,stats])=>({id,...stats})),caveat:'Completed 1-minute candles only, with <=3m lag at both timestamps; 15m direction is descriptive, not an entry trigger or out-of-sample proof.'};
+}
+ AND raw->>'closed_time' ~ '^[0-9]{13} (SELECT to_timestamp((o.raw->>'opened_time')::float8/1000) AS opened_at) t
+ LEFT JOIN LATERAL (SELECT close,start_at FROM market_candles WHERE symbol=o.raw->>'symbol' AND confirmed=true AND start_at+interval '1 minute'<=t.opened_at ORDER BY start_at DESC LIMIT 1) e ON true
+ LEFT JOIN LATERAL (SELECT close,start_at FROM market_candles WHERE symbol=o.raw->>'symbol' AND confirmed=true AND start_at+interval '1 minute'<=t.opened_at-interval '15 minutes' ORDER BY start_at DESC LIMIT 1) p ON true
+ WHERE o.kind='history' AND o.raw->>'opened_time' ~ '^[0-9]{13}$'
+ AND o.raw->>'closed_time' ~ '^[0-9]{13}$'
+ AND UPPER(COALESCE(o.raw->>'status','')) !~ 'PARTIAL|OPEN|ACTIVE|PENDING'
+ ORDER BY o.id DESC LIMIT 300`);
+ const by=new Map<string,{count:number;covered:number;against:number;withTrend:number;flat:number;uncovered:number}>();
+ for(const r of deduplicateV6EntryRows(q.rows)){
+ const a=by.get(r.trader_id)??{count:0,covered:0,against:0,withTrend:0,flat:0,uncovered:0};a.count++;
+ const fresh=r.entry_lag_seconds!==null&&r.prior_lag_seconds!==null&&Number(r.entry_lag_seconds)>=0&&Number(r.prior_lag_seconds)>=0&&Number(r.entry_lag_seconds)<=180&&Number(r.prior_lag_seconds)<=180;
+ const category=fresh?classifyV6Entry(r.side,r.entry,r.prev):'unknown';
+ if(category==='unknown')a.uncovered++;else{a.covered++;if(category==='dip')a.against++;if(category==='momentum')a.withTrend++;if(category==='flat')a.flat++}
+ by.set(r.trader_id,a);
+ }
+ return {traders:[...by].map(([id,stats])=>({id,...stats})),caveat:'Completed 1-minute candles only, with <=3m lag at both timestamps; 15m direction is descriptive, not an entry trigger or out-of-sample proof.'};
+}
+ AND UPPER(COALESCE(raw->>'status','')) !~ 'PARTIAL|OPEN|ACTIVE|PENDING' ORDER BY trader_id,raw->>'symbol',raw->>'side',raw->>'opened_time',raw->>'closed_time',COALESCE((raw->>'update_time')::numeric,0) DESC,id DESC) o
  CROSS JOIN LATERAL (SELECT to_timestamp((o.raw->>'opened_time')::float8/1000) AS opened_at) t
  LEFT JOIN LATERAL (SELECT close,start_at FROM market_candles WHERE symbol=o.raw->>'symbol' AND confirmed=true AND start_at+interval '1 minute'<=t.opened_at ORDER BY start_at DESC LIMIT 1) e ON true
  LEFT JOIN LATERAL (SELECT close,start_at FROM market_candles WHERE symbol=o.raw->>'symbol' AND confirmed=true AND start_at+interval '1 minute'<=t.opened_at-interval '15 minutes' ORDER BY start_at DESC LIMIT 1) p ON true
