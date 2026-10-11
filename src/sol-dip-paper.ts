@@ -19,7 +19,7 @@ export async function tickSolPaper(pool:pg.Pool){
  await client.query('BEGIN');
  const r=await client.query(`SELECT start_at,open,high,low,close FROM market_candles WHERE symbol='SOLUSDT' AND confirmed=true ORDER BY start_at DESC LIMIT 6`);
  const bars:Bar[]=r.rows.reverse().map(x=>({time:new Date(x.start_at).getTime(),open:Number(x.open),high:Number(x.high),low:Number(x.low),close:Number(x.close)}));
- if(bars.length<5){await client.query('COMMIT');return}
+ if(bars.length<5||Date.now()-bars.at(-1)!.time>180000||bars.some((x,i)=>i>0&&x.time-bars[i-1].time!==60000)){await client.query('COMMIT');return}
  const bar=bars.at(-1)!;
  if(!bars.every(x=>Number.isFinite(x.close)&&x.close>0&&Number.isFinite(x.high)&&Number.isFinite(x.low))){await client.query('COMMIT');return}
  for(const variant of SOL_VARIANTS){
@@ -27,8 +27,8 @@ export async function tickSolPaper(pool:pg.Pool){
   if(row.last_bar&&new Date(row.last_bar).getTime()>=bar.time)continue;
   if(row.last_bar&&bar.time-new Date(row.last_bar).getTime()>120000){await client.query('UPDATE sol_dip_accounts SET last_bar=to_timestamp($2/1000.0) WHERE id=$1',[variant.id,bar.time]);continue}
   let balance=Number(row.balance),position=row.position as {entry:number;entryAt:number;quantity:number}|null;
-  if(position){const decision=exitDecision(position,bar,variant.minutes);if(decision){const exitPrice=decision.price*(1-slip);const netPnl=position.quantity*(exitPrice-position.entry)-fee*position.quantity*(position.entry+exitPrice);balance+=netPnl;await client.query('INSERT INTO sol_dip_trades(variant,entry_at,exit_at,entry_price,exit_price,net_pnl,reason) VALUES($1,to_timestamp($2/1000.0),to_timestamp($3/1000.0),$4,$5,$6,$7)',[variant.id,position.entryAt,bar.time,position.entry,exitPrice,netPnl,decision.reason]);position=null}}
-  else if(row.last_bar&&dipSignal(bars.slice(-5,-1))){const entry=bar.open*(1+slip);position={entry,entryAt:bar.time,quantity:Math.max(0,balance)*.1/entry}}
+  if(position){const decision=bar.time<=position.entryAt?null:exitDecision(position,bar,variant.minutes);if(decision){const exitPrice=decision.price*(1-slip);const netPnl=position.quantity*(exitPrice-position.entry)-fee*position.quantity*(position.entry+exitPrice);balance+=netPnl;await client.query('INSERT INTO sol_dip_trades(variant,entry_at,exit_at,entry_price,exit_price,net_pnl,reason) VALUES($1,to_timestamp($2/1000.0),to_timestamp($3/1000.0),$4,$5,$6,$7)',[variant.id,position.entryAt,bar.time,position.entry,exitPrice,netPnl,decision.reason]);position=null}}
+  else if(row.last_bar&&dipSignal(bars.slice(-5,-1))){const entry=bar.close*(1+slip);position={entry,entryAt:bar.time+60000,quantity:Math.max(0,balance)*.1/entry}}
   await client.query('UPDATE sol_dip_accounts SET balance=$2,position=$3,last_bar=to_timestamp($4/1000.0) WHERE id=$1',[variant.id,balance,position===null?null:JSON.stringify(position),bar.time]);
  }
  await client.query('COMMIT');
