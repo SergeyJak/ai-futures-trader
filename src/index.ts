@@ -1,3 +1,4 @@
+import {initV6,runV6,v6Report,v6Html} from './v6.js';
 import {withUnifiedHeader} from './unified-header.js';
 import {v4Html} from './v4-page.js';
 import {researchExitV4} from './v4-exits.js';
@@ -12,7 +13,7 @@ const symbols=(process.env.MARKET_SYMBOLS??'BTCUSDT,ETHUSDT,SOLUSDT').split(',')
 if(!url)throw new Error('DATABASE_URL required');
 if(!endpoint.startsWith('wss://'))throw new Error('Secure WebSocket required');
 if(!Number.isInteger(port)||port<1||port>65535)throw new Error('Invalid port');
-const db=new Database(url);await db.init();await db.initExperiments();await db.initShadow();await db.initV3();await db.initV4();await db.initV5();const stream=new MarketStream(endpoint,symbols,db);stream.start();
+const db=new Database(url);await db.init();await db.initExperiments();await db.initShadow();await db.initV3();await db.initV4();await db.initV5();await initV6(db.v6Pool());const stream=new MarketStream(endpoint,symbols,db);stream.start();
 const server=http.createServer(async(req,res)=>{
  res.setHeader('cache-control','no-store');
  res.setHeader('x-content-type-options','nosniff');
@@ -46,6 +47,8 @@ const server=http.createServer(async(req,res)=>{
   }catch(e){console.error('V4 exit research error',e);res.writeHead(503).end(JSON.stringify({error:'v4 exit study unavailable'}))}
   return;
  }
+ if(req.url==='/v6'){res.setHeader('content-type','text/html; charset=utf-8');res.setHeader('content-security-policy',"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'");res.writeHead(200).end(withUnifiedHeader(v6Html));return}
+ if(req.url==='/api/v6'){try{res.writeHead(200).end(JSON.stringify(await v6Report(db.v6Pool())))}catch(e){console.error('V6 report error',e);res.writeHead(503).end(JSON.stringify({error:'v6 unavailable'}))}return}
  if(req.url==='/v5'){res.setHeader('content-type','text/html; charset=utf-8');res.setHeader('content-security-policy',"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'");res.writeHead(200).end(withUnifiedHeader(`<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>AI Futures v5</title><style>body{margin:0;background:#f6f8fc;color:#172338;font:15px system-ui}main{max-width:1100px;margin:25px auto;padding:16px}.card{background:white;padding:20px;border-radius:16px;border:1px solid #e4eaf5}.scroll{overflow:auto}table{border-collapse:collapse;width:100%;white-space:nowrap}td,th{padding:10px;text-align:left;border-bottom:1px solid #e4eaf5}th{color:#687992}</style></head><body><main><h1>v5 · Независимые сигналы</h1><p>LONG: откат от максимума. SHORT: отскок от минимума. Выход по стопу/тейку до тайм-аута. 15, 30 и 60 минут. Только виртуальные счета.</p><section class="card"><p id="status">Загрузка…</p><div class="scroll"><table><thead><tr><th>Инструмент</th><th>Сторона</th><th>Мин</th><th>Просадка</th><th>Сделки</th><th>Победы</th><th>Чистый P&L</th><th>Комиссии</th><th>Баланс</th></tr></thead><tbody id="rows"></tbody></table></div></section></main><script>async function load(){try{const r=await fetch('/api/v5',{cache:'no-store'});if(!r.ok)throw Error('HTTP '+r.status);const d=await r.json(),root=document.getElementById('rows');root.replaceChildren();for(const a of d.accounts){const tr=document.createElement('tr');for(const x of [a.symbol,a.side,a.hold,(100*a.dip).toFixed(1)+'%',a.trades,a.wins,Number(a.realized_pnl).toFixed(3),Number(a.fees).toFixed(3),Number(a.balance).toFixed(3)]){const td=document.createElement('td');td.textContent=String(x);tr.append(td)}root.append(tr)}document.getElementById('status').textContent=d.configs+' конфигураций · '+d.accounts.reduce((n,a)=>n+a.trades,0)+' сделок · '+new Date(d.at).toLocaleString('ru-RU')}catch(e){document.getElementById('status').textContent=String(e)}}load();setInterval(load,20000)</script></body></html>`));return}
  if(req.url==='/api/v5'){try{res.writeHead(200).end(JSON.stringify(await db.v5Report()))}catch(e){console.error('V5 report error',e);res.writeHead(503).end(JSON.stringify({error:'v5 unavailable'}))}return}
  if(req.url==='/api/v4'){
@@ -307,5 +310,6 @@ const bounceResearchTimer=setInterval(()=>{void reportBounceResearch()},3600000)
 setTimeout(()=>{void reportBounceResearch()},45000);
 const statsTimer=setInterval(()=>{void reportStats()},60000);
 void reportStats();
-let closing=false;async function stop(){if(closing)return;closing=true;clearInterval(statsTimer);clearInterval(storageTimer);clearInterval(repairTimer);clearInterval(historyTimer);clearInterval(paperTimer);clearInterval(telemetryTimer);clearInterval(bounceResearchTimer);clearInterval(v3Timer);clearInterval(v4Timer);clearInterval(v5Timer);server.close();await stream.stop();await db.close();}
+const v6Timer=setInterval(()=>{void runV6(db.v6Pool()).then(result=>console.info('V6_DISCOVERY',JSON.stringify(result))).catch(e=>console.error('V6_ERROR',e))},3600000);setTimeout(()=>{void runV6(db.v6Pool()).then(result=>console.info('V6_DISCOVERY',JSON.stringify(result))).catch(e=>console.error('V6_ERROR',e))},20000);
+let closing=false;async function stop(){if(closing)return;closing=true;clearInterval(statsTimer);clearInterval(storageTimer);clearInterval(repairTimer);clearInterval(historyTimer);clearInterval(paperTimer);clearInterval(telemetryTimer);clearInterval(bounceResearchTimer);clearInterval(v3Timer);clearInterval(v4Timer);clearInterval(v5Timer);clearInterval(v6Timer);server.close();await stream.stop();await db.close();}
 for(const sig of ['SIGINT','SIGTERM'] as const)process.on(sig,()=>{void stop().then(()=>process.exit(0))});
