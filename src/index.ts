@@ -1,4 +1,5 @@
 import {financePageHtml} from './finance-page.js';
+import {backfillV6EntryCandles} from './v6-selective-backfill.js';
 import {summarizeFinance} from './finance-summary.js';
 import {initSolPaper,tickSolPaper,solPaperReport,solPaperHtml} from './sol-dip-paper.js';
 import {overviewHtml} from './overview-page.js';
@@ -322,6 +323,6 @@ const bounceResearchTimer=setInterval(()=>{void reportBounceResearch()},3600000)
 setTimeout(()=>{void reportBounceResearch()},45000);
 const statsTimer=setInterval(()=>{void reportStats()},60000);
 void reportStats();
-const v6Timer=setInterval(()=>{void runV6(db.v6Pool()).then(result=>console.info('V6_DISCOVERY',JSON.stringify(result))).catch(e=>console.error('V6_ERROR',e))},3600000);setTimeout(()=>{void runV6(db.v6Pool()).then(result=>console.info('V6_DISCOVERY',JSON.stringify(result))).catch(e=>console.error('V6_ERROR',e))},20000);
+const v6Timer=setInterval(()=>{void runV6(db.v6Pool()).then(async result=>{console.info('V6_DISCOVERY',JSON.stringify(result));const backfill=await backfillV6EntryCandles(db.v6Pool(),c=>db.upsert(c));console.info('V6_SELECTIVE_BACKFILL',JSON.stringify(backfill))}).catch(e=>console.error('V6_ERROR',e))},3600000);setTimeout(()=>{void runV6(db.v6Pool()).then(result=>console.info('V6_DISCOVERY',JSON.stringify(result))).catch(e=>console.error('V6_ERROR',e))},20000);
 let closing=false;async function stop(){if(closing)return;closing=true;clearInterval(statsTimer);clearInterval(storageTimer);clearInterval(repairTimer);clearInterval(historyTimer);clearInterval(paperTimer);clearInterval(telemetryTimer);clearInterval(bounceResearchTimer);clearInterval(v3Timer);clearInterval(v4Timer);clearInterval(v5Timer);clearInterval(v6Timer);clearInterval(solPaperTimer);server.close();await stream.stop();await db.close();}
 for(const sig of ['SIGINT','SIGTERM'] as const)process.on(sig,()=>{void stop().then(()=>process.exit(0))});
