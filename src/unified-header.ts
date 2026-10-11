@@ -16,7 +16,7 @@ const compactCss = `<style>
 @media(max-width:600px){.af-kpis{gap:7px}.af-kpi{padding:11px}.af-kpi strong{font-size:19px}.af-compact{padding:0 12px}}
 </style>`;
 const compactUi = `<section class="af-compact"><h1 id="af-title">Результаты стратегии</h1><p>Виртуальная торговля · Главное без технического шума</p>
-<div class="af-kpis"><div class="af-kpi"><span>Лучший баланс</span><strong id="af-accounts">…</strong></div><div class="af-kpi"><span>Закрытых сделок</span><strong id="af-trades">…</strong></div><div class="af-kpi"><span>Счетов в плюсе</span><strong id="af-plus">…</strong></div></div>
+<div class="af-kpis"><div class="af-kpi"><span>Лучший чистый PnL</span><strong id="af-accounts">…</strong></div><div class="af-kpi"><span>Закрытых сделок</span><strong id="af-trades">…</strong></div><div class="af-kpi"><span>Макс. просадка</span><strong id="af-plus">…</strong></div></div>
 <div class="af-summary"><strong>Результат</strong><p id="af-conclusion">Загрузка данных…</p></div></section><details class="af-legacy"><summary>Раскрыть все счета, сделки и диагностику</summary>`;
 const compactScript = `<script>
 (function(){
@@ -26,9 +26,9 @@ if(!spec)return;
 const put=(id,v)=>{const node=document.getElementById(id);if(node)node.textContent=String(v)};
 put('af-title',spec.name);
 async function refresh(){try{const r=await fetch(spec.url,{cache:'no-store'});if(!r.ok)throw Error('HTTP '+r.status);const data=await r.json(),accounts=Array.isArray(data.accounts)?data.accounts:[];const trades=accounts.reduce((sum,a)=>sum+(Number(a.trades)||0),0);
-const profit=accounts.filter(a=>Number(a.balance)>100).length;
-const best=Math.max(...accounts.map(a=>Number(a.balance)).filter(Number.isFinite));put('af-accounts',Number.isFinite(best)?best.toFixed(2)+' USDT':'—');put('af-trades',trades);put('af-plus',profit);
-put('af-conclusion',accounts.length?('Из '+accounts.length+' виртуальных счетов '+profit+' имеют баланс выше 100 USDT. Закрытых сделок: '+trades+'. Это экспериментальные результаты, а не гарантия доходности.'): 'Пока нет доступных счетов. Данные сохраняются независимо от отображения.');
+const profit=accounts.filter(a=>Number(a.balance)>100).length;const drawdowns=accounts.map(a=>Number(a.max_drawdown_closed)).filter(x=>Number.isFinite(x)&&x>=0);const dd=drawdowns.length?Math.max(...drawdowns):null;
+const best=Math.max(...accounts.map(a=>Number(a.balance)).filter(Number.isFinite));put('af-accounts',Number.isFinite(best)?(best-100>=0?'+':'')+(best-100).toFixed(2)+' USDT':'—');put('af-trades',trades);put('af-plus',dd===null?'н/д':(dd*100).toFixed(2)+'%');
+put('af-conclusion',accounts.length?('Из '+accounts.length+' виртуальных счетов '+profit+' в плюсе после моделируемых расходов. '+(dd===null?'Историческая максимальная просадка ещё не рассчитана для этой версии.':'Максимальная просадка рассчитана по закрытым сделкам и не учитывает внутрисделочные падения equity.')+' Это исследование, а не гарантия прибыли.'): 'Пока нет доступных счетов. Данные сохраняются независимо от отображения.');
 }catch(e){put('af-conclusion','Не удалось загрузить данные. Подробные отчеты доступны ниже.');put('af-accounts','—');put('af-trades','—');put('af-plus','—')}}
 refresh();setInterval(refresh,30000);
 })();
