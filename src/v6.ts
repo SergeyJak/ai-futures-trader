@@ -104,7 +104,7 @@ export async function v6Report(pool:pg.Pool){
  pool.query('SELECT trader_id,status,error,checked_at::text FROM v6_activity_status ORDER BY checked_at DESC LIMIT 20')
  ]);
  const counts=await pool.query(`SELECT kind,COUNT(*)::int AS count,COUNT(DISTINCT trader_id)::int AS traders FROM v6_position_observations GROUP BY kind`);
- const fields=await pool.query(`SELECT kind,jsonb_object_keys(raw) AS field,COUNT(*)::int AS count FROM v6_position_observations GROUP BY kind,field ORDER BY kind,count DESC LIMIT 60`);
+ const fields=await pool.query(`SELECT o.kind,k.field,COUNT(*)::int AS count FROM v6_position_observations o CROSS JOIN LATERAL jsonb_object_keys(o.raw) AS k(field) GROUP BY o.kind,k.field ORDER BY o.kind,count DESC LIMIT 60`);
  const activityAnalysis={counts:counts.rows,fields:fields.rows};
  console.info('V6_ANALYSIS',JSON.stringify(activityAnalysis));
  return {version:6,mode:'research-only',realOrders:false,source:state.rows[0]??{status:'pending'},traders:snapshots.rows,activity:activity.rows,activityStatus:status.rows,analysis:activityAnalysis,strategies:[],paperTrades:[],note:'Публичные позиции и история собираются. Вывод стратегий и торговые сигналы ещё не реализованы.'};
