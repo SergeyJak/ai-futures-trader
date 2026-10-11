@@ -38,13 +38,31 @@ async function collectActivity(pool:pg.Pool,ids:string[]){
  let records=0,failures=0;
  for(const id of ids){
   for(const [kind,path,params] of [
-    ['history','/traderPositionHistory',{topTraderId:id,marketType:'UM',rows:'20'}],
+    ['history','/traderPositionHistory',{topTraderId:id,marketType:'UM',page:'1',rows:'20'}],
     ['open','/traderOpenPositions',{topTraderId:id,marketType:'UM',page:'1',rows:'20'}]
   ] as const){
    try{
     const payload=await request(path,params);
     if(object(payload).success===false)throw Error(String(object(payload).message??'Provider returned failure'));
-    const rows=extractList(payload);const client=await pool.connect();
+    const rows=extractList(payload);
+    // Fetch a bounded number of history pages. Stop if the provider ignores
+    // page or repeats the same records, avoiding endless duplicate requests.
+    if(kind==='history'&&rows.length===20){
+     const seen=new Set(rows.map(row=>createHash('sha256').update(JSON.stringify(row)).digest('hex')));
+     for(let page=2;page<=5;page++){
+      const next=await request(path,{...params,page:String(page)});
+      if(object(next).success===false)throw Error(String(object(next).message??'Provider returned failure'));
+      const batch=extractList(next);
+      if(!batch.length)break;
+      let added=0;
+      for(const row of batch){
+       const hash=createHash('sha256').update(JSON.stringify(row)).digest('hex');
+       if(!seen.has(hash)){seen.add(hash);rows.push(row);added++}
+      }
+      if(added===0||batch.length<20)break;
+     }
+    }
+    const client=await pool.connect();
     try{
      await client.query('BEGIN');
      for(const row of rows){
