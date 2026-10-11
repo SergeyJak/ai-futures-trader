@@ -11,6 +11,15 @@ export function deduplicateV6EntryRows<T extends {trader_id:string;symbol:string
  for(const row of rows){const key=[row.trader_id,row.symbol,row.side,row.opened_time,row.closed_time].join('|');const previous=byKey.get(key);if(!previous||Number(row.update_time??0)>=Number(previous.update_time??0))byKey.set(key,row)}
  return [...byKey.values()];
 }
+type EntryCounts={count:number;covered:number;against:number;withTrend:number;flat:number;uncovered:number};
+export function summarizeV6EntryEvidence(rows:EntryCounts[]){
+ const totals=rows.reduce((a,r)=>({total:a.total+r.count,covered:a.covered+r.covered,uncovered:a.uncovered+r.uncovered,dip:a.dip+r.against,momentum:a.momentum+r.withTrend,flat:a.flat+r.flat}),{total:0,covered:0,uncovered:0,dip:0,momentum:0,flat:0});
+ const coverageRate=totals.total?totals.covered/totals.total:null;
+ return {...totals,coverageRate,dipShareAmongCovered:totals.covered?totals.dip/totals.covered:null,
+  assessment:totals.covered<30?'insufficient_sample':coverageRate!==null&&coverageRate<.8?'selection_biased':'descriptive_only',
+  minDescriptiveSample:30,
+  note:'The 30-entry threshold is a reporting guardrail, not statistical significance. Symbols without historical candles are excluded non-randomly; no causal entry rule or out-of-sample edge is established.'};
+}
 export async function studyV6Entries(pool:pg.Pool){
  // Only use candles that had FINISHED before the observed trade entry.
  // Do not read the close of the minute containing the entry (look-ahead).
@@ -42,5 +51,5 @@ export async function studyV6Entries(pool:pg.Pool){
  }else{a.covered++;if(category==='dip')a.against++;if(category==='momentum')a.withTrend++;if(category==='flat')a.flat++}
  by.set(r.trader_id,a);
  }
- return {traders:[...by].map(([id,stats])=>({id,...stats})),coverage:{reasons,missingBySymbol:[...missingBySymbol].sort((a,b)=>b[1]-a[1]).slice(0,20).map(([symbol,count])=>({symbol,count}))},caveat:'Completed 1-minute candles only, with <=3m lag at both timestamps; 15m direction is descriptive, not an entry trigger or out-of-sample proof.'};
+ return {traders:[...by].map(([id,stats])=>({id,...stats})),evidence:summarizeV6EntryEvidence([...by.values()]),coverage:{reasons,missingBySymbol:[...missingBySymbol].sort((a,b)=>b[1]-a[1]).slice(0,20).map(([symbol,count])=>({symbol,count}))},caveat:'Completed 1-minute candles only, with <=3m lag at both timestamps; 15m direction is descriptive, not an entry trigger or out-of-sample proof.'};
 }
