@@ -19,7 +19,7 @@ export async function studyV6Entries(pool:pg.Pool){
  e.close::float8 AS entry,p.close::float8 AS prev,
  EXTRACT(EPOCH FROM (t.opened_at-(e.start_at+interval '1 minute'))) AS entry_lag_seconds,
  EXTRACT(EPOCH FROM (t.opened_at-interval '15 minutes'-(p.start_at+interval '1 minute'))) AS prior_lag_seconds
- FROM v6_position_observations o
+ FROM (SELECT DISTINCT ON (trader_id,raw->>'symbol',raw->>'side',raw->>'opened_time',raw->>'closed_time') trader_id,raw,id FROM v6_position_observations WHERE kind='history' AND raw->>'opened_time' ~ '^[0-9]{13}$' AND raw->>'closed_time' ~ '^[0-9]{13}$' AND UPPER(COALESCE(raw->>'status','')) !~ 'PARTIAL|OPEN|ACTIVE|PENDING' ORDER BY trader_id,raw->>'symbol',raw->>'side',raw->>'opened_time',raw->>'closed_time',id DESC) o
  CROSS JOIN LATERAL (SELECT to_timestamp((o.raw->>'opened_time')::float8/1000) AS opened_at) t
  LEFT JOIN LATERAL (SELECT close,start_at FROM market_candles WHERE symbol=o.raw->>'symbol' AND confirmed=true AND start_at+interval '1 minute'<=t.opened_at ORDER BY start_at DESC LIMIT 1) e ON true
  LEFT JOIN LATERAL (SELECT close,start_at FROM market_candles WHERE symbol=o.raw->>'symbol' AND confirmed=true AND start_at+interval '1 minute'<=t.opened_at-interval '15 minutes' ORDER BY start_at DESC LIMIT 1) p ON true
