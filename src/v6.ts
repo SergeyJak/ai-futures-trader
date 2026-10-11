@@ -10,8 +10,8 @@ export function extractList(payload:unknown):unknown[]{
  for(const key of ['data','result','traders','list','rows','items']){
   const v=root[key];if(Array.isArray(v))return v;
   const nested=object(v);
-  for(const sub of ['data','list','rows','items','traders','leaderboard','records','rankings'])if(Array.isArray(nested[sub]))return nested[sub] as unknown[];
-  for(const sub of ['data','result','list','rows','items','traders','leaderboard','records','rankings']){const deep=object(nested[sub]);for(const key of ['list','rows','items','traders','records','data'])if(Array.isArray(deep[key]))return deep[key] as unknown[];}
+  for(const sub of ['data','accounts','list','rows','items','traders','leaderboard','records','rankings'])if(Array.isArray(nested[sub]))return nested[sub] as unknown[];
+  for(const sub of ['data','result','list','rows','items','traders','leaderboard','records','rankings']){const deep=object(nested[sub]);for(const key of ['accounts','list','rows','items','traders','records','data'])if(Array.isArray(deep[key]))return deep[key] as unknown[];}
  }
  return [];
 }
