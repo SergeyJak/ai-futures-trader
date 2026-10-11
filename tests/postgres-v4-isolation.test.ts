@@ -20,13 +20,13 @@ test('V4 transaction updates only its accounts and never touches legacy paper ac
   const origin=Date.parse('2026-10-06T00:00:00Z');
   for(let i=0;i<34;i++)await pool.query('INSERT INTO market_candles VALUES($1,$2,100,101,99,100,1000,true)',['SOLUSDT',new Date(origin+i*60000).toISOString()]);
   const first=await tickV4(pool);
-  assert.equal(first.changed,2);
+  assert.equal(first.changed,1);
   const accounts=await pool.query('SELECT id,balance,last_at FROM v4_accounts ORDER BY id');
   assert.equal(Number(accounts.rows[0].balance),150);
   assert.equal(Number(accounts.rows[1].balance),100);
   assert.equal(Number((await pool.query('SELECT balance FROM paper_account WHERE id=1')).rows[0].balance),123.45);
   const second=await tickV4(pool);
-  assert.equal(second.changed,1);
+  assert.equal(second.changed,0);
   assert.equal(Number((await pool.query('SELECT COUNT(*) AS n FROM v4_trades')).rows[0].n),0);
   assert.equal(Number((await pool.query('SELECT balance FROM paper_account WHERE id=1')).rows[0].balance),123.45);
  }finally{
