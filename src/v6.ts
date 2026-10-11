@@ -1,8 +1,11 @@
+import {pauseForRetryAfter,rotateResearchSample} from './v6-request-policy.js';
 import {studyV6Entries} from './v6-entry-study.js';
 import {v6Insights} from './v6-insights.js';
 import type pg from 'pg';
 
 const BASE='https://api.kopyon.com/v4';
+let providerCooldownUntil=0;
+class ProviderRateLimit extends Error {constructor(){super('Provider HTTP 429 rate limited')}}
 type Json=Record<string,unknown>;
 const object=(x:unknown):Json=>x!==null&&typeof x==='object'&&!Array.isArray(x)?x as Json:{};
 const first=(o:Json,...keys:string[])=>{for(const k of keys){if(o[k]!==undefined&&o[k]!==null)return o[k]}return null};
@@ -25,10 +28,12 @@ export function normalizeTrader(value:unknown){
  return {id:String(id),name:String(first(v,'nickName','nickname','name','userName','traderName')??'Анонимный трейдер'),roi:num('roi','ROI','roiValue'),pnl:num('pnl','PNL','pnlValue'),raw:v};
 }
 async function request(path:string,params:Record<string,string>){
+ if(Date.now()<providerCooldownUntil)throw new ProviderRateLimit();
  const url=new URL(BASE+path);for(const [key,value] of Object.entries(params))url.searchParams.set(key,value);
  const headers:Record<string,string>={'accept':'application/json'};
  if(process.env.KOPYON_API_KEY)headers['X-API-KEY']=process.env.KOPYON_API_KEY;
  const res=await fetch(url,{headers,signal:AbortSignal.timeout(12000)});
+ if(res.status===429){providerCooldownUntil=Date.now()+pauseForRetryAfter(res.headers.get('retry-after'));console.warn('V6_RATE_LIMIT',JSON.stringify({until:new Date(providerCooldownUntil).toISOString()}));throw new ProviderRateLimit()}
  if(!res.ok)throw Error('Provider HTTP '+res.status);
  const json:unknown=await res.json();return json;
 }
@@ -50,7 +55,8 @@ async function collectActivity(pool:pg.Pool,ids:string[]){
     if(kind==='history'&&rows.length===20){
      const seen=new Set(rows.map(row=>createHash('sha256').update(JSON.stringify(row)).digest('hex')));
      for(let page=2;page<=5;page++){
-      const next=await request(path,{...params,page:String(page)});
+      let next:unknown;
+      try{next=await request(path,{...params,page:String(page)})}catch(e){if(e instanceof ProviderRateLimit){console.warn('V6_HISTORY_PARTIAL_PAGE',JSON.stringify({trader:id,page,retained:rows.length}));break}throw e}
       if(object(next).success===false)throw Error(String(object(next).message??'Provider returned failure'));
       const batch=extractList(next);
       if(!batch.length)break;
@@ -76,6 +82,7 @@ async function collectActivity(pool:pg.Pool,ids:string[]){
     }catch(e){await client.query('ROLLBACK');throw e}finally{client.release()}
    }catch(e){
     failures++;
+    if(e instanceof ProviderRateLimit){console.warn('V6_ACTIVITY_PAUSED',JSON.stringify({trader:id,kind}));return {newActivity:records,failedRequests:failures,rateLimited:true}}
     const msg=e instanceof Error?e.message:String(e);
     console.warn('V6_ACTIVITY_ERROR',JSON.stringify({trader:id,kind,error:msg.slice(0,160)}));
     await pool.query(`INSERT INTO v6_activity_status(trader_id,checked_at,status,error) VALUES($1,NOW(),'unavailable',$2) ON CONFLICT(trader_id) DO UPDATE SET checked_at=NOW(),status='unavailable',error=$2`,[id,msg.slice(0,200)]);
@@ -108,7 +115,7 @@ export async function runV6(pool:pg.Pool){
    await client.query(`INSERT INTO v6_source_state(id,status,last_attempt,last_success,error,observed_count) VALUES('kopyon','connected',NOW(),NOW(),NULL,$1) ON CONFLICT(id) DO UPDATE SET status='connected',last_attempt=NOW(),last_success=NOW(),error=NULL,observed_count=EXCLUDED.observed_count`,[list.length]);
    await client.query('COMMIT');
   }catch(e){await client.query('ROLLBACK');throw e}finally{client.release()}
-  const observed=await collectActivity(pool,list.slice(0,5).map(t=>t.id));
+  const observed=await collectActivity(pool,rotateResearchSample(list.map(t=>t.id)));
   const summary=await analyzeV6(pool); console.info('V6_ANALYSIS',JSON.stringify(summary));
   return {status:'connected',traders:list.length,...observed};
  }catch(e){
