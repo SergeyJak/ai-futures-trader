@@ -81,6 +81,13 @@ export async function tickV4(pool:pg.Pool){
  }catch(e){await client.query('ROLLBACK');throw e}finally{client.release()}
 }
 export async function v4Report(pool:pg.Pool){
- const q=await pool.query(`SELECT a.id,a.symbol,a.side,a.dip::float8,a.mode,a.balance::float8,a.last_at::text,a.position,COUNT(t.id)::int AS trades,COUNT(t.id) FILTER(WHERE t.pnl>0)::int AS wins,COALESCE(SUM(t.pnl),0)::float8 AS net,COALESCE(SUM(t.fee_entry+t.fee_exit),0)::float8 AS fees,COALESCE(AVG(t.mfe),0)::float8 AS avg_mfe,COALESCE(AVG(t.mae),0)::float8 AS avg_mae,COALESCE(SUM(t.pnl) FILTER(WHERE t.pnl>0),0)::float8 AS profit,COALESCE(SUM(t.pnl) FILTER(WHERE t.pnl<0),0)::float8 AS loss FROM v4_accounts a LEFT JOIN v4_trades t ON t.config_id=a.id GROUP BY a.id ORDER BY a.symbol,a.dip,a.side,a.mode`);
+ const q=await pool.query(`WITH steps AS (
+ SELECT config_id,id,100+SUM(pnl) OVER (PARTITION BY config_id ORDER BY id) AS equity FROM v4_trades
+ ), peaks AS (
+ SELECT config_id,equity,GREATEST(100,MAX(equity) OVER (PARTITION BY config_id ORDER BY id)) AS peak FROM steps
+ ), drawdowns AS (
+ SELECT config_id,COALESCE(MAX((peak-equity)/NULLIF(peak,0)),0)::float8 AS max_drawdown_closed FROM peaks GROUP BY config_id
+ )
+ SELECT a.id,a.symbol,a.side,a.dip::float8,a.mode,COALESCE(d.max_drawdown_closed,0) AS max_drawdown_closed,a.balance::float8,a.last_at::text,a.position,COUNT(t.id)::int AS trades,COUNT(t.id) FILTER(WHERE t.pnl>0)::int AS wins,COALESCE(SUM(t.pnl),0)::float8 AS net,COALESCE(SUM(t.fee_entry+t.fee_exit),0)::float8 AS fees,COALESCE(AVG(t.mfe),0)::float8 AS avg_mfe,COALESCE(AVG(t.mae),0)::float8 AS avg_mae,COALESCE(SUM(t.pnl) FILTER(WHERE t.pnl>0),0)::float8 AS profit,COALESCE(SUM(t.pnl) FILTER(WHERE t.pnl<0),0)::float8 AS loss FROM v4_accounts a LEFT JOIN v4_trades t ON t.config_id=a.id LEFT JOIN drawdowns d ON d.config_id=a.id GROUP BY a.id,d.max_drawdown_closed ORDER BY a.symbol,a.dip,a.side,a.mode`);
  return {version:'v4-forward-only',at:new Date().toISOString(),configs:q.rows.length,accounts:q.rows};
 }
