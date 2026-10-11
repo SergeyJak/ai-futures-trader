@@ -1,3 +1,4 @@
+import {v6Insights} from './v6-insights.js';
 import type pg from 'pg';
 
 const BASE='https://api.kopyon.com/v4';
@@ -101,7 +102,8 @@ export async function analyzeV6(pool:pg.Pool){
  const [counts,fields]=await Promise.all([
  pool.query(`SELECT kind,COUNT(*)::int AS count,COUNT(DISTINCT trader_id)::int AS traders FROM v6_position_observations GROUP BY kind`),
  pool.query(`SELECT o.kind,k.field,COUNT(*)::int AS count FROM v6_position_observations o CROSS JOIN LATERAL jsonb_object_keys(o.raw) AS k(field) GROUP BY o.kind,k.field ORDER BY o.kind,count DESC LIMIT 60`)]);
- return {counts:counts.rows,fields:fields.rows};
+ const samples=await pool.query<{trader_id:string;kind:string;raw:Record<string,unknown>}>(`SELECT trader_id,kind,raw FROM v6_position_observations ORDER BY id DESC LIMIT 2000`);
+ return {counts:counts.rows,fields:fields.rows,insights:v6Insights(samples.rows)};
 }
 export async function v6Report(pool:pg.Pool){
  const [state,snapshots,activity,status]=await Promise.all([
