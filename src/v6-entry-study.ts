@@ -25,12 +25,22 @@ export async function studyV6Entries(pool:pg.Pool){
  LEFT JOIN LATERAL (SELECT close,start_at FROM market_candles WHERE symbol=o.raw->>'symbol' AND confirmed=true AND start_at+interval '1 minute'<=t.opened_at-interval '15 minutes' ORDER BY start_at DESC LIMIT 1) p ON true
  ORDER BY o.id DESC LIMIT 300`);
  const by=new Map<string,{count:number;covered:number;against:number;withTrend:number;flat:number;uncovered:number}>();
+ const missingBySymbol=new Map<string,number>();
+ const reasons={missingEntryCandle:0,missingPriorCandle:0,staleEntryCandle:0,stalePriorCandle:0,invalidSideOrPrice:0};
  for(const r of deduplicateV6EntryRows(q.rows)){
  const a=by.get(r.trader_id)??{count:0,covered:0,against:0,withTrend:0,flat:0,uncovered:0};a.count++;
  const fresh=r.entry_lag_seconds!==null&&r.prior_lag_seconds!==null&&Number(r.entry_lag_seconds)>=0&&Number(r.prior_lag_seconds)>=0&&Number(r.entry_lag_seconds)<=180&&Number(r.prior_lag_seconds)<=180;
  const category=fresh?classifyV6Entry(r.side,r.entry,r.prev):'unknown';
- if(category==='unknown')a.uncovered++;else{a.covered++;if(category==='dip')a.against++;if(category==='momentum')a.withTrend++;if(category==='flat')a.flat++}
+ if(category==='unknown'){
+  a.uncovered++;
+  const symbol=String(r.symbol??'unknown');missingBySymbol.set(symbol,(missingBySymbol.get(symbol)??0)+1);
+  if(r.entry===null)reasons.missingEntryCandle++;
+  else if(r.prev===null)reasons.missingPriorCandle++;
+  else if(r.entry_lag_seconds===null||Number(r.entry_lag_seconds)<0||Number(r.entry_lag_seconds)>180)reasons.staleEntryCandle++;
+  else if(r.prior_lag_seconds===null||Number(r.prior_lag_seconds)<0||Number(r.prior_lag_seconds)>180)reasons.stalePriorCandle++;
+  else reasons.invalidSideOrPrice++;
+ }else{a.covered++;if(category==='dip')a.against++;if(category==='momentum')a.withTrend++;if(category==='flat')a.flat++}
  by.set(r.trader_id,a);
  }
- return {traders:[...by].map(([id,stats])=>({id,...stats})),caveat:'Completed 1-minute candles only, with <=3m lag at both timestamps; 15m direction is descriptive, not an entry trigger or out-of-sample proof.'};
+ return {traders:[...by].map(([id,stats])=>({id,...stats})),coverage:{reasons,missingBySymbol:[...missingBySymbol].sort((a,b)=>b[1]-a[1]).slice(0,20).map(([symbol,count])=>({symbol,count}))},caveat:'Completed 1-minute candles only, with <=3m lag at both timestamps; 15m direction is descriptive, not an entry trigger or out-of-sample proof.'};
 }
