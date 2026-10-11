@@ -43,29 +43,34 @@ async function collectActivity(pool:pg.Pool,ids:string[]){
  let records=0,failures=0;
  for(const id of ids){
   for(const [kind,path,params] of [
-    ['history','/traderPositionHistory',{topTraderId:id,marketType:'UM',page:'1',rows:'20'}],
+    ['history','/traderPositionHistory',{topTraderId:id,marketType:'UM',rows:'20'}],
     ['open','/traderOpenPositions',{topTraderId:id,marketType:'UM',page:'1',rows:'20'}]
   ] as const){
    try{
     const payload=await request(path,params);
     if(object(payload).success===false)throw Error(String(object(payload).message??'Provider returned failure'));
     const rows=extractList(payload);
-    // Fetch a bounded number of history pages. Stop if the provider ignores
-    // page or repeats the same records, avoiding endless duplicate requests.
-    if(kind==='history'&&rows.length===20){
-     const seen=new Set(rows.map(row=>createHash('sha256').update(JSON.stringify(row)).digest('hex')));
-     for(let page=2;page<=5;page++){
+    // Kopyon history uses searchAfter cursor, not page numbers. Never repeat a cursor.
+    if(kind==='history'){
+     const cursors=new Set<string>();
+     let current=payload;
+     for(let batchNo=1;batchNo<5;batchNo++){
+      const root=object(current),data=object(root.data);
+      const cursor=first(data,'searchAfter','nextSearchAfter')??first(root,'searchAfter','nextSearchAfter');
+      if(cursor===null||cursor===''||typeof cursor==='object')break;
+      const token=String(cursor);
+      if(cursors.has(token))break;
+      cursors.add(token);
       let next:unknown;
-      try{next=await request(path,{...params,page:String(page)})}catch(e){if(e instanceof ProviderRateLimit){console.warn('V6_HISTORY_PARTIAL_PAGE',JSON.stringify({trader:id,page,retained:rows.length}));break}throw e}
+      try{next=await request(path,{...params,searchAfter:token})}catch(e){if(e instanceof ProviderRateLimit){console.warn('V6_HISTORY_CURSOR_PAUSED',JSON.stringify({trader:id,batchNo,retained:rows.length}));break}throw e}
       if(object(next).success===false)throw Error(String(object(next).message??'Provider returned failure'));
       const batch=extractList(next);
       if(!batch.length)break;
+      const seen=new Set(rows.map(row=>createHash('sha256').update(JSON.stringify(row)).digest('hex')));
       let added=0;
-      for(const row of batch){
-       const hash=createHash('sha256').update(JSON.stringify(row)).digest('hex');
-       if(!seen.has(hash)){seen.add(hash);rows.push(row);added++}
-      }
-      if(added===0||batch.length<20)break;
+      for(const row of batch){const hash=createHash('sha256').update(JSON.stringify(row)).digest('hex');if(!seen.has(hash)){seen.add(hash);rows.push(row);added++}}
+      if(!added)break;
+      current=next;
      }
     }
     const client=await pool.connect();
