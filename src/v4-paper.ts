@@ -21,8 +21,8 @@ export function v4Advance(state:State,history:Bar[]){
   const stop=direction===1?now.l<=p.stop:now.h>=p.stop;
   const take=direction===1?now.h>=p.take:now.l<=p.take;
   let raw:number|null=null;let reason='';
-  if(elapsed>=limit){raw=now.o;reason=limit===240?'HARD_CAP':'TIME'}
-  else if(stop){raw=direction===1?Math.min(now.o,p.stop):Math.max(now.o,p.stop);reason='STOP'}
+  if(stop){raw=direction===1?Math.min(now.o,p.stop):Math.max(now.o,p.stop);reason='STOP'}
+  else if(elapsed>=limit){raw=now.o;reason=limit===240?'HARD_CAP':'TIME'}
   else if(s.mode!=='TRAILING'&&take){raw=direction===1?Math.max(now.o,p.take):Math.min(now.o,p.take);reason='TAKE'}
   // Mark intrabar extremes, conservatively bounded by bar OHLC.
   p.mfe=Math.max(p.mfe,(direction===1?now.h/p.entry-1:1-now.l/p.entry)*100);
