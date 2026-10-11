@@ -10,13 +10,14 @@ export function extractList(payload:unknown):unknown[]{
  for(const key of ['data','result','traders','list','rows','items']){
   const v=root[key];if(Array.isArray(v))return v;
   const nested=object(v);
-  for(const sub of ['data','list','rows','items','traders'])if(Array.isArray(nested[sub]))return nested[sub] as unknown[];
+  for(const sub of ['data','list','rows','items','traders','leaderboard','records','rankings'])if(Array.isArray(nested[sub]))return nested[sub] as unknown[];
+  for(const sub of ['data','result','list','rows','items','traders','leaderboard','records','rankings']){const deep=object(nested[sub]);for(const key of ['list','rows','items','traders','records','data'])if(Array.isArray(deep[key]))return deep[key] as unknown[];}
  }
  return [];
 }
 export function normalizeTrader(value:unknown){
  const v=object(value);
- const id=first(v,'topTraderId','futureUid','encryptedUid','uid','id');
+ const id=first(v,'topTraderId','topTraderID','traderId','futureUid','encryptedUid','uid','id');
  if(id===null||String(id).trim()==='')return null;
  const num=(...names:string[])=>{const val=first(v,...names);return val===null?null:Number.isFinite(Number(val))?Number(val):null};
  return {id:String(id),name:String(first(v,'nickName','nickname','name','userName')??'Анонимный трейдер'),roi:num('roi','ROI','roiValue'),pnl:num('pnl','PNL','pnlValue'),raw:v};
@@ -43,7 +44,7 @@ export async function runV6(pool:pg.Pool){
  try{
   const payload=await request('/tradersList',{timeRange:'90D',rankingType:'PNL',order:'DESC',onlyShowSharingPosition:'true',page:'1',rows:'20'});
   const list=extractList(payload).map(normalizeTrader).filter((v):v is NonNullable<typeof v>=>v!==null);
-  if(!list.length)throw Error('Provider returned no recognizable trader records');
+  if(!list.length){const data=object(object(payload).data);const rows=extractList(payload);const sample=object(rows[0]);const diagnostic={success:object(payload).success,message:String(object(payload).message??'').slice(0,120),rootKeys:Object.keys(object(payload)).slice(0,15),dataKeys:Object.keys(data).slice(0,20),rows:rows.length,rowKeys:Object.keys(sample).slice(0,25)};console.warn('V6_PROVIDER_SHAPE',JSON.stringify(diagnostic));throw Error('No trader IDs; response shape: '+JSON.stringify(diagnostic).slice(0,240))}
   const client=await pool.connect();
   try{
    await client.query('BEGIN');
