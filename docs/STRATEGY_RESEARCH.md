@@ -32,3 +32,8 @@ Bybit публичный websocket `wss://stream.bybit.com/v5/public/linear` п�
 5. Сравнивать стратегии по net-результату и просадке; отклонять неустойчивые. Только прошедшие независимую проверку идеи допускать к paper trading.
 
 **Последнее изменение:** 11.10.2026, `ad02fd4`: ограниченная постраничная загрузка истории. Следующий шаг: проверить GitHub Actions, Railway deploy, логи V6 и полноту новых страниц; если не растёт число закрытых позиций, исправить способ пагинации.
+
+### 11.10.2026: V6 data integrity follow-up
+- Replaced ineffective `page` history requests with bounded `searchAfter` cursor traversal; stop on absent/repeated cursor or repeated records. Provider response shape and actual pagination growth still require production verification.
+- Deduplicate completed position histories in SQL **before** the 300-row entry-study limit; reject partial/open/active/pending states before joining candles. Do not interpret uncovered entries as momentum/dip.
+- Next: verify actual provider cursor shape and incremental unique closes from logs; sample additional ranking positions conservatively under rate limits. Then evaluate only candle-covered, non-overlapping out-of-sample net returns including estimated funding and risk limits. No live orders.
