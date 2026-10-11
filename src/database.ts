@@ -26,6 +26,7 @@ export class Database{
   await this.pool.query('CREATE INDEX IF NOT EXISTS paper_equity_by_time ON paper_equity_snapshots(at DESC)');
   for(const cfg of EXPERIMENTS)await this.pool.query('INSERT INTO paper_variants(id,balance) VALUES($1,100) ON CONFLICT(id) DO NOTHING',[cfg.id]);
  }
+ v6Pool(){return this.pool}
  async initV5(){return initV5(this.pool)}
  async runV5(){return tickV5(this.pool)}
  async v5Report(){return v5Report(this.pool)}
