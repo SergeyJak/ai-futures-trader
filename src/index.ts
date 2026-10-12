@@ -1,3 +1,4 @@
+import {auditSolSignals} from './sol-signal-audit.js';
 import {installOutboundTelemetry,outboundSnapshot} from './outbound-telemetry.js';
 import {financePageHtml} from './finance-page.js';
 import {backfillV6EntryCandles} from './v6-selective-backfill.js';
@@ -58,6 +59,7 @@ const server=http.createServer(async(req,res)=>{
   return;
  }
  if(req.url==='/sol-dip'){res.setHeader('content-type','text/html; charset=utf-8');res.setHeader('content-security-policy',"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'");res.writeHead(200).end(withUnifiedHeader(solPaperHtml));return}
+ if(req.url==='/api/sol-dip/audit'){try{res.setHeader('content-type','application/json');res.writeHead(200).end(JSON.stringify(await auditSolSignals(db.v6Pool())))}catch(e){console.error('SOL_DIP_AUDIT_ERROR',e);res.writeHead(503).end(JSON.stringify({error:'SOL signal audit unavailable'}))}return}
  if(req.url==='/api/sol-dip'){try{res.writeHead(200).end(JSON.stringify(await solPaperReport(db.v6Pool())))}catch(e){console.error('SOL_DIP_REPORT_ERROR',e);res.writeHead(503).end(JSON.stringify({error:'SOL paper data unavailable'}))}return}
  if(req.url==='/v6'){res.setHeader('content-type','text/html; charset=utf-8');res.setHeader('content-security-policy',"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'");res.writeHead(200).end(withUnifiedHeader(v6Html));return}
  if(req.url==='/api/v6'){try{res.writeHead(200).end(JSON.stringify(await v6Report(db.v6Pool())))}catch(e){console.error('V6 report error',e);res.writeHead(503).end(JSON.stringify({error:'v6 unavailable'}))}return}
