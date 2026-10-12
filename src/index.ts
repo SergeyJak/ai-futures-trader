@@ -1,10 +1,11 @@
+import {isStrategyKey,strategyPageHtml,strategyPageReport,strategyTradeChart} from './strategy-pages.js';
 import {auditSolSignals} from './sol-signal-audit.js';
 import {installOutboundTelemetry,outboundSnapshot} from './outbound-telemetry.js';
 import {financePageHtml} from './finance-page.js';
 import {backfillV6EntryCandles} from './v6-selective-backfill.js';
 import {createV6ResearchJobs} from './v6-research-jobs.js';
 import {summarizeFinance} from './finance-summary.js';
-import {initSolPaper,tickSolPaper,solPaperReport,solPaperHtml,solTradeCandles} from './sol-dip-paper.js';
+import {initSolPaper,tickSolPaper,solPaperReport,solPaperHtml,solTradeCandles,solActiveTradeCandles} from './sol-dip-paper.js';
 import {overviewHtml} from './overview-page.js';
 import {initV6,runV6,v6Report,v6Html} from './v6.js';
 import {withUnifiedHeader} from './unified-header.js';
@@ -58,6 +59,9 @@ const server=http.createServer(async(req,res)=>{
   }catch(e){console.error('V4 exit research error',e);res.writeHead(503).end(JSON.stringify({error:'v4 exit study unavailable'}))}
   return;
  }
+ if(req.url?.startsWith('/strategy/')){const key=req.url.slice('/strategy/'.length);if(isStrategyKey(key)){res.setHeader('content-type','text/html; charset=utf-8');res.setHeader('content-security-policy',"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'");res.writeHead(200).end(withUnifiedHeader(strategyPageHtml(key)));return}}
+ if(req.url?.startsWith('/api/strategy/')){const u=new URL(req.url,'http://localhost');const parts=u.pathname.split('/');const key=parts[3];if(isStrategyKey(key)&&parts.length===4){try{res.writeHead(200).end(JSON.stringify(await strategyPageReport(db.v6Pool(),key)))}catch(e){console.error('STRATEGY_REPORT_ERROR',e);res.writeHead(503).end(JSON.stringify({error:'Strategy report unavailable'}))}return}if(isStrategyKey(key)&&parts[4]==='trade'&&parts.length===5){const id=u.searchParams.get('id')??'';if(id.length>250){res.writeHead(400).end(JSON.stringify({error:'Invalid ID'}));return}try{const result=await strategyTradeChart(db.v6Pool(),key,id);res.writeHead(result?200:404).end(JSON.stringify(result??{error:'Trade not found'}))}catch(e){console.error('STRATEGY_CHART_ERROR',e);res.writeHead(503).end(JSON.stringify({error:'Trade chart unavailable'}))}return}}
+ if(req.url?.startsWith('/api/sol-dip/active?')){const variant=new URL(req.url,'http://localhost').searchParams.get('variant')??'';try{const result=await solActiveTradeCandles(db.v6Pool(),variant);res.writeHead(result?200:404).end(JSON.stringify(result??{error:'Active position not found'}))}catch(e){console.error('SOL_ACTIVE_CHART_ERROR',e);res.writeHead(503).end(JSON.stringify({error:'Active chart unavailable'}))}return}
  if(req.url==='/sol-dip'){res.setHeader('content-type','text/html; charset=utf-8');res.setHeader('content-security-policy',"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'");res.writeHead(200).end(withUnifiedHeader(solPaperHtml));return}
  if(req.url==='/api/sol-dip/audit'){try{res.setHeader('content-type','application/json');res.writeHead(200).end(JSON.stringify(await auditSolSignals(db.v6Pool())))}catch(e){console.error('SOL_DIP_AUDIT_ERROR',e);res.writeHead(503).end(JSON.stringify({error:'SOL signal audit unavailable'}))}return}
  if(req.url?.startsWith('/api/sol-dip/trade?')){const id=Number(new URL(req.url,'http://localhost').searchParams.get('id'));if(!Number.isSafeInteger(id)||id<=0){res.writeHead(400).end('Invalid trade ID');return}try{const result=await solTradeCandles(db.v6Pool(),id);res.setHeader('content-type','application/json');res.writeHead(result?200:404).end(JSON.stringify(result??{error:'Trade not found'}))}catch(e){console.error('SOL_TRADE_CHART_ERROR',e);res.writeHead(503).end(JSON.stringify({error:'Trade chart unavailable'}))}return}
