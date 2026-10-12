@@ -6,7 +6,13 @@ test('prioritizes latest eligible closed entry per symbol and rejects invalid in
  const rows=[
  {symbol:'HYPEUSDT',openedMs:now-3600000},
  {symbol:'HYPEUSDT',openedMs:now-3500000},
+ {symbol:'BTCUSDC',openedMs:now-5400000},
+ ]);
+ assert.deepEqual(selectV6BackfillTargets(rows,now,3),[
+ {symbol:'HYPEUSDT',openedMs:now-3500000},
+ {symbol:'BTCUSDC',openedMs:now-5400000},
  {symbol:'ZECUSDT',openedMs:now-7200000},
+ {symbol:'BTCUSDC',openedMs:now-5400000},
  {symbol:'BAD/USD',openedMs:now-3600000},
  {symbol:'SOLUSDT',openedMs:now+60000},
  {symbol:'ETHUSDT',openedMs:now-91*86400000},
