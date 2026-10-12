@@ -41,3 +41,19 @@ test('rejects invalid timestamps and prices',()=>{
  assert.throws(()=>scoreClosedTrade({...trade(1),closedMs:day}),/Invalid closed trade/);
  assert.equal(DEFAULT_OOS_CONFIG.feePerSide,0.0006);
 });
+
+test('selected pattern without enough holdout observations cannot be evaluated',()=>{
+ const rows=Array.from({length:100},(_,i)=>trade(i,i<70?'dip_reversal':'momentum_continuation',100,102));
+ const result=chronologicalHoldout(rows);
+ assert.equal(result.status,'insufficient_data');
+ if(result.status==='insufficient_data'){
+  assert.equal(result.selectedPattern,'dip_reversal');
+  assert.equal(result.selectedPatternTestCount,0);
+ }
+});
+test('overall test count does not replace selected-pattern sample threshold',()=>{
+ const rows=Array.from({length:100},(_,i)=>trade(i,i<70?'dip_reversal':i<80?'dip_reversal':'momentum_continuation',100,102));
+ const result=chronologicalHoldout(rows);
+ assert.equal(result.status,'insufficient_data');
+ if(result.status==='insufficient_data')assert.equal(result.selectedPatternTestCount,10);
+});
