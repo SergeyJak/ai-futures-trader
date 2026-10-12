@@ -1,6 +1,7 @@
 import {installOutboundTelemetry,outboundSnapshot} from './outbound-telemetry.js';
 import {financePageHtml} from './finance-page.js';
 import {backfillV6EntryCandles} from './v6-selective-backfill.js';
+import {createV6ResearchJobs} from './v6-research-jobs.js';
 import {summarizeFinance} from './finance-summary.js';
 import {initSolPaper,tickSolPaper,solPaperReport,solPaperHtml} from './sol-dip-paper.js';
 import {overviewHtml} from './overview-page.js';
@@ -326,15 +327,15 @@ const bounceResearchTimer=setInterval(()=>{void reportBounceResearch()},3600000)
 setTimeout(()=>{void reportBounceResearch()},45000);
 const statsTimer=setInterval(()=>{void reportStats()},60000);
 void reportStats();
-let v6BackfillRunning=false;
+const v6ResearchJobs=createV6ResearchJobs(
+ ()=>runV6(db.v6Pool()),
+ ()=>backfillV6EntryCandles(db.v6Pool(),c=>db.upsert(c)),
+);
 async function runV6Backfill(){
- if(v6BackfillRunning)return;
- v6BackfillRunning=true;
  try{
-  const result=await backfillV6EntryCandles(db.v6Pool(),c=>db.upsert(c));
-  console.info('V6_SELECTIVE_BACKFILL',JSON.stringify(result));
+  const started=await v6ResearchJobs.runBackfill();
+  if(started)console.info('V6_SELECTIVE_BACKFILL',JSON.stringify({status:'completed'}));
  }catch(e){console.error('V6_SELECTIVE_BACKFILL_ERROR',e)}
- finally{v6BackfillRunning=false}
 }
 const v6BackfillTimer=setInterval(()=>{void runV6Backfill()},15*60000);
 setTimeout(()=>{void runV6Backfill()},45000);
