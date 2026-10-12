@@ -5,6 +5,17 @@ import type pg from 'pg';
 
 const BASE='https://api.kopyon.com/v4';
 let providerCooldownUntil=0;
+let cooldownPool:pg.Pool|undefined;
+async function restoreProviderCooldown(pool:pg.Pool){
+ cooldownPool=pool;
+ await pool.query(`CREATE TABLE IF NOT EXISTS provider_cooldowns(provider TEXT PRIMARY KEY,until_at TIMESTAMPTZ NOT NULL)`);
+ const result=await pool.query<{until_ms:string}>(`SELECT (EXTRACT(EPOCH FROM until_at)*1000)::bigint::text AS until_ms FROM provider_cooldowns WHERE provider='kopyon'`);
+ providerCooldownUntil=Number(result.rows[0]?.until_ms??0);
+}
+async function persistProviderCooldown(until:number){
+ if(!cooldownPool)return;
+ await cooldownPool.query(`INSERT INTO provider_cooldowns(provider,until_at) VALUES('kopyon',to_timestamp($1/1000.0)) ON CONFLICT(provider) DO UPDATE SET until_at=GREATEST(provider_cooldowns.until_at,EXCLUDED.until_at)`,[until]);
+}
 class ProviderRateLimit extends Error {constructor(){super('Provider HTTP 429 rate limited')}}
 type Json=Record<string,unknown>;
 const object=(x:unknown):Json=>x!==null&&typeof x==='object'&&!Array.isArray(x)?x as Json:{};
@@ -33,7 +44,7 @@ async function request(path:string,params:Record<string,string>){
  const headers:Record<string,string>={'accept':'application/json'};
  if(process.env.KOPYON_API_KEY)headers['X-API-KEY']=process.env.KOPYON_API_KEY;
  const res=await fetch(url,{headers,signal:AbortSignal.timeout(12000)});
- if(res.status===429){providerCooldownUntil=Date.now()+pauseForRetryAfter(res.headers.get('retry-after'));console.warn('V6_RATE_LIMIT',JSON.stringify({until:new Date(providerCooldownUntil).toISOString()}));throw new ProviderRateLimit()}
+ if(res.status===429){providerCooldownUntil=Date.now()+pauseForRetryAfter(res.headers.get('retry-after'));await persistProviderCooldown(providerCooldownUntil);console.warn('V6_RATE_LIMIT',JSON.stringify({until:new Date(providerCooldownUntil).toISOString()}));throw new ProviderRateLimit()}
  if(!res.ok)throw Error('Provider HTTP '+res.status);
  const json:unknown=await res.json();return json;
 }
@@ -98,6 +109,7 @@ async function collectActivity(pool:pg.Pool,ids:string[]){
 }
 
 export async function initV6(pool:pg.Pool){
+ await restoreProviderCooldown(pool);
  await pool.query(`CREATE TABLE IF NOT EXISTS v6_source_state(id TEXT PRIMARY KEY,status TEXT NOT NULL,last_attempt TIMESTAMPTZ,last_success TIMESTAMPTZ,error TEXT,observed_count INTEGER NOT NULL DEFAULT 0)`);
  await pool.query(`CREATE TABLE IF NOT EXISTS v6_trader_snapshots(id BIGSERIAL PRIMARY KEY,trader_id TEXT NOT NULL,observed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),name TEXT,roi DOUBLE PRECISION,pnl DOUBLE PRECISION,raw JSONB NOT NULL)`);
  await pool.query('CREATE INDEX IF NOT EXISTS v6_snapshots_recent ON v6_trader_snapshots(observed_at DESC)');

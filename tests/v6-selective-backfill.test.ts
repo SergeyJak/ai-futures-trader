@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {selectV6BackfillTargets} from '../src/v6-selective-backfill.js';
+import {selectV6BackfillTargets,v6BackfillCooldownMs} from '../src/v6-selective-backfill.js';
 const now=Date.parse('2026-10-11T20:00:00Z');
-test('only valid, mature USDT futures and deduplicate hourly windows',()=>{
+test('prioritizes latest eligible closed entry per symbol and rejects invalid inputs',()=>{
  const rows=[
  {symbol:'HYPEUSDT',openedMs:now-3600000},
  {symbol:'HYPEUSDT',openedMs:now-3500000},
@@ -12,11 +12,24 @@ test('only valid, mature USDT futures and deduplicate hourly windows',()=>{
  {symbol:'ETHUSDT',openedMs:now-91*86400000},
  ];
  assert.deepEqual(selectV6BackfillTargets(rows,now),[
- {symbol:'HYPEUSDT',openedMs:now-3600000},
+ {symbol:'HYPEUSDT',openedMs:now-3500000},
  {symbol:'ZECUSDT',openedMs:now-7200000},
  ]);
 });
-test('limits external fetch workload',()=>{
- const rows=Array.from({length:12},(_,i)=>({symbol:'ZECUSDT',openedMs:now-(i+1)*3600000}));
+test('limits work to distinct symbols and skips blocked invalid instruments',()=>{
+ const rows=[
+ ...Array.from({length:12},(_,i)=>({symbol:'1000SATSUSDT',openedMs:now-(i+1)*3600000})),
+ {symbol:'HYPEUSDT',openedMs:now-3600000},
+ {symbol:'ZECUSDT',openedMs:now-7200000},
+ ];
+ assert.deepEqual(selectV6BackfillTargets(rows,now,2,new Set(['1000SATSUSDT'])),[
+ {symbol:'HYPEUSDT',openedMs:now-3600000},
+ {symbol:'ZECUSDT',openedMs:now-7200000},
+ ]);
  assert.equal(selectV6BackfillTargets(rows,now,2).length,2);
+ assert.equal(selectV6BackfillTargets(rows,now,2).filter(x=>x.symbol==='1000SATSUSDT').length,1);
+});
+test('invalid exchange symbols have long cooldown, transient failures short cooldown',()=>{
+ assert.equal(v6BackfillCooldownMs('Bybit history error: params error: Symbol Is Invalid'),86400000);
+ assert.equal(v6BackfillCooldownMs('HTTP 429'),3600000);
 });

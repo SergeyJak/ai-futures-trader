@@ -1,3 +1,4 @@
+import {installOutboundTelemetry,outboundSnapshot} from './outbound-telemetry.js';
 import {financePageHtml} from './finance-page.js';
 import {backfillV6EntryCandles} from './v6-selective-backfill.js';
 import {summarizeFinance} from './finance-summary.js';
@@ -18,6 +19,7 @@ const symbols=(process.env.MARKET_SYMBOLS??'BTCUSDT,ETHUSDT,SOLUSDT').split(',')
 if(!url)throw new Error('DATABASE_URL required');
 if(!endpoint.startsWith('wss://'))throw new Error('Secure WebSocket required');
 if(!Number.isInteger(port)||port<1||port>65535)throw new Error('Invalid port');
+installOutboundTelemetry();
 const db=new Database(url);await db.init();await db.initExperiments();await db.initShadow();await db.initV3();await db.initV4();await db.initV5();await initV6(db.v6Pool());await initSolPaper(db.v6Pool());const stream=new MarketStream(endpoint,symbols,db);stream.start();
 const server=http.createServer(async(req,res)=>{
  res.setHeader('cache-control','no-store');
@@ -29,6 +31,7 @@ const server=http.createServer(async(req,res)=>{
  if(req.url==='/experiments'){res.setHeader('content-type','text/html; charset=utf-8');res.setHeader('content-security-policy',"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'");res.writeHead(200).end(withUnifiedHeader(v3Html));return}
  if(req.url==='/analytics'||req.url==='/research'||req.url==='/market'){res.setHeader('content-type','text/html; charset=utf-8');res.setHeader('content-security-policy',"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'");res.writeHead(200).end(withUnifiedHeader(req.url==='/analytics'?analyticsHtml:req.url==='/research'?researchHtml:marketHtml));return}
  res.setHeader('content-type','application/json');
+ if(req.url==='/api/provider-requests'){res.writeHead(200).end(JSON.stringify({at:new Date().toISOString(),scope:'process-local; since startup; rolling 240 buckets',requests:outboundSnapshot()}));return}
  if(req.url==='/api/overview'){
   try{const [stats,storage]=await Promise.all([db.candleStats(),db.storageStats()]);res.writeHead(200).end(JSON.stringify({symbols:stats,storage,stream:stream.status,updatedAt:new Date().toISOString()}))}
   catch(e){console.error('Dashboard overview error',e);res.writeHead(503).end(JSON.stringify({error:'Data unavailable'}))}
