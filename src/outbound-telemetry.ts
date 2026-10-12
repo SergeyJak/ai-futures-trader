@@ -1,6 +1,7 @@
 type Bucket={requests:number;errors:number;rateLimited:number;byStatus:Record<string,number>};
 const counts=new Map<string,Bucket>();
-const LIMIT=240;
+const LIMIT=1440;
+let installed=false;
 export function recordOutbound(host:string,path:string,status:number,source='collector',at=Date.now()){
  const minute=new Date(at).toISOString().slice(0,16);
  const key=[minute,host,path,source].join('|');
@@ -11,6 +12,8 @@ export function recordOutbound(host:string,path:string,status:number,source='col
 }
 export function outboundSnapshot(){return [...counts.entries()].map(([key,value])=>{const [minute,host,path,source]=key.split('|');return {minute,host,path,source,...value}})}
 export function installOutboundTelemetry(){
+ if(installed)return;
+ installed=true;
  const original=globalThis.fetch.bind(globalThis);
  globalThis.fetch=async(input:RequestInfo|URL,init?:RequestInit)=>{
   const url=new URL(typeof input==='string'||input instanceof URL?String(input):input.url);
