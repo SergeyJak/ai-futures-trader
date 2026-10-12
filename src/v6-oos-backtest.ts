@@ -42,5 +42,6 @@ export function chronologicalHoldout(trades:CompletedTrade[],config:BacktestConf
  eligible.sort((a,b)=>(b.stats.meanNetReturn??-Infinity)-(a.stats.meanNetReturn??-Infinity));
  const selected=eligible[0].pattern;
  const holdout=test.filter(t=>t.pattern===selected);
+ if(holdout.length<Math.max(10,Math.ceil(config.minimumTest/2)))return {status:'insufficient_data' as const,trainCount:train.length,testCount:test.length,selectedPattern:selected,selectedTestCount:holdout.length,reason:'Insufficient matching held-out trades'};
  return {status:'evaluated' as const,selectedPattern:selected,trainCount:train.length,testCount:test.length,train:summarizeReturns(train.filter(t=>t.pattern===selected)),test:summarizeReturns(holdout),baselineTest:summarizeReturns(test),holdoutStartMs:testStart,config,warning:'Observational copied entries, not independently executable signals; no claim of live profitability.'};
 }
