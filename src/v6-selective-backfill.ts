@@ -8,7 +8,7 @@ export function selectV6BackfillTargets(rows:V6BackfillTarget[],nowMs:number,max
  const seen=new Set<string>();const result:V6BackfillTarget[]=[];
  for(const row of [...rows].sort((a,b)=>b.openedMs-a.openedMs)){
   const symbol=String(row.symbol??'').toUpperCase(),time=Number(row.openedMs);
-  if(!/^[A-Z0-9]{2,20}USDT$/.test(symbol)||!Number.isSafeInteger(time)||time<=0||time>nowMs-20*MINUTE||time<nowMs-90*86400000||seen.has(symbol)||blocked.has(symbol))continue;
+  if(!/^[A-Z0-9]{2,20}USD(?:T|C)$/.test(symbol)||!Number.isSafeInteger(time)||time<=0||time>nowMs-20*MINUTE||time<nowMs-90*86400000||seen.has(symbol)||blocked.has(symbol))continue;
   seen.add(symbol);result.push({symbol,openedMs:time});
   if(result.length>=max)break;
  }
