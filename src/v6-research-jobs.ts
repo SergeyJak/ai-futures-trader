@@ -9,7 +9,7 @@ export function createV6ResearchJobs(
   async runBackfill():Promise<boolean>{
    if(backfillRunning)return false;
    backfillRunning=true;
-   try{await backfill();return true}
+   try{const result=await backfill();console.info('V6_BACKFILL_RESULT',JSON.stringify(result));return true}
    finally{backfillRunning=false}
   },
  };
