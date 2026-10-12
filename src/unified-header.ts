@@ -34,4 +34,4 @@ refresh();setInterval(refresh,30000);
 })();
 </script>`;
 
-export function withUnifiedHeader(html:string){let result=html.replace(/<header\b[^>]*>[\s\S]*?<\/header>/i,'').replace(/<nav\b[^>]*>[\s\S]*?<\/nav>/i,'').replace('</head>',headerCss+'</head>').replace(/<body([^>]*)>/i,(_m,attrs)=>'<body'+attrs+'>'+unifiedHeader);if(/<title>[^<]*(?:v5|v4|Парные эксперименты|Paper Trading)/i.test(html)){result=result.replace('</head>',compactCss+'</head>').replace(unifiedHeader,unifiedHeader+compactUi).replace('</body>','</details>'+compactScript+'</body>')}return result}
+export function withUnifiedHeader(html:string){let result=(html.includes('id="overlay"')?html:html.replace(/<header\b[^>]*>[\s\S]*?<\/header>/i,'').replace(/<nav\b[^>]*>[\s\S]*?<\/nav>/i,'')).replace('</head>',headerCss+'</head>').replace(/<body([^>]*)>/i,(_m,attrs)=>'<body'+attrs+'>'+unifiedHeader);if(/<title>[^<]*(?:v5|v4|Парные эксперименты|Paper Trading)/i.test(html)){result=result.replace('</head>',compactCss+'</head>').replace(unifiedHeader,unifiedHeader+compactUi).replace('</body>','</details>'+compactScript+'</body>')}return result}
