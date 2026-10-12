@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {selectV6BackfillTargets,v6BackfillCooldownMs} from '../src/v6-selective-backfill.js';
+import {backfillV6EntryCandles,selectV6BackfillTargets,v6BackfillCooldownMs} from '../src/v6-selective-backfill.js';
 const now=Date.parse('2026-10-11T20:00:00Z');
 test('prioritizes latest eligible closed entry per symbol and rejects invalid inputs',()=>{
  const rows=[
@@ -32,4 +32,12 @@ test('limits work to distinct symbols and skips blocked invalid instruments',()=
 test('invalid exchange symbols have long cooldown, transient failures short cooldown',()=>{
  assert.equal(v6BackfillCooldownMs('Bybit history error: params error: Symbol Is Invalid'),86400000);
  assert.equal(v6BackfillCooldownMs('HTTP 429'),3600000);
+});
+
+test('database candidate query ranks recent missing symbols after deduplication',async()=>{
+ let sql='';
+ const pool={query:async(query:string)=>{sql=query;return {rows:[]}}};
+ const result=await backfillV6EntryCandles(pool as never,async()=>{},now);
+ assert.deepEqual(result.targets,[]);
+ assert.match(sql,/SELECT DISTINCT ON \(symbol\) symbol,opened_ms FROM missing[\s\S]*ORDER BY symbol,opened_ms DESC[\s\S]*\) newest_per_symbol[\s\S]*ORDER BY opened_ms DESC LIMIT 150/);
 });
