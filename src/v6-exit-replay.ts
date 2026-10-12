@@ -18,7 +18,7 @@ export function replayV6Exit(trade:Pick<CompletedTrade,'openedMs'|'side'|'entry'
  for(let i=0;i<minutes;i++){
   const ms=start+i*60000,c=byTime.get(ms);
   if(!c||![c.open,c.high,c.low,c.close].every(x=>Number.isFinite(x)&&x>0)||c.low>c.high||c.open<c.low||c.open>c.high||c.close<c.low||c.close>c.high)return {status:'insufficient_candles',reason:'Missing or invalid confirmed minute candle'};
-  let exit:number|undefined;let reason:ReplayResult extends never?never:'time'|'stop'|'take'|'both_hit_stop_first'='time';
+  let exit:number|undefined;let reason:'time'|'stop'|'take'|'both_hit_stop_first'='time';
   if(policy.kind==='bracket'){
    const stop=trade.entry*(1-dir*policy.stopPct),take=trade.entry*(1+dir*policy.takePct);
    // At a gap, execute at the opening price when worse than the intended stop.
