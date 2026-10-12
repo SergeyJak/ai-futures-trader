@@ -4,7 +4,7 @@ import {financePageHtml} from './finance-page.js';
 import {backfillV6EntryCandles} from './v6-selective-backfill.js';
 import {createV6ResearchJobs} from './v6-research-jobs.js';
 import {summarizeFinance} from './finance-summary.js';
-import {initSolPaper,tickSolPaper,solPaperReport,solPaperHtml} from './sol-dip-paper.js';
+import {initSolPaper,tickSolPaper,solPaperReport,solPaperHtml,solTradeCandles} from './sol-dip-paper.js';
 import {overviewHtml} from './overview-page.js';
 import {initV6,runV6,v6Report,v6Html} from './v6.js';
 import {withUnifiedHeader} from './unified-header.js';
@@ -60,6 +60,7 @@ const server=http.createServer(async(req,res)=>{
  }
  if(req.url==='/sol-dip'){res.setHeader('content-type','text/html; charset=utf-8');res.setHeader('content-security-policy',"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'");res.writeHead(200).end(withUnifiedHeader(solPaperHtml));return}
  if(req.url==='/api/sol-dip/audit'){try{res.setHeader('content-type','application/json');res.writeHead(200).end(JSON.stringify(await auditSolSignals(db.v6Pool())))}catch(e){console.error('SOL_DIP_AUDIT_ERROR',e);res.writeHead(503).end(JSON.stringify({error:'SOL signal audit unavailable'}))}return}
+ if(req.url?.startsWith('/api/sol-dip/trade?')){const id=Number(new URL(req.url,'http://localhost').searchParams.get('id'));if(!Number.isSafeInteger(id)||id<=0){res.writeHead(400).end('Invalid trade ID');return}try{const result=await solTradeCandles(db.v6Pool(),id);res.setHeader('content-type','application/json');res.writeHead(result?200:404).end(JSON.stringify(result??{error:'Trade not found'}))}catch(e){console.error('SOL_TRADE_CHART_ERROR',e);res.writeHead(503).end(JSON.stringify({error:'Trade chart unavailable'}))}return}
  if(req.url==='/api/sol-dip'){try{res.writeHead(200).end(JSON.stringify(await solPaperReport(db.v6Pool())))}catch(e){console.error('SOL_DIP_REPORT_ERROR',e);res.writeHead(503).end(JSON.stringify({error:'SOL paper data unavailable'}))}return}
  if(req.url==='/v6'){res.setHeader('content-type','text/html; charset=utf-8');res.setHeader('content-security-policy',"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'");res.writeHead(200).end(withUnifiedHeader(v6Html));return}
  if(req.url==='/api/v6'){try{res.writeHead(200).end(JSON.stringify(await v6Report(db.v6Pool())))}catch(e){console.error('V6 report error',e);res.writeHead(503).end(JSON.stringify({error:'v6 unavailable'}))}return}
