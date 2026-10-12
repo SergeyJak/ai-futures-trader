@@ -1,10 +1,12 @@
+import {initStrategyPaper,tickStrategyPaper,strategyPaperReport,strategyPaperChart} from './strategy-paper.js';
+import {isStrategyKey,strategyPageHtml,strategyPageReport,strategyTradeChart} from './strategy-pages.js';
 import {auditSolSignals} from './sol-signal-audit.js';
 import {installOutboundTelemetry,outboundSnapshot} from './outbound-telemetry.js';
 import {financePageHtml} from './finance-page.js';
 import {backfillV6EntryCandles} from './v6-selective-backfill.js';
 import {createV6ResearchJobs} from './v6-research-jobs.js';
 import {summarizeFinance} from './finance-summary.js';
-import {initSolPaper,tickSolPaper,solPaperReport,solPaperHtml,solTradeCandles} from './sol-dip-paper.js';
+import {initSolPaper,tickSolPaper,solPaperReport,solPaperHtml,solTradeCandles,solActiveTradeCandles} from './sol-dip-paper.js';
 import {overviewHtml} from './overview-page.js';
 import {initV6,runV6,v6Report,v6Html} from './v6.js';
 import {withUnifiedHeader} from './unified-header.js';
@@ -22,7 +24,7 @@ if(!url)throw new Error('DATABASE_URL required');
 if(!endpoint.startsWith('wss://'))throw new Error('Secure WebSocket required');
 if(!Number.isInteger(port)||port<1||port>65535)throw new Error('Invalid port');
 installOutboundTelemetry();
-const db=new Database(url);await db.init();await db.initExperiments();await db.initShadow();await db.initV3();await db.initV4();await db.initV5();await initV6(db.v6Pool());await initSolPaper(db.v6Pool());const stream=new MarketStream(endpoint,symbols,db);stream.start();
+const db=new Database(url);await db.init();await db.initExperiments();await db.initShadow();await db.initV3();await db.initV4();await db.initV5();await initV6(db.v6Pool());await initSolPaper(db.v6Pool());await initStrategyPaper(db.v6Pool());const stream=new MarketStream(endpoint,symbols,db);stream.start();
 const server=http.createServer(async(req,res)=>{
  res.setHeader('cache-control','no-store');
  res.setHeader('x-content-type-options','nosniff');
@@ -58,6 +60,10 @@ const server=http.createServer(async(req,res)=>{
   }catch(e){console.error('V4 exit research error',e);res.writeHead(503).end(JSON.stringify({error:'v4 exit study unavailable'}))}
   return;
  }
+ if(req.url?.startsWith('/strategy/')){const key=req.url.slice('/strategy/'.length);if(isStrategyKey(key)){res.setHeader('content-type','text/html; charset=utf-8');res.setHeader('content-security-policy',"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'");res.writeHead(200).end(withUnifiedHeader(strategyPageHtml(key)));return}}
+ if(req.url?.startsWith('/api/strategy-paper/')){const u=new URL(req.url,'http://localhost'),parts=u.pathname.split('/'),key=parts[3];if(isStrategyKey(key)&&parts.length===4){try{res.writeHead(200).end(JSON.stringify(await strategyPaperReport(db.v6Pool(),key)))}catch(e){console.error('STRATEGY_PAPER_REPORT_ERROR',e);res.writeHead(503).end(JSON.stringify({error:'Paper report unavailable'}))}return}if(isStrategyKey(key)&&parts[4]==='chart'&&parts.length===5){try{const result=await strategyPaperChart(db.v6Pool(),key,u.searchParams.get('variant')??'',u.searchParams.get('id')??'');res.writeHead(result?200:404).end(JSON.stringify(result??{error:'Trade not found'}))}catch(e){console.error('STRATEGY_PAPER_CHART_ERROR',e);res.writeHead(503).end(JSON.stringify({error:'Chart unavailable'}))}return}}
+ if(req.url?.startsWith('/api/strategy/')){const u=new URL(req.url,'http://localhost');const parts=u.pathname.split('/');const key=parts[3];if(isStrategyKey(key)&&parts.length===4){try{res.writeHead(200).end(JSON.stringify(await strategyPageReport(db.v6Pool(),key)))}catch(e){console.error('STRATEGY_REPORT_ERROR',e);res.writeHead(503).end(JSON.stringify({error:'Strategy report unavailable'}))}return}if(isStrategyKey(key)&&parts[4]==='trade'&&parts.length===5){const id=u.searchParams.get('id')??'';if(id.length>250){res.writeHead(400).end(JSON.stringify({error:'Invalid ID'}));return}try{const result=await strategyTradeChart(db.v6Pool(),key,id);res.writeHead(result?200:404).end(JSON.stringify(result??{error:'Trade not found'}))}catch(e){console.error('STRATEGY_CHART_ERROR',e);res.writeHead(503).end(JSON.stringify({error:'Trade chart unavailable'}))}return}}
+ if(req.url?.startsWith('/api/sol-dip/active?')){const variant=new URL(req.url,'http://localhost').searchParams.get('variant')??'';try{const result=await solActiveTradeCandles(db.v6Pool(),variant);res.writeHead(result?200:404).end(JSON.stringify(result??{error:'Active position not found'}))}catch(e){console.error('SOL_ACTIVE_CHART_ERROR',e);res.writeHead(503).end(JSON.stringify({error:'Active chart unavailable'}))}return}
  if(req.url==='/sol-dip'){res.setHeader('content-type','text/html; charset=utf-8');res.setHeader('content-security-policy',"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'");res.writeHead(200).end(withUnifiedHeader(solPaperHtml));return}
  if(req.url==='/api/sol-dip/audit'){try{res.setHeader('content-type','application/json');res.writeHead(200).end(JSON.stringify(await auditSolSignals(db.v6Pool())))}catch(e){console.error('SOL_DIP_AUDIT_ERROR',e);res.writeHead(503).end(JSON.stringify({error:'SOL signal audit unavailable'}))}return}
  if(req.url?.startsWith('/api/sol-dip/trade?')){const id=Number(new URL(req.url,'http://localhost').searchParams.get('id'));if(!Number.isSafeInteger(id)||id<=0){res.writeHead(400).end('Invalid trade ID');return}try{const result=await solTradeCandles(db.v6Pool(),id);res.setHeader('content-type','application/json');res.writeHead(result?200:404).end(JSON.stringify(result??{error:'Trade not found'}))}catch(e){console.error('SOL_TRADE_CHART_ERROR',e);res.writeHead(503).end(JSON.stringify({error:'Trade chart unavailable'}))}return}
@@ -276,6 +282,9 @@ async function runPaper(){if(paperRunning||closing)return;paperRunning=true;try{
 const paperTimer=setInterval(()=>{void runPaper()},15000);setTimeout(()=>{void runPaper()},20000);
 let solPaperRunning=false;
 async function runSolPaper(){if(solPaperRunning||closing)return;solPaperRunning=true;try{await tickSolPaper(db.v6Pool())}catch(e){console.error('SOL_DIP_TICK_ERROR',e)}finally{solPaperRunning=false}}
+let strategyPaperRunning=false;
+async function runStrategyPaper(){if(strategyPaperRunning||closing)return;strategyPaperRunning=true;try{await tickStrategyPaper(db.v6Pool())}catch(e){console.error('STRATEGY_PAPER_TICK_ERROR',e)}finally{strategyPaperRunning=false}}
+const strategyPaperTimer=setInterval(()=>{void runStrategyPaper()},15000);setTimeout(()=>{void runStrategyPaper()},26000);
 const solPaperTimer=setInterval(()=>{void runSolPaper()},15000);setTimeout(()=>{void runSolPaper()},23000);
 let v3Running=false;
 async function runIndependentV3(){
@@ -344,5 +353,5 @@ const v6BackfillTimer=setInterval(()=>{void runV6Backfill()},15*60000);
 setTimeout(()=>{void runV6Backfill()},45000);
 const v6Timer=setInterval(()=>{void runV6(db.v6Pool()).then(result=>console.info('V6_DISCOVERY',JSON.stringify(result))).catch(e=>console.error('V6_ERROR',e))},3600000);
 setTimeout(()=>{void runV6(db.v6Pool()).then(result=>console.info('V6_DISCOVERY',JSON.stringify(result))).catch(e=>console.error('V6_ERROR',e))},20000);
-let closing=false;async function stop(){if(closing)return;closing=true;clearInterval(statsTimer);clearInterval(storageTimer);clearInterval(repairTimer);clearInterval(historyTimer);clearInterval(paperTimer);clearInterval(telemetryTimer);clearInterval(bounceResearchTimer);clearInterval(v3Timer);clearInterval(v4Timer);clearInterval(v5Timer);clearInterval(v6Timer);clearInterval(v6BackfillTimer);clearInterval(solPaperTimer);server.close();await stream.stop();await db.close();}
+let closing=false;async function stop(){if(closing)return;closing=true;clearInterval(statsTimer);clearInterval(storageTimer);clearInterval(repairTimer);clearInterval(historyTimer);clearInterval(paperTimer);clearInterval(telemetryTimer);clearInterval(bounceResearchTimer);clearInterval(v3Timer);clearInterval(v4Timer);clearInterval(v5Timer);clearInterval(v6Timer);clearInterval(v6BackfillTimer);clearInterval(solPaperTimer);clearInterval(strategyPaperTimer);server.close();await stream.stop();await db.close();}
 for(const sig of ['SIGINT','SIGTERM'] as const)process.on(sig,()=>{void stop().then(()=>process.exit(0))});
