@@ -33,8 +33,11 @@ export async function backfillV6EntryCandles(pool:pg.Pool,save:(c:Candle)=>Promi
   WHERE NOT EXISTS(SELECT 1 FROM market_candles c WHERE c.symbol=r.symbol
     AND c.confirmed=true AND c.start_at=date_trunc('minute',to_timestamp(r.opened_ms::float8/1000))-interval '1 minute')
  )
- SELECT DISTINCT ON (symbol) symbol,opened_ms FROM missing
- ORDER BY symbol,opened_ms DESC LIMIT 150`);
+ SELECT symbol,opened_ms FROM (
+  SELECT DISTINCT ON (symbol) symbol,opened_ms FROM missing
+  ORDER BY symbol,opened_ms DESC
+ ) newest_per_symbol
+ ORDER BY opened_ms DESC LIMIT 150`);
  for(const [symbol,until] of retryAfter)if(until<=nowMs)retryAfter.delete(symbol);
  const blocked=new Set(retryAfter.keys());
  const targets=selectV6BackfillTargets(q.rows.map(r=>({symbol:r.symbol,openedMs:Number(r.opened_ms)})),nowMs,2,blocked);
