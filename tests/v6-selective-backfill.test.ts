@@ -45,5 +45,10 @@ test('database candidate query ranks recent missing symbols after deduplication'
  const pool={query:async(query:string)=>{sql=query;return {rows:[]}}};
  const result=await backfillV6EntryCandles(pool as never,async()=>{},now);
  assert.deepEqual(result.targets,[]);
+ assert.match(sql,/JOIN market_candles m ON m.symbol=e.symbol AND m.confirmed=true/);
+ assert.match(sql,/JOIN market_candles p ON p.symbol=e.symbol AND p.confirmed=true/);
+ assert.match(sql,/interval '16 minutes'/);
+ assert.match(sql,/e.confirmed=true/);
+ assert.doesNotMatch(sql,/NOT EXISTS\\(SELECT 1 FROM market_candles c/);
  assert.match(sql,/SELECT DISTINCT ON \(symbol\) symbol,opened_ms FROM missing[\s\S]*ORDER BY symbol,opened_ms DESC[\s\S]*\) newest_per_symbol[\s\S]*ORDER BY opened_ms DESC LIMIT 150/);
 });
