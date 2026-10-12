@@ -4,22 +4,22 @@ import {backfillV6EntryCandles,selectV6BackfillTargets,v6BackfillCooldownMs} fro
 const now=Date.parse('2026-10-11T20:00:00Z');
 test('prioritizes latest eligible closed entry per symbol and rejects invalid inputs',()=>{
  const rows=[
- {symbol:'HYPEUSDT',openedMs:now-3600000},
- {symbol:'HYPEUSDT',openedMs:now-3500000},
- {symbol:'BTCUSDC',openedMs:now-5400000},
- ]);
- assert.deepEqual(selectV6BackfillTargets(rows,now,3),[
- {symbol:'HYPEUSDT',openedMs:now-3500000},
- {symbol:'BTCUSDC',openedMs:now-5400000},
- {symbol:'ZECUSDT',openedMs:now-7200000},
- {symbol:'BTCUSDC',openedMs:now-5400000},
- {symbol:'BAD/USD',openedMs:now-3600000},
- {symbol:'SOLUSDT',openedMs:now+60000},
- {symbol:'ETHUSDT',openedMs:now-91*86400000},
+  {symbol:'HYPEUSDT',openedMs:now-3600000},
+  {symbol:'HYPEUSDT',openedMs:now-3500000},
+  {symbol:'ZECUSDT',openedMs:now-7200000},
+  {symbol:'BTCUSDC',openedMs:now-5400000},
+  {symbol:'BAD/USD',openedMs:now-3600000},
+  {symbol:'SOLUSDT',openedMs:now+60000},
+  {symbol:'ETHUSDT',openedMs:now-91*86400000},
  ];
  assert.deepEqual(selectV6BackfillTargets(rows,now),[
- {symbol:'HYPEUSDT',openedMs:now-3500000},
- {symbol:'ZECUSDT',openedMs:now-7200000},
+  {symbol:'HYPEUSDT',openedMs:now-3500000},
+  {symbol:'BTCUSDC',openedMs:now-5400000},
+ ]);
+ assert.deepEqual(selectV6BackfillTargets(rows,now,3),[
+  {symbol:'HYPEUSDT',openedMs:now-3500000},
+  {symbol:'BTCUSDC',openedMs:now-5400000},
+  {symbol:'ZECUSDT',openedMs:now-7200000},
  ]);
 });
 test('limits work to distinct symbols and skips blocked invalid instruments',()=>{
