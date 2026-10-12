@@ -30,8 +30,14 @@ export async function backfillV6EntryCandles(pool:pg.Pool,save:(c:Candle)=>Promi
     ORDER BY id DESC LIMIT 1500) h
  ), missing AS (
   SELECT r.symbol,r.opened_ms FROM recent r
-  WHERE NOT EXISTS(SELECT 1 FROM market_candles c WHERE c.symbol=r.symbol
-    AND c.confirmed=true AND c.start_at=date_trunc('minute',to_timestamp(r.opened_ms::float8/1000))-interval '1 minute')
+  WHERE NOT EXISTS(
+    SELECT 1 FROM market_candles e
+    JOIN market_candles m ON m.symbol=e.symbol AND m.confirmed=true AND m.start_at=e.start_at-interval '1 minute'
+    JOIN market_candles p ON p.symbol=e.symbol AND p.confirmed=true
+      AND p.start_at=date_trunc('minute',to_timestamp(r.opened_ms::float8/1000))-interval '16 minutes'
+    WHERE e.symbol=r.symbol AND e.confirmed=true
+      AND e.start_at=date_trunc('minute',to_timestamp(r.opened_ms::float8/1000))-interval '1 minute'
+  )
  )
  SELECT symbol,opened_ms FROM (
   SELECT DISTINCT ON (symbol) symbol,opened_ms FROM missing
