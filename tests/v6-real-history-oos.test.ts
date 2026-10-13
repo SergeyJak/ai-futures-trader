@@ -19,3 +19,17 @@ test('rejects open snapshots, partial fills, missing prices and stale candles',(
 test('does not use the unfinished entry minute',()=>{
  assert.equal(convertV6ClosedRow({...row,entry_close:null}),null);
 });
+
+test('entry classification covers all 341 closed rows rather than truncating at 300',async()=>{
+ const {studyV6Entries,V6_ENTRY_STUDY_LIMIT}=await import('../src/v6-entry-study.js');
+ const rows=Array.from({length:341},(_,i)=>({trader_id:'trader-'+i,symbol:'SOLUSDT',side:'LONG',opened_time:String(now+i*60000),closed_time:String(now+i*60000+60000),update_time:'1',entry:99,prev:100,previous_minute:98,entry_lag_seconds:0,prior_lag_seconds:0,minute_spacing_seconds:60}));
+ let sql='';
+ const pool={query:async(q:string)=>{sql=q;return {rows}}} as unknown as Parameters<typeof studyV6Entries>[0];
+ const result=await studyV6Entries(pool);
+ assert.equal(V6_ENTRY_STUDY_LIMIT,5000);
+ assert.match(sql,/LIMIT 5000/);
+ assert.match(sql,/kind='history'/);
+ assert.equal(result.sample.closedHistoryRowsExamined,341);
+ assert.equal(result.patternStudy.patterns.dip_reversal,341);
+ assert.equal(result.traders.length,341);
+});
