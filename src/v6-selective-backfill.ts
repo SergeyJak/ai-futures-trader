@@ -59,3 +59,9 @@ export async function backfillV6EntryCandles(pool:pg.Pool,save:(c:Candle)=>Promi
  }
  return {targets:targets.map(t=>t.symbol),saved,errors,skippedCooldown:blocked.size,mode:'research-only' as const};
 }
+
+/** Report actual candle coverage progress rather than a misleading unconditional 'completed'. */
+export function summarizeV6Backfill(result:{targets:string[];saved:number;errors:string[];skippedCooldown:number}){
+ const status=result.errors.length?'partial':result.targets.length?'completed':'idle';
+ return {status,targets:result.targets.length,saved:result.saved,failed:result.errors.length,skippedCooldown:result.skippedCooldown,errors:result.errors.slice(0,2)};
+}
