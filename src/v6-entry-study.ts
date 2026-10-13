@@ -26,6 +26,7 @@ export function deduplicateV6EntryRows<T extends {trader_id:string;symbol:string
  for(const row of rows){const key=[row.trader_id,row.symbol,row.side,row.opened_time,row.closed_time].join('|');const previous=byKey.get(key);if(!previous||Number(row.update_time??0)>=Number(previous.update_time??0))byKey.set(key,row)}
  return [...byKey.values()];
 }
+export const V6_ENTRY_STUDY_LIMIT=5000;
 export async function studyV6Entries(pool:pg.Pool){
  // Only use candles that had FINISHED before the observed trade entry.
  // Do not read the close of the minute containing the entry (look-ahead).
@@ -40,7 +41,7 @@ export async function studyV6Entries(pool:pg.Pool){
  LEFT JOIN LATERAL (SELECT close,start_at FROM market_candles WHERE symbol=o.raw->>'symbol' AND confirmed=true AND start_at+interval '1 minute'<=t.opened_at ORDER BY start_at DESC LIMIT 1) e ON true
  LEFT JOIN LATERAL (SELECT close,start_at FROM market_candles WHERE symbol=o.raw->>'symbol' AND confirmed=true AND start_at+interval '1 minute'<=t.opened_at-interval '15 minutes' ORDER BY start_at DESC LIMIT 1) p ON true
  LEFT JOIN LATERAL (SELECT close,start_at FROM market_candles WHERE symbol=o.raw->>'symbol' AND confirmed=true AND start_at=e.start_at-interval '1 minute' LIMIT 1) m ON true
- ORDER BY o.id DESC LIMIT 300`);
+ ORDER BY o.id DESC LIMIT ${V6_ENTRY_STUDY_LIMIT}`);
  const by=new Map<string,{count:number;covered:number;against:number;withTrend:number;flat:number;uncovered:number}>();
  const missingBySymbol=new Map<string,number>();
  const patterns:Record<V6EntryPattern,number>={dip_reversal:0,dip_continuation:0,momentum_continuation:0,momentum_pullback:0,flat:0,unknown:0};
@@ -62,5 +63,5 @@ export async function studyV6Entries(pool:pg.Pool){
  patterns[pattern]++;
  by.set(r.trader_id,a);
  }
- return {patternStudy:{patterns,eligible:Object.entries(patterns).filter(([k])=>k!=='unknown').reduce((n,[,v])=>n+v,0),minimumSampleForInference:30,interpretation:'Observational categories only; dip reversal requires 15m countertrend plus a completed 1m turn. Do not infer profitability or trade from small samples.'},traders:[...by].map(([id,stats])=>({id,...stats})),coverage:{reasons,missingBySymbol:[...missingBySymbol].sort((a,b)=>b[1]-a[1]).slice(0,20).map(([symbol,count])=>({symbol,count}))},caveat:'Completed 1-minute candles only, with <=3m lag at both timestamps; 15m direction is descriptive, not an entry trigger or out-of-sample proof.'};
+ return {sample:{closedHistoryRowsExamined:q.rows.length,limit:V6_ENTRY_STUDY_LIMIT,selection:'most recent closed history; excludes open snapshots and partial closes'},patternStudy:{patterns,eligible:Object.entries(patterns).filter(([k])=>k!=='unknown').reduce((n,[,v])=>n+v,0),minimumSampleForInference:30,interpretation:'Observational categories only; dip reversal requires 15m countertrend plus a completed 1m turn. Do not infer profitability or trade from small samples.'},traders:[...by].map(([id,stats])=>({id,...stats})),coverage:{reasons,missingBySymbol:[...missingBySymbol].sort((a,b)=>b[1]-a[1]).slice(0,20).map(([symbol,count])=>({symbol,count}))},caveat:'Completed 1-minute candles only, with <=3m lag at both timestamps; 15m direction is descriptive, not an entry trigger or out-of-sample proof.'};
 }
