@@ -27,6 +27,7 @@ export function deduplicateV6EntryRows<T extends {trader_id:string;symbol:string
  return [...byKey.values()];
 }
 export async function studyV6Entries(pool:pg.Pool){
+ // Use the same chronological 5000-closed-trade window as the OOS study.
  // Only use candles that had FINISHED before the observed trade entry.
  // Do not read the close of the minute containing the entry (look-ahead).
  const q=await pool.query(`SELECT o.trader_id,o.raw->>'symbol' symbol,o.raw->>'side' side,
@@ -40,7 +41,7 @@ export async function studyV6Entries(pool:pg.Pool){
  LEFT JOIN LATERAL (SELECT close,start_at FROM market_candles WHERE symbol=o.raw->>'symbol' AND confirmed=true AND start_at+interval '1 minute'<=t.opened_at ORDER BY start_at DESC LIMIT 1) e ON true
  LEFT JOIN LATERAL (SELECT close,start_at FROM market_candles WHERE symbol=o.raw->>'symbol' AND confirmed=true AND start_at+interval '1 minute'<=t.opened_at-interval '15 minutes' ORDER BY start_at DESC LIMIT 1) p ON true
  LEFT JOIN LATERAL (SELECT close,start_at FROM market_candles WHERE symbol=o.raw->>'symbol' AND confirmed=true AND start_at=e.start_at-interval '1 minute' LIMIT 1) m ON true
- ORDER BY o.id DESC LIMIT 300`);
+ ORDER BY t.opened_at ASC LIMIT 5000`);
  const by=new Map<string,{count:number;covered:number;against:number;withTrend:number;flat:number;uncovered:number}>();
  const missingBySymbol=new Map<string,number>();
  const patterns:Record<V6EntryPattern,number>={dip_reversal:0,dip_continuation:0,momentum_continuation:0,momentum_pullback:0,flat:0,unknown:0};
