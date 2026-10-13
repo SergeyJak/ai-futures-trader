@@ -341,7 +341,7 @@ const statsTimer=setInterval(()=>{void reportStats()},60000);
 void reportStats();
 const v6ResearchJobs=createV6ResearchJobs(
  ()=>runV6(db.v6Pool()),
- ()=>backfillV6EntryCandles(db.v6Pool(),c=>db.upsert(c)),
+ async ()=>{const result=await backfillV6EntryCandles(db.v6Pool(),c=>db.upsert(c));console.info('V6_BACKFILL_RESULT',JSON.stringify(result));return result},
 );
 async function runV6Backfill(){
  try{
