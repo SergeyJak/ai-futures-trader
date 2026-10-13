@@ -19,3 +19,11 @@ test('gap through stop executes at worse opening price',()=>{
 test('duplicate candle timestamps are rejected',()=>{
  assert.equal(replayV6Exit(trade,[...bars,bars[0]],{kind:'time',minutes:30}).status,'insufficient_candles');
 });
+
+test('short bracket direction and 4h completeness',()=>{
+ const p={...trade,side:'SHORT' as const};
+ const result=replayV6Exit(p,[{startMs:t,open:100,high:101,low:97,close:99}],{kind:'bracket',stopPct:0.02,takePct:0.02,maxMinutes:30});
+ assert.equal(result.status,'evaluated');
+ if(result.status==='evaluated')assert.equal(result.exitPrice,98);
+ assert.equal(replayV6Exit(trade,bars,{kind:'time',minutes:240}).status,'insufficient_candles');
+});
