@@ -1,5 +1,6 @@
 import type pg from 'pg';
 import {classifyV6EntryPattern} from './v6-entry-study.js';
+import {summarizeClosedFills} from './v6-closed-fill-summary.js';
 import {chronologicalHoldout,type CompletedTrade} from './v6-oos-backtest.js';
 type RawRow={id:string;trader_id:string;symbol:string;side:string;opened_time:string;closed_time:string;entry_price:string;exit_price:string;status:string;entry_close:number|null;previous_minute:number|null;prior_close:number|null;entry_lag:number|null;prior_lag:number|null;minute_spacing:number|null};
 export function convertV6ClosedRow(row:RawRow):CompletedTrade|null{
@@ -37,5 +38,5 @@ export async function studyV6OutOfSample(pool:pg.Pool){
  LEFT JOIN LATERAL (SELECT close,start_at FROM market_candles WHERE symbol=o.raw->>'symbol' AND confirmed=true AND start_at=e.start_at-interval '1 minute' LIMIT 1) m ON true
  ORDER BY t.opened_at ASC LIMIT 5000`);
  const converted=result.rows.map(convertV6ClosedRow).filter((x):x is CompletedTrade=>x!==null);
- return {closedHistoryRows:result.rows.length,eligibleWithCompleteCandlesAndPrices:converted.length,excluded:result.rows.length-converted.length,assessment:chronologicalHoldout(converted),scope:'Observed trader fills only; cannot validate an executable signal until a forward-only entry/exit simulator is built.'};
+ return {closedHistoryRows:result.rows.length,eligibleWithCompleteCandlesAndPrices:converted.length,excluded:result.rows.length-converted.length,closedFillSummary:summarizeClosedFills(result.rows),assessment:chronologicalHoldout(converted),scope:'Observed trader fills only; cannot validate an executable signal until a forward-only entry/exit simulator is built.'};
 }
