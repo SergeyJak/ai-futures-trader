@@ -57,5 +57,5 @@ export async function backfillV6EntryCandles(pool:pg.Pool,save:(c:Candle)=>Promi
    for(const candle of candles){await save(candle);saved++}
   }catch(e){retryAfter.set(t.symbol,nowMs+v6BackfillCooldownMs(e));errors.push(t.symbol+': '+String(e).slice(0,100))}
  }
- return {targets:targets.map(t=>t.symbol),saved,errors,skippedCooldown:blocked.size,mode:'research-only' as const};
+ return {targets:targets.map(t=>t.symbol),saved,errors,skippedCooldown:blocked.size,candidateRows:q.rows.length,mode:'research-only' as const};
 }
