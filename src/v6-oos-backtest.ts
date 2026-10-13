@@ -1,7 +1,7 @@
 /** Research-only, pre-registered chronological holdout. Never used to place orders. */
 export type Pattern='dip_reversal'|'dip_continuation'|'momentum_continuation'|'momentum_pullback';
 export type CompletedTrade={id:string;openedMs:number;closedMs:number;pattern:Pattern;side:'LONG'|'SHORT';entry:number;exit:number};
-export type ScoredTrade=CompletedTrade&{netReturn:number};
+export type ScoredTrade=CompletedTrade&{grossReturn:number;roundTripCost:number;netReturn:number};
 export type BacktestConfig={feePerSide:number;slippagePerSide:number;trainFraction:number;minimumTrain:number;minimumTest:number};
 export const DEFAULT_OOS_CONFIG:BacktestConfig={feePerSide:0.0006,slippagePerSide:0.0003,trainFraction:0.7,minimumTrain:30,minimumTest:15};
 export function scoreClosedTrade(t:CompletedTrade,config:BacktestConfig=DEFAULT_OOS_CONFIG):ScoredTrade{
@@ -9,7 +9,7 @@ export function scoreClosedTrade(t:CompletedTrade,config:BacktestConfig=DEFAULT_
  const direction=t.side==='LONG'?1:t.side==='SHORT'?-1:0;
  if(!direction)throw Error('Invalid side');
  const gross=direction*(t.exit/t.entry-1);
- return {...t,netReturn:gross-2*(config.feePerSide+config.slippagePerSide)};
+ const roundTripCost=2*(config.feePerSide+config.slippagePerSide);return {...t,grossReturn:gross,roundTripCost,netReturn:gross-roundTripCost};
 }
 export function summarizeReturns(rows:ScoredTrade[]){
  const returns=rows.map(r=>r.netReturn);
