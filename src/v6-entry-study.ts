@@ -46,7 +46,13 @@ export async function studyV6Entries(pool:pg.Pool){
  const missingBySymbol=new Map<string,number>();
  const patterns:Record<V6EntryPattern,number>={dip_reversal:0,dip_continuation:0,momentum_continuation:0,momentum_pullback:0,flat:0,unknown:0};
  const reasons={missingEntryCandle:0,missingPriorCandle:0,staleEntryCandle:0,stalePriorCandle:0,invalidSideOrPrice:0};
+ const holdingMinutes:number[]=[];
+ const holdingBuckets={under30m:0,from30mTo4h:0,from4hTo24h:0,over24h:0,invalid:0};
  for(const r of deduplicateV6EntryRows(q.rows)){
+ const openedMs=Number(r.opened_time),closedMs=Number(r.closed_time);
+ if(!Number.isSafeInteger(openedMs)||!Number.isSafeInteger(closedMs)||closedMs<=openedMs)holdingBuckets.invalid++;
+ else {const minutes=(closedMs-openedMs)/60000;holdingMinutes.push(minutes);
+  if(minutes<30)holdingBuckets.under30m++;else if(minutes<240)holdingBuckets.from30mTo4h++;else if(minutes<1440)holdingBuckets.from4hTo24h++;else holdingBuckets.over24h++}
  const a=by.get(r.trader_id)??{count:0,covered:0,against:0,withTrend:0,flat:0,uncovered:0};a.count++;
  const fresh=r.entry_lag_seconds!==null&&r.prior_lag_seconds!==null&&Number(r.entry_lag_seconds)>=0&&Number(r.prior_lag_seconds)>=0&&Number(r.entry_lag_seconds)<=180&&Number(r.prior_lag_seconds)<=180;
  const category=fresh?classifyV6Entry(r.side,r.entry,r.prev):'unknown';
@@ -63,5 +69,7 @@ export async function studyV6Entries(pool:pg.Pool){
  patterns[pattern]++;
  by.set(r.trader_id,a);
  }
- return {sample:{closedHistoryRowsExamined:q.rows.length,limit:V6_ENTRY_STUDY_LIMIT,selection:'chronological closed history, aligned with OOS; excludes open snapshots and partial closes'},patternStudy:{patterns,eligible:Object.entries(patterns).filter(([k])=>k!=='unknown').reduce((n,[,v])=>n+v,0),minimumSampleForInference:30,interpretation:'Observational categories only; dip reversal requires 15m countertrend plus a completed 1m turn. Do not infer profitability or trade from small samples.'},traders:[...by].map(([id,stats])=>({id,...stats})),coverage:{reasons,missingBySymbol:[...missingBySymbol].sort((a,b)=>b[1]-a[1]).slice(0,20).map(([symbol,count])=>({symbol,count}))},caveat:'Completed 1-minute candles only, with <=3m lag at both timestamps; 15m direction is descriptive, not an entry trigger or out-of-sample proof.'};
+ holdingMinutes.sort((a,b)=>a-b);
+ const percentile=(p:number)=>holdingMinutes.length?holdingMinutes[Math.max(0,Math.ceil(p*holdingMinutes.length)-1)]:null;
+ return {holding:{...holdingBuckets,valid:holdingMinutes.length,medianMinutes:percentile(.5),p90Minutes:percentile(.9),caveat:'Observed copytrader holding periods; not a recommendation for paper exit timers.'},sample:{closedHistoryRowsExamined:q.rows.length,limit:V6_ENTRY_STUDY_LIMIT,selection:'chronological closed history, aligned with OOS; excludes open snapshots and partial closes'},patternStudy:{patterns,eligible:Object.entries(patterns).filter(([k])=>k!=='unknown').reduce((n,[,v])=>n+v,0),minimumSampleForInference:30,interpretation:'Observational categories only; dip reversal requires 15m countertrend plus a completed 1m turn. Do not infer profitability or trade from small samples.'},traders:[...by].map(([id,stats])=>({id,...stats})),coverage:{reasons,missingBySymbol:[...missingBySymbol].sort((a,b)=>b[1]-a[1]).slice(0,20).map(([symbol,count])=>({symbol,count}))},caveat:'Completed 1-minute candles only, with <=3m lag at both timestamps; 15m direction is descriptive, not an entry trigger or out-of-sample proof.'};
 }
