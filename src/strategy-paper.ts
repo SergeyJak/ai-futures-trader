@@ -1,7 +1,7 @@
 import type pg from 'pg';
 import {STRATEGY_PAGES,type StrategyKey} from './strategy-pages.js';
 export const EXPERIMENT_KEYS=Object.keys(STRATEGY_PAGES) as StrategyKey[];
-export const EXIT_MODES=[{id:'30m',minutes:30},{id:'4h',minutes:240},{id:'bracket',minutes:null}] as const;
+export const EXIT_MODES=[{id:'4h',minutes:240},{id:'12h',minutes:720},{id:'24h',minutes:1440},{id:'bracket',minutes:null}] as const;
 export const FEE=.0006,SLIP=.0003,STOP=.01,TAKE=.02;
 type Bar={time:number;open:number;high:number;low:number;close:number};
 type Position={entry:number;entryAt:number;quantity:number;side:'LONG'|'SHORT'};
