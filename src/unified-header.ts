@@ -1,5 +1,39 @@
 export const unifiedHeader = `<div class="af-header"><a class="af-brand" href="/">AI <span>Futures</span></a><details class="af-menu"><summary aria-label="Меню разделов" title="Меню разделов">⋮</summary><nav aria-label="Разделы"><a href="/">Общий обзор</a><details class="af-submenu"><summary>Стратегии ▸</summary><div><a href="/sol-dip">SOL · Dip Reversal</a><a href="/dip-oos">Dip Reversal · OOS эксперимент</a><a href="/strategy/dip_reversal">Отскок после просадки</a><a href="/strategy/momentum_continuation">Продолжение импульса</a><a href="/strategy/dip_continuation">Продолжение просадки</a></div></details><details class="af-submenu"><summary>Версии V1–V6 ▸</summary><div><a href="/dashboard">V1 / V2 · Торговля</a><a href="/experiments">V3 · Парные стратегии</a><a href="/exit-research">V4 · Выходы</a><a href="/v5">V5 · Исправленные сигналы</a><a href="/v6">V6 · Исследование трейдеров</a></div></details><a href="/finance">Финансы · Рейтинг стратегий</a><a href="/analytics">Аналитика</a><a href="/market">Рынок</a><a href="/research">Исследования</a></nav></details></div>`;
-export const headerCss = `<style>.af-header{box-sizing:border-box;max-width:1150px;margin:0 auto;padding:16px 18px;display:flex;align-items:center;justify-content:space-between;background:#fff;border-bottom:1px solid #e4eaf5;font:600 16px system-ui;color:#172338}.af-header *{box-sizing:border-box}.af-brand{text-decoration:none!important;color:#172338!important;font-size:22px;font-weight:850}.af-brand span{color:#506ddd}.af-menu{position:relative}.af-menu summary{list-style:none;cursor:pointer;border:1px solid #dce4f0;background:#f7f9fd;color:#172338;border-radius:12px;width:43px;height:43px;display:grid;place-items:center;font-size:29px;line-height:1}.af-menu summary::-webkit-details-marker{display:none}.af-menu nav{position:absolute;z-index:100;right:0;top:49px;width:min(290px,85vw);background:#fff;border:1px solid #dce4f0;box-shadow:0 12px 35px #17233822;border-radius:14px;padding:8px;display:grid;gap:2px}.af-menu nav a{color:#273951!important;text-decoration:none!important;padding:11px 13px;border-radius:8px;font-size:14px}.af-menu nav a:hover{background:#eef3ff}.af-submenu>summary{padding:11px 13px;cursor:pointer;font-size:14px;list-style:none;border-radius:8px}.af-submenu>summary:hover{background:#eef3ff}.af-submenu>div{padding-left:12px;display:grid}.af-submenu[open]>summary{font-weight:750}</style>`;
+export const headerCss = `<style>
+.af-header,.af-header *{box-sizing:border-box}
+.af-header{max-width:1150px;margin:0 auto;padding:16px 18px;display:flex;align-items:center;justify-content:space-between;background:#fff;border-bottom:1px solid #e4eaf5;font:600 16px system-ui;color:#172338}
+.af-brand{text-decoration:none!important;color:#172338!important;font-size:22px;font-weight:850}.af-brand span{color:#506ddd}
+.af-menu{position:relative}.af-menu>summary{list-style:none;cursor:pointer;border:1px solid #dce4f0;background:#f7f9fd;color:#172338;border-radius:12px;width:43px;height:43px;display:grid;place-items:center;font-size:29px;line-height:1}
+.af-menu summary::-webkit-details-marker{display:none}
+.af-menu>nav{position:absolute;z-index:100;right:0;top:49px;width:min(330px,calc(100vw - 28px));max-height:calc(100dvh - 115px);overflow-y:auto;overscroll-behavior:contain;background:#fff;border:1px solid #dce4f0;box-shadow:0 12px 35px #17233822;border-radius:14px;padding:10px;display:flex;flex-direction:column;gap:4px;align-items:stretch}
+.af-menu>nav>a,.af-submenu>summary,.af-submenu>div>a{display:block!important;width:100%!important;min-height:44px!important;height:auto!important;margin:0!important;float:none!important;position:static!important;transform:none!important;line-height:1.4!important;text-align:left!important;white-space:normal!important;overflow-wrap:anywhere!important;border:0!important;border-radius:9px!important;padding:12px 13px!important;font:600 14px/1.4 system-ui!important;box-shadow:none!important}
+.af-menu>nav a{color:#273951!important;text-decoration:none!important}
+.af-menu>nav a:hover,.af-submenu>summary:hover{background:#eef3ff!important}
+.af-submenu{display:block!important;width:100%!important;margin:0!important;padding:0!important;border:0!important;min-width:0!important}
+.af-submenu>summary{cursor:pointer!important;list-style:none!important;background:#f7f9fd!important}
+.af-submenu>summary::after{content:'▾';float:right;font-size:13px;transition:transform .15s}
+.af-submenu[open]>summary::after{transform:rotate(180deg)}
+.af-submenu>div{display:flex!important;flex-direction:column!important;gap:2px!important;padding:4px 0 7px 12px!important;margin:0!important}
+.af-submenu>div>a{font-weight:500!important;padding-left:16px!important}
+.af-submenu[open]>summary{font-weight:750!important;background:#eef3ff!important}
+@media(max-width:600px){.af-menu>nav{right:-2px}}
+</style>`;
+const menuPersistenceScript = `<script>
+(function(){
+const menu=document.querySelector('.af-menu');
+if(!menu)return;
+const groups=Array.from(menu.querySelectorAll('.af-submenu'));
+const key='ai-futures-expanded-menu-v1';
+try{
+ const stored=JSON.parse(sessionStorage.getItem(key)||'[]');
+ groups.forEach((g,i)=>{g.open=stored.includes(i)});
+}catch{}
+const save=()=>{try{sessionStorage.setItem(key,JSON.stringify(groups.flatMap((g,i)=>g.open?[i]:[])))}catch{}};
+groups.forEach(g=>g.addEventListener('toggle',save));
+menu.addEventListener('toggle',()=>{if(menu.open){try{const stored=JSON.parse(sessionStorage.getItem(key)||'[]');groups.forEach((g,i)=>{g.open=stored.includes(i)})}catch{}}});
+})();
+</script>`;
+
 
 const compactCss = `<style>
 .af-compact{max-width:1050px;margin:18px auto 0;padding:0 16px;font:14px system-ui;color:#172338}
@@ -34,4 +68,4 @@ refresh();setInterval(refresh,30000);
 })();
 </script>`;
 
-export function withUnifiedHeader(html:string){let result=(html.includes('id="overlay"')?html:html.replace(/<header\b[^>]*>[\s\S]*?<\/header>/i,'').replace(/<nav\b[^>]*>[\s\S]*?<\/nav>/i,'')).replace('</head>',headerCss+'</head>').replace(/<body([^>]*)>/i,(_m,attrs)=>'<body'+attrs+'>'+unifiedHeader);if(/<title>[^<]*(?:v5|v4|Парные эксперименты|Paper Trading)/i.test(html)){result=result.replace('</head>',compactCss+'</head>').replace(unifiedHeader,unifiedHeader+compactUi).replace('</body>','</details>'+compactScript+'</body>')}return result}
+export function withUnifiedHeader(html:string){let result=(html.includes('id="overlay"')?html:html.replace(/<header\b[^>]*>[\s\S]*?<\/header>/i,'').replace(/<nav\b[^>]*>[\s\S]*?<\/nav>/i,'')).replace('</head>',headerCss+'</head>').replace(/<body([^>]*)>/i,(_m,attrs)=>'<body'+attrs+'>'+unifiedHeader);if(/<title>[^<]*(?:v5|v4|Парные эксперименты|Paper Trading)/i.test(html)){result=result.replace('</head>',compactCss+'</head>').replace(unifiedHeader,unifiedHeader+compactUi).replace('</body>','</details>'+compactScript+'</body>')}return result.replace('</body>',menuPersistenceScript+'</body>')}
