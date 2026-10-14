@@ -37,6 +37,25 @@ export async function studyV6OutOfSample(pool:pg.Pool){
  LEFT JOIN LATERAL (SELECT close,start_at FROM market_candles WHERE symbol=o.raw->>'symbol' AND confirmed=true AND start_at+interval '1 minute'<=t.opened_at-interval '15 minutes' ORDER BY start_at DESC LIMIT 1) p ON true
  LEFT JOIN LATERAL (SELECT close,start_at FROM market_candles WHERE symbol=o.raw->>'symbol' AND confirmed=true AND start_at=e.start_at-interval '1 minute' LIMIT 1) m ON true
  ORDER BY t.opened_at ASC LIMIT 5000`);
- const converted=result.rows.map(convertV6ClosedRow).filter((x):x is CompletedTrade=>x!==null);
- return {closedHistoryRows:result.rows.length,eligibleWithCompleteCandlesAndPrices:converted.length,excluded:result.rows.length-converted.length,assessment:chronologicalHoldout(converted),holdingWindows:observedHoldingWindowStudy(converted),scope:'Observed trader fills only; cannot validate an executable signal until a forward-only entry/exit simulator is built.'};
+ const okx=await pool.query<RawRow>(`SELECT
+ concat('okx:',h.unique_code,'|',h.sub_pos_id) AS id,
+ concat('okx:',h.unique_code) AS trader_id,
+ replace(COALESCE(h.raw->>'instId',''),'-','') AS symbol,
+ upper(COALESCE(h.raw->>'posSide','')) AS side,
+ (EXTRACT(EPOCH FROM h.open_at)*1000)::bigint::text AS opened_time,
+ (EXTRACT(EPOCH FROM h.close_at)*1000)::bigint::text AS closed_time,
+ h.raw->>'openAvgPx' AS entry_price,h.raw->>'closeAvgPx' AS exit_price,
+ 'CLOSED' AS status,
+ e.close::float8 AS entry_close,m.close::float8 AS previous_minute,p.close::float8 AS prior_close,
+ EXTRACT(EPOCH FROM (h.open_at-(e.start_at+interval '1 minute')))::float8 AS entry_lag,
+ EXTRACT(EPOCH FROM (h.open_at-interval '15 minutes'-(p.start_at+interval '1 minute')))::float8 AS prior_lag,
+ EXTRACT(EPOCH FROM (e.start_at-m.start_at))::float8 AS minute_spacing
+ FROM v6_okx_history h
+ LEFT JOIN LATERAL (SELECT close,start_at FROM market_candles WHERE symbol=replace(COALESCE(h.raw->>'instId',''),'-','') AND confirmed=true AND start_at+interval '1 minute'<=h.open_at ORDER BY start_at DESC LIMIT 1) e ON true
+ LEFT JOIN LATERAL (SELECT close,start_at FROM market_candles WHERE symbol=replace(COALESCE(h.raw->>'instId',''),'-','') AND confirmed=true AND start_at+interval '1 minute'<=h.open_at-interval '15 minutes' ORDER BY start_at DESC LIMIT 1) p ON true
+ LEFT JOIN LATERAL (SELECT close,start_at FROM market_candles WHERE symbol=replace(COALESCE(h.raw->>'instId',''),'-','') AND confirmed=true AND start_at=e.start_at-interval '1 minute' LIMIT 1) m ON true
+ ORDER BY h.open_at ASC LIMIT 5000`);
+ const combined=[...result.rows,...okx.rows];
+ const converted=combined.map(convertV6ClosedRow).filter((x):x is CompletedTrade=>x!==null);
+ return {closedHistoryRows:combined.length,sourceCounts:{kopyon:result.rows.length,okx:okx.rows.length},eligibleWithCompleteCandlesAndPrices:converted.length,excluded:combined.length-converted.length,assessment:chronologicalHoldout(converted),holdingWindows:observedHoldingWindowStudy(converted),scope:'Observed trader fills only; cannot validate an executable signal until a forward-only entry/exit simulator is built.'};
 }
