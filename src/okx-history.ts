@@ -25,7 +25,7 @@ async function requestHistory(code:string,after?:string){
 export async function collectOkxHistory(pool:pg.Pool,codes:string[],maxPages=3){
  let inserted=0,invalid=0;const errors:string[]=[];
  for(const code of codes.slice(0,10)){
-  if(!/^[A-Za-z0-9]{16}$/.test(code)){errors.push('invalid uniqueCode');continue;}
+  if(!/^(?:[A-Za-z0-9]{16}|[A-Za-z0-9]{18})$/.test(code)){errors.push('invalid uniqueCode');continue;}
   let cursor:string|undefined;const seen=new Set<string>();
   try{
    await pool.query(`INSERT INTO v6_okx_source_status(unique_code,status,last_attempt) VALUES($1,'fetching',now()) ON CONFLICT(unique_code) DO UPDATE SET status='fetching',last_attempt=now()`,[code]);
