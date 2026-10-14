@@ -1,3 +1,4 @@
+import {observedHoldingWindowStudy} from './v6-holding-window-study.js';
 import type pg from 'pg';
 import {classifyV6EntryPattern} from './v6-entry-study.js';
 import {chronologicalHoldout,type CompletedTrade} from './v6-oos-backtest.js';
@@ -37,5 +38,5 @@ export async function studyV6OutOfSample(pool:pg.Pool){
  LEFT JOIN LATERAL (SELECT close,start_at FROM market_candles WHERE symbol=o.raw->>'symbol' AND confirmed=true AND start_at=e.start_at-interval '1 minute' LIMIT 1) m ON true
  ORDER BY t.opened_at ASC LIMIT 5000`);
  const converted=result.rows.map(convertV6ClosedRow).filter((x):x is CompletedTrade=>x!==null);
- return {closedHistoryRows:result.rows.length,eligibleWithCompleteCandlesAndPrices:converted.length,excluded:result.rows.length-converted.length,assessment:chronologicalHoldout(converted),scope:'Observed trader fills only; cannot validate an executable signal until a forward-only entry/exit simulator is built.'};
+ return {closedHistoryRows:result.rows.length,eligibleWithCompleteCandlesAndPrices:converted.length,excluded:result.rows.length-converted.length,assessment:chronologicalHoldout(converted),holdingWindows:observedHoldingWindowStudy(converted),scope:'Observed trader fills only; cannot validate an executable signal until a forward-only entry/exit simulator is built.'};
 }
