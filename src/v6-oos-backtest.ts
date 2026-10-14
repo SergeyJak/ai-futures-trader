@@ -1,4 +1,4 @@
-/** Research-only, pre-registered chronological holdout. Never used to place orders. */
+/** Research-only scoring. The 70/30 split is rolling/exploratory, NOT a frozen OOS boundary. Never used to place orders. */
 export type Pattern='dip_reversal'|'dip_continuation'|'momentum_continuation'|'momentum_pullback';
 export type CompletedTrade={id:string;openedMs:number;closedMs:number;pattern:Pattern;side:'LONG'|'SHORT';entry:number;exit:number};
 export type ScoredTrade=CompletedTrade&{netReturn:number};
@@ -19,8 +19,8 @@ export function summarizeReturns(rows:ScoredTrade[]){
  const loss=-losses.reduce((a,b)=>a+b,0);
  return {count:rows.length,winRate:rows.length?wins.length/rows.length:null,meanNetReturn:rows.length?returns.reduce((a,b)=>a+b,0)/rows.length:null,profitFactor:loss>0?gain/loss:null,medianHoldMinutes:rows.length?[...rows].map(x=>(x.closedMs-x.openedMs)/60000).sort((a,b)=>a-b)[Math.floor((rows.length-1)/2)]:null};
 }
-/** Split by entry time, purge trades overlapping the test period, select ONLY on training.
- * The holdout is reported once, with no parameter tuning based on its outcome.
+/** Exploratory rolling 70/30 split by entry time. The split moves as history grows;
+ * repeated checks are NOT independent forward OOS validation.
  */
 export function chronologicalHoldout(trades:CompletedTrade[],config:BacktestConfig=DEFAULT_OOS_CONFIG){
  if(!(config.trainFraction>0&&config.trainFraction<1)||config.minimumTrain<1||config.minimumTest<1||config.feePerSide<0||config.slippagePerSide<0)throw Error('Invalid OOS config');
@@ -43,5 +43,27 @@ export function chronologicalHoldout(trades:CompletedTrade[],config:BacktestConf
  const selected=eligible[0].pattern;
  const holdout=test.filter(t=>t.pattern===selected);
  if(holdout.length<config.minimumTest)return {status:'insufficient_data' as const,selectedPattern:selected,trainCount:train.length,testCount:test.length,selectedPatternTestCount:holdout.length,reason:'Not enough out-of-sample closed trades for the selected pattern'};
- return {status:'evaluated' as const,selectedPattern:selected,trainCount:train.length,testCount:test.length,train:summarizeReturns(train.filter(t=>t.pattern===selected)),test:summarizeReturns(holdout),baselineTest:summarizeReturns(test),holdoutStartMs:testStart,config,warning:'Observational copied entries, not independently executable signals; no claim of live profitability.'};
+ return {status:'evaluated' as const,selectedPattern:selected,trainCount:train.length,testCount:test.length,train:summarizeReturns(train.filter(t=>t.pattern===selected)),test:summarizeReturns(holdout),baselineTest:summarizeReturns(test),holdoutStartMs:testStart,config,warning:'Rolling exploratory split changes when new history arrives. Observational copied entries, not independently executable signals. No genuine frozen OOS or live profitability claim.'};
+}
+
+/** Frozen, forward-only validation of one predeclared pattern. No model selection on
+ * observations after cutoff. The sample remains copied-trader fills, not our executions. */
+export const V6_FROZEN_CUTOFF_MS=Date.parse('2026-10-15T00:00:00.000Z');
+export const V6_FROZEN_PATTERN:Pattern='dip_reversal';
+export function frozenForwardValidation(
+ trades:CompletedTrade[],
+ cutoffMs=V6_FROZEN_CUTOFF_MS,
+ pattern:Pattern=V6_FROZEN_PATTERN,
+ config:BacktestConfig=DEFAULT_OOS_CONFIG,
+){
+ if(!Number.isFinite(cutoffMs)||cutoffMs<=0||!['dip_reversal','dip_continuation','momentum_continuation','momentum_pullback'].includes(pattern))throw Error('Invalid frozen validation parameters');
+ const seen=new Set<string>();
+ const future=trades.filter(t=>{
+  if(t.openedMs<cutoffMs||t.pattern!==pattern||seen.has(t.id))return false;
+  seen.add(t.id);
+  return true;
+ }).map(t=>scoreClosedTrade(t,config));
+ const base={cutoffMs,pattern,observedForwardTrades:future.length,minimumRequired:config.minimumTest,source:'Observed copytrader fills, not independent executable strategy fills',frozen:true,selectionUsesForwardData:false};
+ if(future.length<config.minimumTest)return {...base,status:'insufficient_data' as const,reason:'Awaiting new fully closed, candle-covered positions opened after frozen cutoff'};
+ return {...base,status:'evaluated' as const,stats:summarizeReturns(future),warning:'Fixed forward cohort of observed copytrader fills only; cannot prove profitability of independently executed signals.'};
 }
