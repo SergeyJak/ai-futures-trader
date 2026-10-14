@@ -41,3 +41,19 @@ export async function dipOosReport(pool:pg.Pool){
  const [accounts,trades]=await Promise.all([pool.query('SELECT * FROM v6_dip_oos_accounts ORDER BY variant'),pool.query('SELECT * FROM v6_dip_oos_trades ORDER BY id DESC LIMIT 150')]);
  return {strategy:OOS_KEY,mode:'forward-paper',realOrders:false,startingBalance:100,feePerSide:FEE,slippagePerSide:SLIP,warning:'Independent forward paper experiment; no out-of-sample profitability established.',variants:OOS_VARIANTS.map(v=>({...v,...accounts.rows.find(x=>x.variant===v.id),trades:trades.rows.filter(t=>t.variant===v.id)}))};
 }
+
+export async function dipOosChart(pool:pg.Pool,variant:string,id:string){
+ if(!OOS_VARIANTS.some(v=>v.id===variant))return null;
+ let trade:any;
+ if(id==='active'){
+  const r=await pool.query('SELECT position FROM v6_dip_oos_accounts WHERE variant=$1',[variant]);
+  const p=r.rows[0]?.position as Position|null;if(!p)return null;
+  trade={id:'active',variant,side:p.side,entry_at:new Date(p.entryAt).toISOString(),exit_at:new Date().toISOString(),entry_price:p.entry,exit_price:null,reason:'OPEN'};
+ }else{
+  if(!/^\\d{1,15}$/.test(id))return null;
+  const r=await pool.query('SELECT * FROM v6_dip_oos_trades WHERE id=$1 AND variant=$2',[id,variant]);
+  if(!r.rowCount)return null;trade=r.rows[0];
+ }
+ const candles=await pool.query(`SELECT start_at AS time,open,high,low,close FROM market_candles WHERE symbol='SOLUSDT' AND confirmed=true AND start_at BETWEEN $1::timestamptz-interval '10 minutes' AND $2::timestamptz+interval '10 minutes' ORDER BY start_at DESC LIMIT 1500`,[trade.entry_at,trade.exit_at]);
+ return {trade,candles:candles.rows.reverse()};
+}
