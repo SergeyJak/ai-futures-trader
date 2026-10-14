@@ -4,7 +4,7 @@ import {strategySignal,strategyExit,FEE,SLIP} from './strategy-paper.js';
 type Bar={time:number;open:number;high:number;low:number;close:number};
 type Position={entry:number;entryAt:number;quantity:number;side:'LONG'|'SHORT'};
 export const OOS_KEY='dip_reversal_oos';
-export const OOS_VARIANTS=[{id:'30m',minutes:30},{id:'4h',minutes:240},{id:'bracket',minutes:null}] as const;
+export const OOS_VARIANTS=[{id:'4h',minutes:240},{id:'12h',minutes:720},{id:'24h',minutes:1440},{id:'bracket',minutes:null}] as const;
 export async function initDipOos(pool:pg.Pool){
  await pool.query(`CREATE TABLE IF NOT EXISTS v6_dip_oos_accounts(variant TEXT PRIMARY KEY,balance DOUBLE PRECISION NOT NULL DEFAULT 100,position JSONB,last_bar TIMESTAMPTZ)`);
  await pool.query(`CREATE TABLE IF NOT EXISTS v6_dip_oos_trades(id BIGSERIAL PRIMARY KEY,variant TEXT NOT NULL,side TEXT NOT NULL,entry_at TIMESTAMPTZ NOT NULL,exit_at TIMESTAMPTZ NOT NULL,entry_price DOUBLE PRECISION NOT NULL,exit_price DOUBLE PRECISION NOT NULL,net_pnl DOUBLE PRECISION NOT NULL,reason TEXT NOT NULL)`);
