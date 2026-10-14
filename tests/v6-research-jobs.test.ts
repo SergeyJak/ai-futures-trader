@@ -31,3 +31,9 @@ test('a failed backfill releases its single-flight guard',async()=>{
  assert.equal(await jobs.runBackfill(),true);
  assert.equal(calls,2);
 });
+
+test('diagnostics include saved candle count',async()=>{
+ const jobs=createV6ResearchJobs(async()=>{},async()=>({saved:21,targets:['SOLUSDT'],errors:[]}));
+ const result=await jobs.runBackfillDetailed();
+ assert.deepEqual(result,{started:true,result:{saved:21,targets:['SOLUSDT'],errors:[]}});
+});
