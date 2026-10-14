@@ -1,3 +1,4 @@
+import {evaluateV6CohortHoldout,type ClosedPositionMeta,type CohortEntry} from './v6-cohort-oos.js';
 import type pg from 'pg';
 import {classifyV6EntryPattern} from './v6-entry-study.js';
 import {chronologicalHoldout,type CompletedTrade} from './v6-oos-backtest.js';
@@ -37,5 +38,11 @@ export async function studyV6OutOfSample(pool:pg.Pool){
  LEFT JOIN LATERAL (SELECT close,start_at FROM market_candles WHERE symbol=o.raw->>'symbol' AND confirmed=true AND start_at=e.start_at-interval '1 minute' LIMIT 1) m ON true
  ORDER BY t.opened_at ASC LIMIT 5000`);
  const converted=result.rows.map(convertV6ClosedRow).filter((x):x is CompletedTrade=>x!==null);
- return {closedHistoryRows:result.rows.length,eligibleWithCompleteCandlesAndPrices:converted.length,excluded:result.rows.length-converted.length,assessment:chronologicalHoldout(converted),scope:'Observed trader fills only; cannot validate an executable signal until a forward-only entry/exit simulator is built.'};
+ const closedMeta:ClosedPositionMeta[]=result.rows.flatMap(r=>{
+  if(!/^[0-9]{13}$/.test(r.opened_time)||!/^[0-9]{13}$/.test(r.closed_time))return [];
+  const openedMs=Number(r.opened_time),closedMs=Number(r.closed_time);
+  return closedMs>openedMs?[{id:r.id,traderId:r.trader_id,openedMs,closedMs}]:[];
+ });
+ const eligible:CohortEntry[]=result.rows.flatMap(r=>{const t=convertV6ClosedRow(r);return t?[{...t,traderId:r.trader_id}]:[]});
+ return {closedHistoryRows:result.rows.length,eligibleWithCompleteCandlesAndPrices:converted.length,excluded:result.rows.length-converted.length,assessment:chronologicalHoldout(converted),cohortHoldout:evaluateV6CohortHoldout(closedMeta,eligible),scope:'Observed trader fills only; cannot validate an executable signal until a forward-only entry/exit simulator is built.'};
 }
