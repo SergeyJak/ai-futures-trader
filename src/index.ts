@@ -1,3 +1,4 @@
+import {initOkxHistory,collectOkxHistory} from './okx-history.js';
 import {dipOosHtml} from './dip-oos-page.js';
 import {initDipOos,tickDipOos,dipOosReport,dipOosChart} from './dip-oos.js';
 import {initStrategyPaper,tickStrategyPaper,strategyPaperReport,strategyPaperChart} from './strategy-paper.js';
@@ -26,7 +27,7 @@ if(!url)throw new Error('DATABASE_URL required');
 if(!endpoint.startsWith('wss://'))throw new Error('Secure WebSocket required');
 if(!Number.isInteger(port)||port<1||port>65535)throw new Error('Invalid port');
 installOutboundTelemetry();
-const db=new Database(url);await db.init();await db.initExperiments();await db.initShadow();await db.initV3();await db.initV4();await db.initV5();await initV6(db.v6Pool());await initSolPaper(db.v6Pool());await initStrategyPaper(db.v6Pool());await initDipOos(db.v6Pool());const stream=new MarketStream(endpoint,symbols,db);stream.start();
+const db=new Database(url);await db.init();await db.initExperiments();await db.initShadow();await db.initV3();await db.initV4();await db.initV5();await initV6(db.v6Pool());await initOkxHistory(db.v6Pool());await initSolPaper(db.v6Pool());await initStrategyPaper(db.v6Pool());await initDipOos(db.v6Pool());const stream=new MarketStream(endpoint,symbols,db);stream.start();
 const server=http.createServer(async(req,res)=>{
  res.setHeader('cache-control','no-store');
  res.setHeader('x-content-type-options','nosniff');
@@ -356,6 +357,12 @@ async function runV6Backfill(){
 }
 const v6BackfillTimer=setInterval(()=>{void runV6Backfill()},15*60000);
 setTimeout(()=>{void runV6Backfill()},45000);
+// Optional OKX public trader IDs, configured independently of Kopyon.
+const okxCodes=(process.env.OKX_TRADER_CODES??'').split(',').map(x=>x.trim()).filter(Boolean);
+let okxRunning=false;
+async function runOkx(){if(okxRunning||!okxCodes.length)return;okxRunning=true;try{console.info('V6_OKX_COLLECTION',JSON.stringify(await collectOkxHistory(db.v6Pool(),okxCodes)))}catch(e){console.error('V6_OKX_ERROR',e)}finally{okxRunning=false}}
+const okxTimer=setInterval(()=>{void runOkx()},6*3600000);
+setTimeout(()=>{void runOkx()},60000);
 const v6Timer=setInterval(()=>{void runV6(db.v6Pool()).then(result=>console.info('V6_DISCOVERY',JSON.stringify(result))).catch(e=>console.error('V6_ERROR',e))},6*3600000);
 setTimeout(()=>{void runV6(db.v6Pool()).then(result=>console.info('V6_DISCOVERY',JSON.stringify(result))).catch(e=>console.error('V6_ERROR',e))},20000);
 let closing=false;async function stop(){if(closing)return;closing=true;clearInterval(statsTimer);clearInterval(storageTimer);clearInterval(repairTimer);clearInterval(historyTimer);clearInterval(paperTimer);clearInterval(telemetryTimer);clearInterval(bounceResearchTimer);clearInterval(v3Timer);clearInterval(v4Timer);clearInterval(v5Timer);clearInterval(v6Timer);clearInterval(v6BackfillTimer);clearInterval(solPaperTimer);clearInterval(strategyPaperTimer);server.close();await stream.stop();await db.close();}
