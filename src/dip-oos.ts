@@ -50,7 +50,7 @@ export async function dipOosChart(pool:pg.Pool,variant:string,id:string){
   const p=r.rows[0]?.position as Position|null;if(!p)return null;
   trade={id:'active',variant,side:p.side,entry_at:new Date(p.entryAt).toISOString(),exit_at:new Date().toISOString(),entry_price:p.entry,exit_price:null,reason:'OPEN'};
  }else{
-  if(!/^\\d{1,15}$/.test(id))return null;
+  if(!/^\d{1,15}$/.test(id))return null;
   const r=await pool.query('SELECT * FROM v6_dip_oos_trades WHERE id=$1 AND variant=$2',[id,variant]);
   if(!r.rowCount)return null;trade=r.rows[0];
  }
