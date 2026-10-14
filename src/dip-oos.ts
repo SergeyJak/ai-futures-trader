@@ -19,7 +19,7 @@ export async function tickDipOos(pool:pg.Pool){
  if(bars.length<18||Date.now()-bars.at(-1)!.time>180000||bars.some((b,i)=>i>0&&b.time-bars[i-1].time!==60000)||bars.some(b=>![b.open,b.high,b.low,b.close].every(x=>Number.isFinite(x)&&x>0)||b.low>b.high||b.open<b.low||b.open>b.high||b.close<b.low||b.close>b.high)){await client.query('COMMIT');return}
  const bar=bars.at(-1)!;
  // Signal from completed candles only; fill is modelled at next candle open.
- const signal=strategySignal('dip_reversal',bars.slice(-16));
+ const signal=strategySignal('dip_reversal',bars.slice(-17,-1));
  for(const variant of OOS_VARIANTS){
  const a=await client.query('SELECT balance,position,last_bar FROM v6_dip_oos_accounts WHERE variant=$1 FOR UPDATE',[variant.id]);
  const row=a.rows[0];if(!row)continue;
@@ -31,7 +31,7 @@ export async function tickDipOos(pool:pg.Pool){
  const decision=strategyExit(position,bar,variant.minutes);
  if(decision){const dir=position.side==='LONG'?1:-1,exit=decision.price*(1-dir*SLIP),net=position.quantity*dir*(exit-position.entry)-FEE*position.quantity*(position.entry+exit);balance+=net;
  await client.query('INSERT INTO v6_dip_oos_trades(variant,side,entry_at,exit_at,entry_price,exit_price,net_pnl,reason) VALUES($1,$2,to_timestamp($3/1000.0),to_timestamp($4/1000.0),$5,$6,$7,$8)',[variant.id,position.side,position.entryAt,bar.time,position.entry,exit,net,decision.reason]);position=null}
- }else if(signal){const dir=signal==='LONG'?1:-1;position={entry:bar.close*(1+dir*SLIP),entryAt:bar.time+60000,quantity:Math.max(0,balance)*.1/(bar.close*(1+dir*SLIP)),side:signal}}
+ }else if(signal){const dir=signal==='LONG'?1:-1;position={entry:bar.open*(1+dir*SLIP),entryAt:bar.time,quantity:Math.max(0,balance)*.1/(bar.open*(1+dir*SLIP)),side:signal}}
  await client.query('UPDATE v6_dip_oos_accounts SET balance=$2,position=$3,last_bar=to_timestamp($4/1000.0) WHERE variant=$1',[variant.id,balance,position?JSON.stringify(position):null,bar.time]);
  }
  await client.query('COMMIT');
