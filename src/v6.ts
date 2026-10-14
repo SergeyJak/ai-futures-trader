@@ -1,3 +1,4 @@
+import {summarizeV6HoldingCohorts} from './v6-holding-cohorts.js';
 import {pauseForRetryAfter,rotateResearchSample} from './v6-request-policy.js';
 import {studyV6Entries} from './v6-entry-study.js';
 import {studyV6OutOfSample} from './v6-real-history-oos.js';
@@ -148,7 +149,8 @@ export async function analyzeV6(pool:pg.Pool){
  pool.query(`SELECT o.kind,k.field,COUNT(*)::int AS count FROM v6_position_observations o CROSS JOIN LATERAL jsonb_object_keys(o.raw) AS k(field) GROUP BY o.kind,k.field ORDER BY o.kind,count DESC LIMIT 60`)]);
  const samples=await pool.query<{trader_id:string;kind:string;raw:Record<string,unknown>}>(`SELECT trader_id,kind,raw FROM v6_position_observations ORDER BY id DESC LIMIT 2000`);
  const [entryStudy,outOfSample]=await Promise.all([studyV6Entries(pool).catch(e=>({error:String(e)})),studyV6OutOfSample(pool).catch(e=>({error:String(e)}))]);
- return {counts:counts.rows,fields:fields.rows,insights:v6Insights(samples.rows),entryStudy,outOfSample};
+ const insights=v6Insights(samples.rows);
+ return {counts:counts.rows,fields:fields.rows,insights,holdingCohorts:summarizeV6HoldingCohorts(insights),entryStudy,outOfSample};
 }
 export async function v6Report(pool:pg.Pool){
  const [state,snapshots,activity,status]=await Promise.all([
