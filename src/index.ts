@@ -1,3 +1,4 @@
+import {discoverOkxTraderCodes} from './okx-discovery.js';
 import {initOkxHistory,collectOkxHistory} from './okx-history.js';
 import {dipOosHtml} from './dip-oos-page.js';
 import {initDipOos,tickDipOos,dipOosReport,dipOosChart} from './dip-oos.js';
@@ -360,7 +361,7 @@ setTimeout(()=>{void runV6Backfill()},45000);
 // Optional OKX public trader IDs, configured independently of Kopyon.
 const okxCodes=(process.env.OKX_TRADER_CODES??'').split(',').map(x=>x.trim()).filter(Boolean);
 let okxRunning=false;
-async function runOkx(){if(okxRunning||!okxCodes.length)return;okxRunning=true;try{console.info('V6_OKX_COLLECTION',JSON.stringify(await collectOkxHistory(db.v6Pool(),okxCodes)))}catch(e){console.error('V6_OKX_ERROR',e)}finally{okxRunning=false}}
+async function runOkx(){if(okxRunning)return;okxRunning=true;try{const codes=okxCodes.length?okxCodes:await discoverOkxTraderCodes();if(!codes.length){console.info('V6_OKX_DISCOVERY_EMPTY');return}console.info('V6_OKX_COLLECTION',JSON.stringify(await collectOkxHistory(db.v6Pool(),codes)))}catch(e){console.error('V6_OKX_ERROR',e)}finally{okxRunning=false}}
 const okxTimer=setInterval(()=>{void runOkx()},6*3600000);
 setTimeout(()=>{void runOkx()},60000);
 const v6Timer=setInterval(()=>{void runV6(db.v6Pool()).then(result=>console.info('V6_DISCOVERY',JSON.stringify(result))).catch(e=>console.error('V6_ERROR',e))},6*3600000);
