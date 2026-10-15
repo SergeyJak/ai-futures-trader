@@ -12,6 +12,7 @@ export type ClosedPosition = {
   positionId: string;
   symbol: string;
   closedAt: string;
+  openedAt?: string;
   grossReturnPct: number;
   fundingPct?: number;
 };
