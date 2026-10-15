@@ -1,3 +1,4 @@
+import {okxSwapSymbolSql} from './v6-okx-symbol.js';
 import {observedHoldingWindowStudy} from './v6-holding-window-study.js';
 import type pg from 'pg';
 import {classifyV6EntryPattern} from './v6-entry-study.js';
@@ -40,7 +41,7 @@ export async function studyV6OutOfSample(pool:pg.Pool){
  const okx=await pool.query<RawRow>(`SELECT
  concat('okx:',h.unique_code,'|',h.sub_pos_id) AS id,
  concat('okx:',h.unique_code) AS trader_id,
- replace(COALESCE(h.raw->>'instId',''),'-','') AS symbol,
+ inst.symbol AS symbol,
  upper(COALESCE(h.raw->>'posSide','')) AS side,
  (EXTRACT(EPOCH FROM h.open_at)*1000)::bigint::text AS opened_time,
  (EXTRACT(EPOCH FROM h.close_at)*1000)::bigint::text AS closed_time,
@@ -51,11 +52,21 @@ export async function studyV6OutOfSample(pool:pg.Pool){
  EXTRACT(EPOCH FROM (h.open_at-interval '15 minutes'-(p.start_at+interval '1 minute')))::float8 AS prior_lag,
  EXTRACT(EPOCH FROM (e.start_at-m.start_at))::float8 AS minute_spacing
  FROM v6_okx_history h
- LEFT JOIN LATERAL (SELECT close,start_at FROM market_candles WHERE symbol=replace(COALESCE(h.raw->>'instId',''),'-','') AND confirmed=true AND start_at+interval '1 minute'<=h.open_at ORDER BY start_at DESC LIMIT 1) e ON true
- LEFT JOIN LATERAL (SELECT close,start_at FROM market_candles WHERE symbol=replace(COALESCE(h.raw->>'instId',''),'-','') AND confirmed=true AND start_at+interval '1 minute'<=h.open_at-interval '15 minutes' ORDER BY start_at DESC LIMIT 1) p ON true
- LEFT JOIN LATERAL (SELECT close,start_at FROM market_candles WHERE symbol=replace(COALESCE(h.raw->>'instId',''),'-','') AND confirmed=true AND start_at=e.start_at-interval '1 minute' LIMIT 1) m ON true
+ CROSS JOIN LATERAL (SELECT ${okxSwapSymbolSql('h.raw')} AS symbol) inst
+ LEFT JOIN LATERAL (SELECT close,start_at FROM market_candles WHERE symbol=inst.symbol AND confirmed=true AND start_at+interval '1 minute'<=h.open_at ORDER BY start_at DESC LIMIT 1) e ON true
+ LEFT JOIN LATERAL (SELECT close,start_at FROM market_candles WHERE symbol=inst.symbol AND confirmed=true AND start_at+interval '1 minute'<=h.open_at-interval '15 minutes' ORDER BY start_at DESC LIMIT 1) p ON true
+ LEFT JOIN LATERAL (SELECT close,start_at FROM market_candles WHERE symbol=inst.symbol AND confirmed=true AND start_at=e.start_at-interval '1 minute' LIMIT 1) m ON true
  ORDER BY h.open_at ASC LIMIT 5000`);
- const combined=[...result.rows,...okx.rows];
- const converted=combined.map(convertV6ClosedRow).filter((x):x is CompletedTrade=>x!==null);
- return {closedHistoryRows:combined.length,sourceCounts:{kopyon:result.rows.length,okx:okx.rows.length},eligibleWithCompleteCandlesAndPrices:converted.length,excluded:combined.length-converted.length,assessment:chronologicalHoldout(converted),holdingWindows:observedHoldingWindowStudy(converted),scope:'Observed trader fills only; cannot validate an executable signal until a forward-only entry/exit simulator is built.'};
+ const kopyonClosed=result.rows.map(convertV6ClosedRow).filter((x):x is CompletedTrade=>x!==null);
+ const okxClosed=okx.rows.map(convertV6ClosedRow).filter((x):x is CompletedTrade=>x!==null);
+ const converted=[...kopyonClosed,...okxClosed];
+ const total=result.rows.length+okx.rows.length;
+ return {closedHistoryRows:total,sourceCounts:{kopyon:result.rows.length,okx:okx.rows.length},
+  eligibleWithCompleteCandlesAndPrices:converted.length,excluded:total-converted.length,
+  sourceAssessments:{
+   kopyon:{closedHistoryRows:result.rows.length,eligible:kopyonClosed.length,excluded:result.rows.length-kopyonClosed.length,assessment:chronologicalHoldout(kopyonClosed)},
+   okx:{closedHistoryRows:okx.rows.length,eligible:okxClosed.length,excluded:okx.rows.length-okxClosed.length,assessment:chronologicalHoldout(okxClosed)}
+  },
+  assessment:chronologicalHoldout(converted),holdingWindows:observedHoldingWindowStudy(converted),
+  scope:'Historical observed trader fills only, not executable entry signals. Pooled assessment mixes providers; evaluate each source separately. Missing candles and unsupported non-USDT instruments are excluded. Funding and market impact are not modeled.'};
 }
