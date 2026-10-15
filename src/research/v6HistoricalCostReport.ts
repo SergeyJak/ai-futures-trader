@@ -30,20 +30,24 @@ export async function historicalCostStressReport(pool: pg.Pool, split: FrozenSpl
       FROM v6_position_observations WHERE kind='history'
       AND raw->>'opened_time' ~ '^[0-9]{13}$' AND raw->>'closed_time' ~ '^[0-9]{13}$'
       AND upper(coalesce(raw->>'status','')) !~ 'PARTIAL|OPEN|ACTIVE|PENDING'
-      LIMIT 5000`),
+      ORDER BY (raw->>'closed_time')::bigint DESC, trader_id ASC, (raw->>'opened_time')::bigint DESC
+      LIMIT 5001`),
     pool.query<SourceRow>(`SELECT 'okx' AS source,concat('okx:',unique_code) AS trader_id,
       sub_pos_id AS position_id,raw->>'instId' AS symbol,
       raw->>'posSide' AS side,open_at::text AS opened_at,close_at::text AS closed_at,
       raw->>'openAvgPx' AS entry_price,raw->>'closeAvgPx' AS exit_price
-      FROM v6_okx_history LIMIT 5000`),
+      FROM v6_okx_history ORDER BY close_at DESC, unique_code ASC, sub_pos_id ASC LIMIT 5001`),
   ]);
-  const all = [...kopyon.rows, ...okx.rows];
+  const truncatedSources = { kopyon: kopyon.rows.length > 5000, okx: okx.rows.length > 5000 };
+  const all = [...kopyon.rows.slice(0,5000), ...okx.rows.slice(0,5000)];
   const eligible = deduplicateClosedPositions(all.map(convertHistoricalCostRow).filter((p): p is ClosedPosition => p !== null));
   const cohorts = groupFrozenOosBySource(eligible, split);
   return {
     mode: 'observed-historical-fills-only',
     realOrders: false,
-    rowsRead: { kopyon: kopyon.rows.length, okx: okx.rows.length },
+    rowsRead: { kopyon: Math.min(kopyon.rows.length,5000), okx: Math.min(okx.rows.length,5000) },
+    truncatedSources,
+    completeHistory: !truncatedSources.kopyon && !truncatedSources.okx,
     eligibleClosed: { kopyon: eligible.filter(p => p.source === 'kopyon').length, okx: eligible.filter(p => p.source === 'okx').length },
     excludedOrDuplicate: all.length - eligible.length,
     frozenSplit: split,
@@ -55,6 +59,6 @@ export async function historicalCostStressReport(pool: pg.Pool, split: FrozenSpl
       outsideCount: cohorts[source].outside,
       observedTestCostScenarios: stressBySource(cohorts[source].test).find(r => r.source === source)!.scenarios,
     })),
-    warning: 'Historical trader fills only. Funding is unavailable; net returns remain null. Not a strategy backtest or evidence of profitability.',
+    warning: 'Historical trader fills only. Latest 5000 rows per source; truncated sources do not represent complete history. Funding unavailable; net returns remain null. Not a strategy backtest or evidence of profitability.',
   };
 }
