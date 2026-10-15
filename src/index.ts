@@ -371,5 +371,16 @@ const okxTimer=setInterval(()=>{void runOkx()},6*3600000);
 setTimeout(()=>{void runOkx()},60000);
 const v6Timer=setInterval(()=>{if(closing)return;void runV6(db.v6Pool()).then(result=>console.info('V6_DISCOVERY',JSON.stringify(result))).catch(e=>console.error('V6_ERROR',e))},6*3600000);
 setTimeout(()=>{if(closing)return;void runV6(db.v6Pool()).then(result=>console.info('V6_DISCOVERY',JSON.stringify(result))).catch(e=>console.error('V6_ERROR',e))},20000);
-let closing=false;async function stop(){if(closing)return;closing=true;clearInterval(statsTimer);clearInterval(storageTimer);clearInterval(repairTimer);clearInterval(historyTimer);clearInterval(paperTimer);clearInterval(telemetryTimer);clearInterval(bounceResearchTimer);clearInterval(v3Timer);clearInterval(v4Timer);clearInterval(v5Timer);clearInterval(v6Timer);clearInterval(v6BackfillTimer);clearInterval(v6CostTimer);clearInterval(solPaperTimer);clearInterval(strategyPaperTimer);server.close();await stream.stop();await db.close();}
+let closing=false;async function stop(){if(closing)return;closing=true;clearInterval(statsTimer);clearInterval(storageTimer);clearInterval(repairTimer);clearInterval(historyTimer);clearInterval(paperTimer);clearInterval(telemetryTimer);clearInterval(bounceResearchTimer);clearInterval(v3Timer);clearInterval(v4Timer);clearInterval(v5Timer);clearInterval(v6Timer);clearInterval(v6BackfillTimer);clearInterval(v6CostTimer);clearInterval(solPaperTimer);clearInterval(strategyPaperTimer);server.close();
+ // Existing jobs may still be using the pools after timers have stopped.
+ // Drain paper-trading ticks before closing the shared database pools.
+ const drainDeadline=Date.now()+15000;
+ while(paperRunning||solPaperRunning||strategyPaperRunning||v3Running||v4Running||v5Running||historyBusy||repairing||okxRunning){
+  if(Date.now()>=drainDeadline){
+   console.error('SHUTDOWN_DRAIN_TIMEOUT',JSON.stringify({paperRunning,solPaperRunning,strategyPaperRunning,v3Running,v4Running,v5Running,historyBusy,repairing,okxRunning}));
+   break;
+  }
+  await new Promise(resolve=>setTimeout(resolve,100));
+ }
+ await stream.stop();await db.close();}
 for(const sig of ['SIGINT','SIGTERM'] as const)process.on(sig,()=>{void stop().then(()=>process.exit(0))});
