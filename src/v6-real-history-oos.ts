@@ -1,3 +1,4 @@
+import {OKX_MARKET_SYMBOL_SQL} from './v6-okx-symbol.js';
 import {observedHoldingWindowStudy} from './v6-holding-window-study.js';
 import type pg from 'pg';
 import {classifyV6EntryPattern} from './v6-entry-study.js';
@@ -40,7 +41,7 @@ export async function studyV6OutOfSample(pool:pg.Pool){
  const okx=await pool.query<RawRow>(`SELECT
  concat('okx:',h.unique_code,'|',h.sub_pos_id) AS id,
  concat('okx:',h.unique_code) AS trader_id,
- replace(COALESCE(h.raw->>'instId',''),'-','') AS symbol,
+ ${OKX_MARKET_SYMBOL_SQL} AS symbol,
  upper(COALESCE(h.raw->>'posSide','')) AS side,
  (EXTRACT(EPOCH FROM h.open_at)*1000)::bigint::text AS opened_time,
  (EXTRACT(EPOCH FROM h.close_at)*1000)::bigint::text AS closed_time,
@@ -51,9 +52,9 @@ export async function studyV6OutOfSample(pool:pg.Pool){
  EXTRACT(EPOCH FROM (h.open_at-interval '15 minutes'-(p.start_at+interval '1 minute')))::float8 AS prior_lag,
  EXTRACT(EPOCH FROM (e.start_at-m.start_at))::float8 AS minute_spacing
  FROM v6_okx_history h
- LEFT JOIN LATERAL (SELECT close,start_at FROM market_candles WHERE symbol=replace(COALESCE(h.raw->>'instId',''),'-','') AND confirmed=true AND start_at+interval '1 minute'<=h.open_at ORDER BY start_at DESC LIMIT 1) e ON true
- LEFT JOIN LATERAL (SELECT close,start_at FROM market_candles WHERE symbol=replace(COALESCE(h.raw->>'instId',''),'-','') AND confirmed=true AND start_at+interval '1 minute'<=h.open_at-interval '15 minutes' ORDER BY start_at DESC LIMIT 1) p ON true
- LEFT JOIN LATERAL (SELECT close,start_at FROM market_candles WHERE symbol=replace(COALESCE(h.raw->>'instId',''),'-','') AND confirmed=true AND start_at=e.start_at-interval '1 minute' LIMIT 1) m ON true
+ LEFT JOIN LATERAL (SELECT close,start_at FROM market_candles WHERE symbol=${OKX_MARKET_SYMBOL_SQL} AND confirmed=true AND start_at+interval '1 minute'<=h.open_at ORDER BY start_at DESC LIMIT 1) e ON true
+ LEFT JOIN LATERAL (SELECT close,start_at FROM market_candles WHERE symbol=${OKX_MARKET_SYMBOL_SQL} AND confirmed=true AND start_at+interval '1 minute'<=h.open_at-interval '15 minutes' ORDER BY start_at DESC LIMIT 1) p ON true
+ LEFT JOIN LATERAL (SELECT close,start_at FROM market_candles WHERE symbol=${OKX_MARKET_SYMBOL_SQL} AND confirmed=true AND start_at=e.start_at-interval '1 minute' LIMIT 1) m ON true
  ORDER BY h.open_at ASC LIMIT 5000`);
  const combined=[...result.rows,...okx.rows];
  const converted=combined.map(convertV6ClosedRow).filter((x):x is CompletedTrade=>x!==null);
