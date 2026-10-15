@@ -40,7 +40,7 @@ export async function studyV6OutOfSample(pool:pg.Pool){
  const okx=await pool.query<RawRow>(`SELECT
  concat('okx:',h.unique_code,'|',h.sub_pos_id) AS id,
  concat('okx:',h.unique_code) AS trader_id,
- replace(COALESCE(h.raw->>'instId',''),'-','') AS symbol,
+ CASE WHEN h.raw->>'instId' ~ '^[A-Z0-9]+-(USDT|USDC)-SWAP$' THEN split_part(h.raw->>'instId','-',1)||split_part(h.raw->>'instId','-',2) ELSE NULL END AS symbol,
  upper(COALESCE(h.raw->>'posSide','')) AS side,
  (EXTRACT(EPOCH FROM h.open_at)*1000)::bigint::text AS opened_time,
  (EXTRACT(EPOCH FROM h.close_at)*1000)::bigint::text AS closed_time,
@@ -51,11 +51,12 @@ export async function studyV6OutOfSample(pool:pg.Pool){
  EXTRACT(EPOCH FROM (h.open_at-interval '15 minutes'-(p.start_at+interval '1 minute')))::float8 AS prior_lag,
  EXTRACT(EPOCH FROM (e.start_at-m.start_at))::float8 AS minute_spacing
  FROM v6_okx_history h
- LEFT JOIN LATERAL (SELECT close,start_at FROM market_candles WHERE symbol=replace(COALESCE(h.raw->>'instId',''),'-','') AND confirmed=true AND start_at+interval '1 minute'<=h.open_at ORDER BY start_at DESC LIMIT 1) e ON true
- LEFT JOIN LATERAL (SELECT close,start_at FROM market_candles WHERE symbol=replace(COALESCE(h.raw->>'instId',''),'-','') AND confirmed=true AND start_at+interval '1 minute'<=h.open_at-interval '15 minutes' ORDER BY start_at DESC LIMIT 1) p ON true
- LEFT JOIN LATERAL (SELECT close,start_at FROM market_candles WHERE symbol=replace(COALESCE(h.raw->>'instId',''),'-','') AND confirmed=true AND start_at=e.start_at-interval '1 minute' LIMIT 1) m ON true
+ LEFT JOIN LATERAL (SELECT close,start_at FROM market_candles WHERE symbol=CASE WHEN h.raw->>'instId' ~ '^[A-Z0-9]+-(USDT|USDC)-SWAP$' THEN split_part(h.raw->>'instId','-',1)||split_part(h.raw->>'instId','-',2) ELSE NULL END AND confirmed=true AND start_at+interval '1 minute'<=h.open_at ORDER BY start_at DESC LIMIT 1) e ON true
+ LEFT JOIN LATERAL (SELECT close,start_at FROM market_candles WHERE symbol=CASE WHEN h.raw->>'instId' ~ '^[A-Z0-9]+-(USDT|USDC)-SWAP$' THEN split_part(h.raw->>'instId','-',1)||split_part(h.raw->>'instId','-',2) ELSE NULL END AND confirmed=true AND start_at+interval '1 minute'<=h.open_at-interval '15 minutes' ORDER BY start_at DESC LIMIT 1) p ON true
+ LEFT JOIN LATERAL (SELECT close,start_at FROM market_candles WHERE symbol=CASE WHEN h.raw->>'instId' ~ '^[A-Z0-9]+-(USDT|USDC)-SWAP$' THEN split_part(h.raw->>'instId','-',1)||split_part(h.raw->>'instId','-',2) ELSE NULL END AND confirmed=true AND start_at=e.start_at-interval '1 minute' LIMIT 1) m ON true
  ORDER BY h.open_at ASC LIMIT 5000`);
  const combined=[...result.rows,...okx.rows];
+ const eligibleBySource={kopyon:result.rows.filter(r=>convertV6ClosedRow(r)!==null).length,okx:okx.rows.filter(r=>convertV6ClosedRow(r)!==null).length};
  const converted=combined.map(convertV6ClosedRow).filter((x):x is CompletedTrade=>x!==null);
- return {closedHistoryRows:combined.length,sourceCounts:{kopyon:result.rows.length,okx:okx.rows.length},eligibleWithCompleteCandlesAndPrices:converted.length,excluded:combined.length-converted.length,assessment:chronologicalHoldout(converted),holdingWindows:observedHoldingWindowStudy(converted),scope:'Observed trader fills only; cannot validate an executable signal until a forward-only entry/exit simulator is built.'};
+ return {closedHistoryRows:combined.length,sourceCounts:{kopyon:result.rows.length,okx:okx.rows.length},eligibleBySource,eligibleWithCompleteCandlesAndPrices:converted.length,excluded:combined.length-converted.length,assessment:chronologicalHoldout(converted),holdingWindows:observedHoldingWindowStudy(converted),scope:'Observed trader fills only; cannot validate an executable signal until a forward-only entry/exit simulator is built.'};
 }
