@@ -1,20 +1,21 @@
 import type pg from 'pg';
 import { deduplicateClosedPositions, stressBySource, type ClosedPosition } from './v6CostStress.js';
 import { groupFrozenOosBySource, type FrozenSplit } from './v6FrozenOos.js';
+import { summarizeObservedHoldingRisk } from './v6ObservedHoldingRisk.js';
 
 type SourceRow = { source: 'kopyon' | 'okx'; trader_id: string; position_id: string; symbol: string; side: string; opened_at: string; closed_at: string; entry_price: string; exit_price: string };
 const validTime = (value: string) => Number.isFinite(Date.parse(value));
 
 export function convertHistoricalCostRow(row: SourceRow): ClosedPosition | null {
   const entry = Number(row.entry_price), exit = Number(row.exit_price);
-  const side = row.side.toUpperCase();
+  const side = String(row.side ?? '').toUpperCase();
   if (!row.trader_id || !row.position_id || !row.symbol || !validTime(row.opened_at) || !validTime(row.closed_at)
     || Date.parse(row.closed_at) <= Date.parse(row.opened_at)
     || !Number.isFinite(entry) || !Number.isFinite(exit) || entry <= 0 || exit <= 0
     || !['LONG', 'SHORT', 'BUY', 'SELL'].includes(side)) return null;
   const direction = side === 'LONG' || side === 'BUY' ? 1 : -1;
   return { source: row.source, traderId: row.trader_id, positionId: row.position_id,
-    symbol: row.symbol, closedAt: row.closed_at,
+    symbol: row.symbol, openedAt: row.opened_at, closedAt: row.closed_at,
     grossReturnPct: 100 * direction * (exit / entry - 1) };
 }
 
@@ -48,6 +49,7 @@ export async function historicalCostStressReport(pool: pg.Pool, split: FrozenSpl
     rowsRead: { kopyon: Math.min(kopyon.rows.length,5000), okx: Math.min(okx.rows.length,5000) },
     truncatedSources,
     completeHistory: !truncatedSources.kopyon && !truncatedSources.okx,
+    sourceHistoryCoverageUnknown: true,
     eligibleClosed: { kopyon: eligible.filter(p => p.source === 'kopyon').length, okx: eligible.filter(p => p.source === 'okx').length },
     excludedOrDuplicate: all.length - eligible.length,
     frozenSplit: split,
@@ -57,8 +59,10 @@ export async function historicalCostStressReport(pool: pg.Pool, split: FrozenSpl
       embargoCount: cohorts[source].embargo,
       testCount: cohorts[source].test.length,
       outsideCount: cohorts[source].outside,
+      trainObservedHoldingRisk: summarizeObservedHoldingRisk(cohorts[source].train),
+      testObservedHoldingRisk: summarizeObservedHoldingRisk(cohorts[source].test),
       observedTestCostScenarios: stressBySource(cohorts[source].test).find(r => r.source === source)!.scenarios,
     })),
-    warning: 'Historical trader fills only. Latest 5000 rows per source; truncated sources do not represent complete history. Funding unavailable; net returns remain null. Not a strategy backtest or evidence of profitability.',
+    warning: 'Historical trader fills only. Latest 5000 rows per source; completeHistory only means the query limit was not hit, not that the provider supplied all history. Funding unavailable; net returns remain null. Not a strategy backtest or evidence of profitability.',
   };
 }
