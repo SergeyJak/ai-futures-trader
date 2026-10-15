@@ -14,13 +14,13 @@ export function evaluateV7(bars:V7Bar[],startBalance=100){
     const net=position.quantity*dir*(exit-position.entry)-V7_COST.fee*position.quantity*(position.entry+exit);
     balance+=net;trades.push({side:position.side,entryAt:position.entryAt,exitAt:b.time+300000,entry:position.entry,exit,net});position=null;
    }else if(action){position={side:position.side,entry:position.entry,entryAt:position.entryAt,quantity:position.quantity,atr:position.atr,best:action.best,stop:action.stop}}
-  }else{
+  }else if(i+1<bars.length&&bars[i+1].time===b.time+300000){
    const recent=bars.slice(i-30,i+1);
    const s=v7Signal(recent);
    if(s){
-    const dir=s.side==='LONG'?1:-1,entry=b.close*(1+dir*V7_COST.slippage),stop=entry-dir*2*s.atr;
+    const dir=s.side==='LONG'?1:-1,entry=bars[i+1].open*(1+dir*V7_COST.slippage),stop=entry-dir*2*s.atr;
     const quantity=Math.min(Math.max(0,balance)*.01/Math.abs(entry-stop),Math.max(0,balance)*.5/entry);
-    if(quantity>0)position={side:s.side,entry,entryAt:b.time+300000,quantity,stop,best:entry,atr:s.atr};
+    if(quantity>0)position={side:s.side,entry,entryAt:bars[i+1].time,quantity,stop,best:entry,atr:s.atr};
    }
   }
   peak=Math.max(peak,balance);maxDrawdown=Math.max(maxDrawdown,peak>0?(peak-balance)/peak:0);
