@@ -59,8 +59,13 @@ export function stressBySource(positions: readonly ClosedPosition[]) {
       scenarios: (Object.keys(COST_SCENARIOS) as CostScenario[]).map((scenario) => {
         const results = cohort.map((position) => stressTrade(position, scenario));
         const complete = results.filter((result) => result.complete);
+        const observed = results.map(result => result.excludingFundingPct).sort((a,b) => a-b);
+        const n = observed.length;
         return {
           scenario,
+          averageExcludingFundingPct: n ? observed.reduce((sum,value) => sum+value,0)/n : null,
+          p10ExcludingFundingPct: n ? observed[Math.floor((n-1)*0.1)] : null,
+          lossShareExcludingFunding: n ? observed.filter(value => value<=0).length/n : null,
           completeCount: complete.length,
           incompleteFundingCount: results.length - complete.length,
           averageNetReturnPct: complete.length
