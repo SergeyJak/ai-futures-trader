@@ -1,3 +1,4 @@
+import {forwardEvidence} from './forward-evidence.js';
 import type pg from 'pg';
 import {STRATEGY_PAGES,type StrategyKey} from './strategy-pages.js';
 export const EXPERIMENT_KEYS=Object.keys(STRATEGY_PAGES) as StrategyKey[];
@@ -48,7 +49,7 @@ export async function tickStrategyPaper(pool:pg.Pool){
 }
 export async function strategyPaperReport(pool:pg.Pool,key:StrategyKey){
  const [a,t]=await Promise.all([pool.query('SELECT variant,balance,position,last_bar FROM v6_paper_accounts WHERE strategy=$1 ORDER BY variant',[key]),pool.query('SELECT id,variant,side,entry_at,exit_at,entry_price,exit_price,net_pnl,reason FROM v6_paper_trades WHERE strategy=$1 ORDER BY id DESC LIMIT 150',[key])]);
- return {mode:'forward-paper',realOrders:false,startingBalance:100,feePerSide:FEE,slippagePerSide:SLIP,variants:EXIT_MODES.map(v=>({...v,...a.rows.find(x=>x.variant===v.id),trades:t.rows.filter(x=>x.variant===v.id)}))};
+ return {mode:'forward-paper',realOrders:false,startingBalance:100,feePerSide:FEE,slippagePerSide:SLIP,funding:'unknown; excluded from realized PnL',warning:'Paper execution is candle-close based and may not be achievable at the observed close. Not an independent verified executable strategy.',variants:EXIT_MODES.map(v=>({...v,...a.rows.find(x=>x.variant===v.id),trades:t.rows.filter(x=>x.variant===v.id),evidence:forwardEvidence(t.rows.filter(x=>x.variant===v.id).slice().reverse(),100)}))};
 }
 export async function strategyPaperChart(pool:pg.Pool,key:StrategyKey,variant:string,id:string){
  if(!EXIT_MODES.some(v=>v.id===variant))return null;
