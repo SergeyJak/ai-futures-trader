@@ -12,6 +12,8 @@ export type ClosedPosition = {
   positionId: string;
   symbol: string;
   closedAt: string;
+  /** Only present when the original closed-position record includes an entry timestamp. */
+  openedAt?: string;
   grossReturnPct: number;
   fundingPct?: number;
 };
