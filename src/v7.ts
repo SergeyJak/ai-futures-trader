@@ -59,9 +59,16 @@ export async function tickV7(pool:pg.Pool){
  const bars=aggregateV7(minutes),bar=bars.at(-1),last=a.rows[0]?.last_bar?new Date(a.rows[0].last_bar).getTime():null;
  if(!bar||bars.length<31||Date.now()-(bar.time+300000)>180000||last!==null&&bar.time<=last){await client.query('COMMIT');return}
  // Never pretend skipped intervals have been executed. Refresh cursor without inventing fills.
- if(last!==null&&bar.time-last>300000){await client.query('UPDATE v7_accounts SET last_bar=to_timestamp($1/1000.0) WHERE id=1',[bar.time]);await client.query('COMMIT');return}
+ if(last!==null&&bar.time-last>300000){await client.query("UPDATE v7_accounts SET last_bar=to_timestamp($1/1000.0),position=CASE WHEN position ? 'pendingAt' THEN NULL ELSE position END WHERE id=1",[bar.time]);await client.query('COMMIT');return}
  let balance=Number(a.rows[0].balance),position=a.rows[0].position as V7Position|null;
- if(position){
+ if(position&&'pendingAt' in position){
+  const pending=position as unknown as {pendingAt:number;side:V7Side;atr:number};
+  if(bar.time===pending.pendingAt){
+   const dir=pending.side==='LONG'?1:-1,entry=bar.open*(1+dir*V7_COST.slippage),stop=entry-dir*2*pending.atr;
+   const quantity=Math.min(Math.max(0,balance)*.01/Math.abs(entry-stop),Math.max(0,balance)*.5/entry);
+   position=quantity>0?{side:pending.side,entry,entryAt:bar.time,quantity,stop,best:entry,atr:pending.atr}:null;
+  }else position=null;
+ }else if(position){
   const action=v7Exit(position,bar);
   if(action?.reason==='ATR_STOP'){
    const dir=position.side==='LONG'?1:-1,exit=action.price*(1-dir*V7_COST.slippage);
@@ -73,11 +80,8 @@ export async function tickV7(pool:pg.Pool){
  }else if(last!==null){
   const signal=v7Signal(bars);
   if(signal){
-   const dir=signal.side==='LONG'?1:-1,entry=bar.close*(1+dir*V7_COST.slippage);
-   const stop=entry-dir*2*signal.atr;
-   // Risk 1% of cash, cap notional at 50% of account balance.
-   const quantity=Math.min(Math.max(0,balance)*.01/Math.abs(entry-stop),Math.max(0,balance)*.5/entry);
-   if(quantity>0)position={side:signal.side,entry,entryAt:bar.time+300000,quantity,stop,best:entry,atr:signal.atr};
+   // Queue a signal; only the following contiguous completed candle can provide an entry open.
+   position={pendingAt:bar.time+300000,side:signal.side,atr:signal.atr} as unknown as V7Position;
   }
  }
  await client.query('UPDATE v7_accounts SET balance=$1,position=$2,last_bar=to_timestamp($3/1000.0) WHERE id=1',[balance,position?JSON.stringify(position):null,bar.time]);
@@ -86,5 +90,5 @@ export async function tickV7(pool:pg.Pool){
 }
 export async function v7Report(pool:pg.Pool){
  const [a,t]=await Promise.all([pool.query('SELECT balance,position,last_bar FROM v7_accounts WHERE id=1'),pool.query('SELECT id,side,entry_at,exit_at,entry_price,exit_price,net_pnl,reason FROM v7_trades ORDER BY id DESC LIMIT 100')]);
- const row=a.rows[0];return {mode:'forward-paper',symbol:'SOLUSDT',timeframe:'5m from confirmed 1m bars',realOrders:false,balance:Number(row.balance),position:row.position,lastBar:row.last_bar,trades:t.rows,feePerSide:V7_COST.fee,slippagePerSide:V7_COST.slippage,funding:'excluded',warning:'Research only. Fills simulated at the completed candle close; intrabar trailing stops use prior stop. Missing periods are skipped; no retroactive executions.'};
+ const row=a.rows[0];return {mode:'forward-paper',symbol:'SOLUSDT',timeframe:'5m from confirmed 1m bars',realOrders:false,balance:Number(row.balance),position:row.position,lastBar:row.last_bar,trades:t.rows,feePerSide:V7_COST.fee,slippagePerSide:V7_COST.slippage,funding:'excluded',warning:'Research only. Signals are queued and filled from the next contiguous completed candle open; intrabar trailing stops use prior stop. Missing periods are skipped; no retroactive executions.'};
 }
