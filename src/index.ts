@@ -5,6 +5,7 @@ import {initDipOos,tickDipOos,dipOosReport,dipOosChart} from './dip-oos.js';
 import {initStrategyPaper,tickStrategyPaper,strategyPaperReport,strategyPaperChart} from './strategy-paper.js';
 import {initV7,tickV7,v7Report} from './v7.js';
 import {v7Html} from './v7-page.js';
+import {v7HistoricalReport} from './v7-backtest.js';
 import {isStrategyKey,strategyPageHtml,strategyPageReport,strategyTradeChart} from './strategy-pages.js';
 import {auditSolSignals} from './sol-signal-audit.js';
 import {installOutboundTelemetry,outboundSnapshot} from './outbound-telemetry.js';
@@ -79,6 +80,7 @@ const server=http.createServer(async(req,res)=>{
  if(req.url?.startsWith('/api/dip-oos/chart?')){const u=new URL(req.url,'http://localhost');try{const result=await dipOosChart(db.v6Pool(),u.searchParams.get('variant')??'',u.searchParams.get('id')??'');res.writeHead(result?200:404).end(JSON.stringify(result??{error:'Trade not found'}))}catch(e){console.error('DIP_OOS_CHART_ERROR',e);res.writeHead(503).end(JSON.stringify({error:'Chart unavailable'}))}return}
  if(req.url==='/dip-oos'){res.setHeader('content-type','text/html; charset=utf-8');res.setHeader('content-security-policy',"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'");res.writeHead(200).end(withUnifiedHeader(dipOosHtml));return}
  if(req.url==='/v7'){res.setHeader('content-type','text/html; charset=utf-8');res.setHeader('content-security-policy',"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'");res.writeHead(200).end(withUnifiedHeader(v7Html));return}
+ if(req.url==='/api/v7/backtest'){try{res.writeHead(200).end(JSON.stringify(await v7HistoricalReport(db.v6Pool())))}catch(e){console.error('V7_BACKTEST_ERROR',e);res.writeHead(503).end(JSON.stringify({error:'V7 backtest unavailable'}))}return}
  if(req.url==='/api/v7'){try{res.writeHead(200).end(JSON.stringify(await v7Report(db.v6Pool())))}catch(e){console.error('V7_REPORT_ERROR',e);res.writeHead(503).end(JSON.stringify({error:'V7 report unavailable'}))}return}
  if(req.url==='/v6'){res.setHeader('content-type','text/html; charset=utf-8');res.setHeader('content-security-policy',"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'");res.writeHead(200).end(withUnifiedHeader(v6Html));return}
  if(req.url==='/api/v6'){try{res.writeHead(200).end(JSON.stringify(await v6Report(db.v6Pool())))}catch(e){console.error('V6 report error',e);res.writeHead(503).end(JSON.stringify({error:'v6 unavailable'}))}return}
