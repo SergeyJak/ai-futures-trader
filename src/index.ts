@@ -348,13 +348,14 @@ setTimeout(()=>{void reportBounceResearch()},45000);
 const statsTimer=setInterval(()=>{void reportStats()},60000);
 void reportStats();
 const v6CostResearch=createV6CostResearchScheduler(db.v6Pool(),configuredV6FrozenSplit(process.env));
-const v6CostTimer=setInterval(()=>{void v6CostResearch.run().then(ok=>{if(ok)console.info('V6_COST_STRESS',JSON.stringify(v6CostResearch.snapshot()))})},6*3600000);
-setTimeout(()=>{void v6CostResearch.run().then(ok=>{if(ok)console.info('V6_COST_STRESS',JSON.stringify(v6CostResearch.snapshot()))})},90000);
+const v6CostTimer=setInterval(()=>{if(closing)return;void v6CostResearch.run().then(ok=>{if(ok)console.info('V6_COST_STRESS',JSON.stringify(v6CostResearch.snapshot()))})},6*3600000);
+setTimeout(()=>{if(closing)return;void v6CostResearch.run().then(ok=>{if(ok)console.info('V6_COST_STRESS',JSON.stringify(v6CostResearch.snapshot()))})},90000);
 const v6ResearchJobs=createV6ResearchJobs(
  ()=>runV6(db.v6Pool()),
  ()=>backfillV6EntryCandles(db.v6Pool(),c=>db.upsert(c)),
 );
 async function runV6Backfill(){
+ if(closing)return;
  try{
   const started=await v6ResearchJobs.runBackfill();
   if(started)console.info('V6_SELECTIVE_BACKFILL',JSON.stringify({status:'completed'}));
@@ -365,10 +366,10 @@ setTimeout(()=>{void runV6Backfill()},45000);
 // Optional OKX public trader IDs, configured independently of Kopyon.
 const okxCodes=(process.env.OKX_TRADER_CODES??'').split(',').map(x=>x.trim()).filter(Boolean);
 let okxRunning=false;
-async function runOkx(){if(okxRunning)return;okxRunning=true;try{const codes=okxCodes.length?okxCodes:await discoverOkxTraderCodes();if(!codes.length){console.info('V6_OKX_DISCOVERY_EMPTY');return}console.info('V6_OKX_COLLECTION',JSON.stringify(await collectOkxHistory(db.v6Pool(),codes)))}catch(e){console.error('V6_OKX_ERROR',e)}finally{okxRunning=false}}
+async function runOkx(){if(okxRunning||closing)return;okxRunning=true;try{const codes=okxCodes.length?okxCodes:await discoverOkxTraderCodes();if(!codes.length){console.info('V6_OKX_DISCOVERY_EMPTY');return}console.info('V6_OKX_COLLECTION',JSON.stringify(await collectOkxHistory(db.v6Pool(),codes)))}catch(e){console.error('V6_OKX_ERROR',e)}finally{okxRunning=false}}
 const okxTimer=setInterval(()=>{void runOkx()},6*3600000);
 setTimeout(()=>{void runOkx()},60000);
-const v6Timer=setInterval(()=>{void runV6(db.v6Pool()).then(result=>console.info('V6_DISCOVERY',JSON.stringify(result))).catch(e=>console.error('V6_ERROR',e))},6*3600000);
-setTimeout(()=>{void runV6(db.v6Pool()).then(result=>console.info('V6_DISCOVERY',JSON.stringify(result))).catch(e=>console.error('V6_ERROR',e))},20000);
+const v6Timer=setInterval(()=>{if(closing)return;void runV6(db.v6Pool()).then(result=>console.info('V6_DISCOVERY',JSON.stringify(result))).catch(e=>console.error('V6_ERROR',e))},6*3600000);
+setTimeout(()=>{if(closing)return;void runV6(db.v6Pool()).then(result=>console.info('V6_DISCOVERY',JSON.stringify(result))).catch(e=>console.error('V6_ERROR',e))},20000);
 let closing=false;async function stop(){if(closing)return;closing=true;clearInterval(statsTimer);clearInterval(storageTimer);clearInterval(repairTimer);clearInterval(historyTimer);clearInterval(paperTimer);clearInterval(telemetryTimer);clearInterval(bounceResearchTimer);clearInterval(v3Timer);clearInterval(v4Timer);clearInterval(v5Timer);clearInterval(v6Timer);clearInterval(v6BackfillTimer);clearInterval(v6CostTimer);clearInterval(solPaperTimer);clearInterval(strategyPaperTimer);server.close();await stream.stop();await db.close();}
 for(const sig of ['SIGINT','SIGTERM'] as const)process.on(sig,()=>{void stop().then(()=>process.exit(0))});
