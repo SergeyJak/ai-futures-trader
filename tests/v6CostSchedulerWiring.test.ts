@@ -20,6 +20,6 @@ test('scheduler catches database failures and allows subsequent attempts', async
   });
   assert.equal(await scheduler.run(), false);
   assert.equal(await scheduler.run(), false);
-  assert.equal(calls, 2);
+  assert.equal(calls, 4); // Each attempt starts both independent source queries.
   assert.equal((scheduler.snapshot() as {status:string}).status, 'failed');
 });
