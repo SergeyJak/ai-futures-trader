@@ -3,6 +3,8 @@ import {initOkxHistory,collectOkxHistory} from './okx-history.js';
 import {dipOosHtml} from './dip-oos-page.js';
 import {initDipOos,tickDipOos,dipOosReport,dipOosChart} from './dip-oos.js';
 import {initStrategyPaper,tickStrategyPaper,strategyPaperReport,strategyPaperChart} from './strategy-paper.js';
+import {initV7,tickV7,v7Report} from './v7.js';
+import {v7Html} from './v7-page.js';
 import {isStrategyKey,strategyPageHtml,strategyPageReport,strategyTradeChart} from './strategy-pages.js';
 import {auditSolSignals} from './sol-signal-audit.js';
 import {installOutboundTelemetry,outboundSnapshot} from './outbound-telemetry.js';
@@ -29,7 +31,7 @@ if(!url)throw new Error('DATABASE_URL required');
 if(!endpoint.startsWith('wss://'))throw new Error('Secure WebSocket required');
 if(!Number.isInteger(port)||port<1||port>65535)throw new Error('Invalid port');
 installOutboundTelemetry();
-const db=new Database(url);await db.init();await db.initExperiments();await db.initShadow();await db.initV3();await db.initV4();await db.initV5();await initV6(db.v6Pool());await initOkxHistory(db.v6Pool());await initSolPaper(db.v6Pool());await initStrategyPaper(db.v6Pool());await initDipOos(db.v6Pool());const stream=new MarketStream(endpoint,symbols,db);stream.start();
+const db=new Database(url);await db.init();await db.initExperiments();await db.initShadow();await db.initV3();await db.initV4();await db.initV5();await initV6(db.v6Pool());await initOkxHistory(db.v6Pool());await initSolPaper(db.v6Pool());await initStrategyPaper(db.v6Pool());await initV7(db.v6Pool());await initDipOos(db.v6Pool());const stream=new MarketStream(endpoint,symbols,db);stream.start();
 const server=http.createServer(async(req,res)=>{
  res.setHeader('cache-control','no-store');
  res.setHeader('x-content-type-options','nosniff');
@@ -76,6 +78,8 @@ const server=http.createServer(async(req,res)=>{
  if(req.url==='/api/dip-oos'){try{res.writeHead(200).end(JSON.stringify(await dipOosReport(db.v6Pool())))}catch(e){console.error('DIP_OOS_REPORT_ERROR',e);res.writeHead(503).end(JSON.stringify({error:'Dip OOS unavailable'}))}return}
  if(req.url?.startsWith('/api/dip-oos/chart?')){const u=new URL(req.url,'http://localhost');try{const result=await dipOosChart(db.v6Pool(),u.searchParams.get('variant')??'',u.searchParams.get('id')??'');res.writeHead(result?200:404).end(JSON.stringify(result??{error:'Trade not found'}))}catch(e){console.error('DIP_OOS_CHART_ERROR',e);res.writeHead(503).end(JSON.stringify({error:'Chart unavailable'}))}return}
  if(req.url==='/dip-oos'){res.setHeader('content-type','text/html; charset=utf-8');res.setHeader('content-security-policy',"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'");res.writeHead(200).end(withUnifiedHeader(dipOosHtml));return}
+ if(req.url==='/v7'){res.setHeader('content-type','text/html; charset=utf-8');res.setHeader('content-security-policy',"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'");res.writeHead(200).end(withUnifiedHeader(v7Html));return}
+ if(req.url==='/api/v7'){try{res.writeHead(200).end(JSON.stringify(await v7Report(db.v6Pool())))}catch(e){console.error('V7_REPORT_ERROR',e);res.writeHead(503).end(JSON.stringify({error:'V7 report unavailable'}))}return}
  if(req.url==='/v6'){res.setHeader('content-type','text/html; charset=utf-8');res.setHeader('content-security-policy',"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'");res.writeHead(200).end(withUnifiedHeader(v6Html));return}
  if(req.url==='/api/v6'){try{res.writeHead(200).end(JSON.stringify(await v6Report(db.v6Pool())))}catch(e){console.error('V6 report error',e);res.writeHead(503).end(JSON.stringify({error:'v6 unavailable'}))}return}
  if(req.url==='/v5'){res.setHeader('content-type','text/html; charset=utf-8');res.setHeader('content-security-policy',"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'");res.writeHead(200).end(withUnifiedHeader(`<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>AI Futures v5</title><style>body{margin:0;background:#f6f8fc;color:#172338;font:15px system-ui}main{max-width:1100px;margin:25px auto;padding:16px}.card{background:white;padding:20px;border-radius:16px;border:1px solid #e4eaf5}.scroll{overflow:auto}table{border-collapse:collapse;width:100%;white-space:nowrap}td,th{padding:10px;text-align:left;border-bottom:1px solid #e4eaf5}th{color:#687992}</style></head><body><main><h1>v5 · Независимые сигналы</h1><p>LONG: откат от максимума. SHORT: отскок от минимума. Выход по стопу/тейку до тайм-аута. 15, 30 и 60 минут. Только виртуальные счета.</p><section class="card"><p id="status">Загрузка…</p><div class="scroll"><table><thead><tr><th>Инструмент</th><th>Сторона</th><th>Мин</th><th>Просадка</th><th>Сделки</th><th>Победы</th><th>Чистый P&L</th><th>Комиссии</th><th>Баланс</th></tr></thead><tbody id="rows"></tbody></table></div></section></main><script>async function load(){try{const r=await fetch('/api/v5',{cache:'no-store'});if(!r.ok)throw Error('HTTP '+r.status);const d=await r.json(),root=document.getElementById('rows');root.replaceChildren();for(const a of d.accounts){const tr=document.createElement('tr');for(const x of [a.symbol,a.side,a.hold,(100*a.dip).toFixed(1)+'%',a.trades,a.wins,Number(a.realized_pnl).toFixed(3),Number(a.fees).toFixed(3),Number(a.balance).toFixed(3)]){const td=document.createElement('td');td.textContent=String(x);tr.append(td)}root.append(tr)}document.getElementById('status').textContent=d.configs+' конфигураций · '+d.accounts.reduce((n,a)=>n+a.trades,0)+' сделок · '+new Date(d.at).toLocaleString('ru-RU')}catch(e){document.getElementById('status').textContent=String(e)}}load();setInterval(load,20000)</script></body></html>`));return}
@@ -291,7 +295,7 @@ const paperTimer=setInterval(()=>{void runPaper()},15000);setTimeout(()=>{void r
 let solPaperRunning=false;
 async function runSolPaper(){if(solPaperRunning||closing)return;solPaperRunning=true;try{await tickSolPaper(db.v6Pool())}catch(e){console.error('SOL_DIP_TICK_ERROR',e)}finally{solPaperRunning=false}}
 let strategyPaperRunning=false;
-async function runStrategyPaper(){if(strategyPaperRunning||closing)return;strategyPaperRunning=true;try{await tickStrategyPaper(db.v6Pool());await tickDipOos(db.v6Pool())}catch(e){console.error('STRATEGY_PAPER_TICK_ERROR',e)}finally{strategyPaperRunning=false}}
+async function runStrategyPaper(){if(strategyPaperRunning||closing)return;strategyPaperRunning=true;try{await tickStrategyPaper(db.v6Pool());await tickDipOos(db.v6Pool());await tickV7(db.v6Pool())}catch(e){console.error('STRATEGY_PAPER_TICK_ERROR',e)}finally{strategyPaperRunning=false}}
 const strategyPaperTimer=setInterval(()=>{void runStrategyPaper()},15000);setTimeout(()=>{void runStrategyPaper()},26000);
 const solPaperTimer=setInterval(()=>{void runSolPaper()},15000);setTimeout(()=>{void runSolPaper()},23000);
 let v3Running=false;

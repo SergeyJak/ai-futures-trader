@@ -1,0 +1,10 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {aggregateV7,v7Atr,v7Exit,v7Signal} from '../src/v7.js';
+const t=1800000000000;
+const minutes=Array.from({length:10},(_,i)=>({time:t+i*60000,open:100+i*.1,high:101+i*.1,low:99+i*.1,close:100.1+i*.1,volume:2}));
+test('aggregates exactly five contiguous confirmed minutes',()=>{const bars=aggregateV7(minutes);assert.equal(bars.length,2);assert.equal(bars[0].volume,10);assert.equal(bars[1].close,101)});
+test('does not assemble partial or gapped candles',()=>{assert.equal(aggregateV7(minutes.slice(0,4)).length,0);assert.equal(aggregateV7(minutes.filter((_,i)=>i!==2)).length,1)});
+test('signal rejects insufficient or non-contiguous data',()=>{assert.equal(v7Signal([]),null);assert.equal(v7Atr([],14),null)});
+test('ATR stop is not moved retroactively on the current bar',()=>{const p={side:'LONG' as const,entry:100,entryAt:t,quantity:1,stop:98,best:100,atr:1};assert.deepEqual(v7Exit(p,{time:t+300000,open:100,high:105,low:97,close:104,volume:5}),{price:98,reason:'ATR_STOP',best:105,stop:98})});
+test('trailing stop moves only forward on a completed bar',()=>{const p={side:'SHORT' as const,entry:100,entryAt:t,quantity:1,stop:102,best:100,atr:1};const x=v7Exit(p,{time:t+300000,open:100,high:101,low:95,close:96,volume:5});assert.equal(x?.reason,'HOLD');assert.equal(x?.stop,97)});
