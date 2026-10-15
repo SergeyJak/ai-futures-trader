@@ -13,7 +13,7 @@ export function evaluateV7(bars:V7Bar[],startBalance=100){
     const dir=position.side==='LONG'?1:-1,exit=action.price*(1-dir*V7_COST.slippage);
     const net=position.quantity*dir*(exit-position.entry)-V7_COST.fee*position.quantity*(position.entry+exit);
     balance+=net;trades.push({side:position.side,entryAt:position.entryAt,exitAt:b.time+300000,entry:position.entry,exit,net});position=null;
-   }else if(action){position={...position,best:action.best,stop:action.stop}}
+   }else if(action){position={side:position.side,entry:position.entry,entryAt:position.entryAt,quantity:position.quantity,atr:position.atr,best:action.best,stop:action.stop}}
   }else{
    const recent=bars.slice(i-30,i+1);
    const s=v7Signal(recent);
