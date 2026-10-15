@@ -40,7 +40,16 @@ export async function historicalCostStressReport(pool: pg.Pool, split: FrozenSpl
   ]);
   const truncatedSources = { kopyon: kopyon.rows.length > 5000, okx: okx.rows.length > 5000 };
   const all = [...kopyon.rows.slice(0,5000), ...okx.rows.slice(0,5000)];
-  const eligible = deduplicateClosedPositions(all.map(convertHistoricalCostRow).filter((p): p is ClosedPosition => p !== null));
+  // A position opened before the holdout boundary is not a fresh OOS entry,
+  // even when the trader closed it inside the test period.
+  const crossesTestBoundary = (row: SourceRow) => {
+    const opened = Date.parse(row.opened_at), closed = Date.parse(row.closed_at);
+    const start = Date.parse(split.testFrom), end = Date.parse(split.testBefore);
+    return Number.isFinite(opened) && Number.isFinite(closed)
+      && closed >= start && closed < end && opened < start;
+  };
+  const excludedCrossBoundaryEntries = all.filter(crossesTestBoundary).length;
+  const eligible = deduplicateClosedPositions(all.filter(row => !crossesTestBoundary(row)).map(convertHistoricalCostRow).filter((p): p is ClosedPosition => p !== null));
   const cohorts = groupFrozenOosBySource(eligible, split);
   return {
     mode: 'observed-historical-fills-only',
@@ -50,6 +59,7 @@ export async function historicalCostStressReport(pool: pg.Pool, split: FrozenSpl
     completeHistory: !truncatedSources.kopyon && !truncatedSources.okx,
     eligibleClosed: { kopyon: eligible.filter(p => p.source === 'kopyon').length, okx: eligible.filter(p => p.source === 'okx').length },
     excludedOrDuplicate: all.length - eligible.length,
+    excludedCrossBoundaryEntries,
     frozenSplit: split,
     results: (['kopyon', 'okx'] as const).map(source => ({
       source,
