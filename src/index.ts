@@ -9,6 +9,7 @@ import {installOutboundTelemetry,outboundSnapshot} from './outbound-telemetry.js
 import {financePageHtml} from './finance-page.js';
 import {backfillV6EntryCandles} from './v6-selective-backfill.js';
 import {createV6ResearchJobs} from './v6-research-jobs.js';
+import {configuredV6FrozenSplit,createV6CostResearchScheduler} from './v6-cost-research-scheduler.js';
 import {summarizeFinance} from './finance-summary.js';
 import {initSolPaper,tickSolPaper,solPaperReport,solPaperHtml,solTradeCandles,solActiveTradeCandles} from './sol-dip-paper.js';
 import {overviewHtml} from './overview-page.js';
@@ -346,6 +347,9 @@ const bounceResearchTimer=setInterval(()=>{void reportBounceResearch()},3600000)
 setTimeout(()=>{void reportBounceResearch()},45000);
 const statsTimer=setInterval(()=>{void reportStats()},60000);
 void reportStats();
+const v6CostResearch=createV6CostResearchScheduler(db.v6Pool(),configuredV6FrozenSplit(process.env));
+const v6CostTimer=setInterval(()=>{void v6CostResearch.run().then(ok=>{if(ok)console.info('V6_COST_STRESS',JSON.stringify(v6CostResearch.snapshot()))})},6*3600000);
+setTimeout(()=>{void v6CostResearch.run().then(ok=>{if(ok)console.info('V6_COST_STRESS',JSON.stringify(v6CostResearch.snapshot()))})},90000);
 const v6ResearchJobs=createV6ResearchJobs(
  ()=>runV6(db.v6Pool()),
  ()=>backfillV6EntryCandles(db.v6Pool(),c=>db.upsert(c)),
@@ -366,5 +370,5 @@ const okxTimer=setInterval(()=>{void runOkx()},6*3600000);
 setTimeout(()=>{void runOkx()},60000);
 const v6Timer=setInterval(()=>{void runV6(db.v6Pool()).then(result=>console.info('V6_DISCOVERY',JSON.stringify(result))).catch(e=>console.error('V6_ERROR',e))},6*3600000);
 setTimeout(()=>{void runV6(db.v6Pool()).then(result=>console.info('V6_DISCOVERY',JSON.stringify(result))).catch(e=>console.error('V6_ERROR',e))},20000);
-let closing=false;async function stop(){if(closing)return;closing=true;clearInterval(statsTimer);clearInterval(storageTimer);clearInterval(repairTimer);clearInterval(historyTimer);clearInterval(paperTimer);clearInterval(telemetryTimer);clearInterval(bounceResearchTimer);clearInterval(v3Timer);clearInterval(v4Timer);clearInterval(v5Timer);clearInterval(v6Timer);clearInterval(v6BackfillTimer);clearInterval(solPaperTimer);clearInterval(strategyPaperTimer);server.close();await stream.stop();await db.close();}
+let closing=false;async function stop(){if(closing)return;closing=true;clearInterval(statsTimer);clearInterval(storageTimer);clearInterval(repairTimer);clearInterval(historyTimer);clearInterval(paperTimer);clearInterval(telemetryTimer);clearInterval(bounceResearchTimer);clearInterval(v3Timer);clearInterval(v4Timer);clearInterval(v5Timer);clearInterval(v6Timer);clearInterval(v6BackfillTimer);clearInterval(v6CostTimer);clearInterval(solPaperTimer);clearInterval(strategyPaperTimer);server.close();await stream.stop();await db.close();}
 for(const sig of ['SIGINT','SIGTERM'] as const)process.on(sig,()=>{void stop().then(()=>process.exit(0))});
