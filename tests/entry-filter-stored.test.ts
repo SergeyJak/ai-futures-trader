@@ -37,3 +37,11 @@ test('fixed OOS rejects invalid outcome timestamps and non-finite net',async()=>
  const r=await evaluateStoredEntryFilters(pool,'v4','2026-10-05T00:00:00Z',1);
  assert.equal(r.invalidOutcomes,2);assert.equal(r.usableTrades,0);
 });
+
+test('one malformed candle history is excluded without aborting the study',async()=>{
+ const at=Date.parse('2026-10-10T00:00:00Z');
+ const candles=Array.from({length:30},(_,i)=>({at:new Date(at-(30-i)*60000).toISOString(),open:100,high:101,low:99,close:100}));
+ const pool={query:async(sql:string)=>sql.includes('FROM v3_trades')?{rows:[{symbol:'SOLUSDT',side:'LONG',at:new Date(at).toISOString(),exited_at:'2026-10-10T01:00:00Z',net:1},{symbol:'SOLUSDT',side:'LONG',at:new Date(at+60000).toISOString(),exited_at:'2026-10-10T01:00:00Z',net:1}]}:{rows:candles.map((c,i)=>i===0?{...c,high:98}:c)}} as any;
+ const r=await evaluateStoredEntryFilters(pool,'v3','2026-10-05T00:00:00Z',1);
+ assert.equal(r.invalidCandles,1);assert.equal(r.missingHistory,1);assert.equal(r.usableTrades,0);
+});
