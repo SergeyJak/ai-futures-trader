@@ -3,7 +3,7 @@
  */
 export type EntryObservation={at:string;symbol:string;side:'LONG'|'SHORT';net:number;features:Record<string,number>};
 export type EntryFilter={name:string;accept:(features:Record<string,number>)=>boolean};
-export type FilterScore={name:string;trainTrades:number;testTrades:number;testNet:number;testMean:number;baselineNet:number;baselineTrades:number;coverage:number;eligible:boolean};
+export type FilterScore={name:string;trainTrades:number;testTrades:number;testNet:number;testMean:number;baselineNet:number;baselineTrades:number;baselineMean:number;netVsBaseline:number;coverage:number;eligible:boolean};
 export function evaluateEntryFilters(rows:EntryObservation[],filters:EntryFilter[],cutoff:string,minTest=30):FilterScore[]{
  const split=Date.parse(cutoff);
  if(!Number.isFinite(split))throw Error('Invalid fixed OOS cutoff');
@@ -11,11 +11,12 @@ export function evaluateEntryFilters(rows:EntryObservation[],filters:EntryFilter
  const clean=rows.filter(r=>Number.isFinite(Date.parse(r.at))&&Number.isFinite(r.net)&&Object.values(r.features).every(Number.isFinite));
  const train=clean.filter(r=>Date.parse(r.at)<split),test=clean.filter(r=>Date.parse(r.at)>=split);
  const baselineNet=test.reduce((sum,r)=>sum+r.net,0);
+ const baselineMean=test.length?baselineNet/test.length:0;
  return filters.map(f=>{
   const training=train.filter(r=>f.accept(r.features));
   const heldout=test.filter(r=>f.accept(r.features));
   const testNet=heldout.reduce((sum,r)=>sum+r.net,0);
-  return {name:f.name,trainTrades:training.length,testTrades:heldout.length,testNet,testMean:heldout.length?testNet/heldout.length:0,baselineNet,baselineTrades:test.length,coverage:test.length?heldout.length/test.length:0,eligible:heldout.length>=minTest};
+  return {name:f.name,trainTrades:training.length,testTrades:heldout.length,testNet,testMean:heldout.length?testNet/heldout.length:0,baselineNet,baselineTrades:test.length,baselineMean,netVsBaseline:testNet-(baselineMean*heldout.length),coverage:test.length?heldout.length/test.length:0,eligible:heldout.length>=minTest};
  });
 }
 /** Features are known only from candles strictly preceding the entry candle. */
