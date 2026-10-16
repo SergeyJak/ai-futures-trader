@@ -11,5 +11,7 @@ test('focused menu prioritizes progress and preserves legacy pages only in archi
 test('overview links to progress without duplicate legacy navigation',()=>{
  assert.match(overviewHtml,/Прогресс/);
  assert.doesNotMatch(overviewHtml,/Подробные разделы и диагностика/);
- assert.match(overviewHtml,/api\/v3/);
+ assert.match(overviewHtml,/api\/finance/);
+ assert.match(overviewHtml,/all\.sort/);
+ assert.match(overviewHtml,/Минимум закрытых сделок/);
 });
