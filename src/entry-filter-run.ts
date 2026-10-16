@@ -4,6 +4,7 @@
 import 'dotenv/config';
 import pg from 'pg';
 import {evaluateStoredEntryFilters} from './entry-filter-stored.js';
+import {summarizeOos} from './entry-filter-decision.js';
 const cutoff=process.argv[2],minTest=Number(process.argv[3]??30);
 if(!cutoff||!Number.isFinite(Date.parse(cutoff))||!Number.isInteger(minTest)||minTest<1){
  console.error('Usage: npm run research:entries -- <fixed-ISO-cutoff> [min-test-trades>=1]');
@@ -19,7 +20,8 @@ if(!cutoff||!Number.isFinite(Date.parse(cutoff))||!Number.isInteger(minTest)||mi
   await client.query('BEGIN READ ONLY');
   for(const version of ['v3','v4'] as const){
    const result=await evaluateStoredEntryFilters(client,version,cutoff,minTest);
-   console.log(JSON.stringify({kind:'fixed-oos-entry-filter-study',generatedAt:new Date().toISOString(),...result}));
+   const decisions=summarizeOos(result.scores);
+   console.log(JSON.stringify({kind:'fixed-oos-entry-filter-study',generatedAt:new Date().toISOString(),...result,decisions,candidateCount:decisions.filter(d=>d.decision==='candidate-for-paper').length}));
   }
   await client.query('ROLLBACK');
  }catch(e){console.error('OOS_STUDY_FAILED',e);process.exitCode=1;if(client){try{await client.query('ROLLBACK')}catch{ /* connection may be lost */ }}}
