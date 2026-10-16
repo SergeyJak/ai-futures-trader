@@ -15,3 +15,11 @@ test('stored OOS never includes the entry candle in features',async()=>{
  const result=await evaluateStoredEntryFilters(pool,'v4','2026-10-05T00:00:00Z',1);
  assert.equal(result.usableTrades,1);assert.equal(result.scores[0].testNet,-0.1);
 });
+test('many trades on one symbol require only one candle query',async()=>{
+ let candleQueries=0;
+ const at=Date.parse('2026-10-10T00:00:00Z');
+ const candles=Array.from({length:30},(_,i)=>({at:new Date(at-(30-i)*60000).toISOString(),open:100,high:101,low:99,close:100}));
+ const pool={query:async(sql:string)=>{if(sql.includes('FROM v3_trades'))return {rows:Array.from({length:20},()=>({symbol:'BTCUSDT',side:'LONG',at:new Date(at).toISOString(),net:-0.1}))};candleQueries++;return {rows:candles};}} as any;
+ const r=await evaluateStoredEntryFilters(pool,'v3','2026-10-05T00:00:00Z',1);
+ assert.equal(r.usableTrades,20);assert.equal(candleQueries,1);
+});
