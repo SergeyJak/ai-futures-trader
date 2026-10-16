@@ -1,3 +1,5 @@
+import {createResearchProgress} from './research-progress.js';
+import {researchProgressHtml} from './research-progress-page.js';
 import {discoverOkxTraderCodes} from './okx-discovery.js';
 import {initOkxHistory,collectOkxHistory} from './okx-history.js';
 import {dipOosHtml} from './dip-oos-page.js';
@@ -33,10 +35,18 @@ if(!endpoint.startsWith('wss://'))throw new Error('Secure WebSocket required');
 if(!Number.isInteger(port)||port<1||port>65535)throw new Error('Invalid port');
 installOutboundTelemetry();
 const db=new Database(url);await db.init();await db.initExperiments();await db.initShadow();await db.initV3();await db.initV4();await db.initV5();await initV6(db.v6Pool());await initOkxHistory(db.v6Pool());await initSolPaper(db.v6Pool());await initStrategyPaper(db.v6Pool());await initV7(db.v6Pool());await initDipOos(db.v6Pool());const stream=new MarketStream(endpoint,symbols,db);stream.start();
+const researchProgress=createResearchProgress(db.v6Pool());
+// A bounded observational job, never part of the trade execution tick.
+const researchTimer=setInterval(()=>{void researchProgress.run().catch(e=>console.error('RESEARCH_PROGRESS_ERROR',e))},6*3600000);
+researchTimer.unref();
+const researchStart=setTimeout(()=>{void researchProgress.run().catch(e=>console.error('RESEARCH_PROGRESS_ERROR',e))},120000);
+researchStart.unref();
 const server=http.createServer(async(req,res)=>{
  res.setHeader('cache-control','no-store');
  res.setHeader('x-content-type-options','nosniff');
  res.setHeader('referrer-policy','no-referrer');
+ if(req.url==='/research-progress'){res.setHeader('content-type','text/html; charset=utf-8');res.setHeader('content-security-policy',"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'");res.writeHead(200).end(withUnifiedHeader(researchProgressHtml));return}
+ if(req.url==='/api/research-progress'){res.setHeader('content-type','application/json');res.writeHead(200).end(JSON.stringify(researchProgress.snapshot()));return}
  if(req.url==='/'){res.setHeader('content-type','text/html; charset=utf-8');res.setHeader('content-security-policy',"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'");res.writeHead(200).end(withUnifiedHeader(overviewHtml));return}
  if(req.url==='/dashboard'){res.setHeader('content-type','text/html; charset=utf-8');res.setHeader('content-security-policy',"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'");res.writeHead(200).end(withUnifiedHeader(dashboardHtml));return}
  if(req.url==='/exit-research'){res.setHeader('content-type','text/html; charset=utf-8');res.setHeader('content-security-policy',"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'");res.writeHead(200).end(withUnifiedHeader(v4Html));return}
