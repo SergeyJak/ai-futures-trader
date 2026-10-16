@@ -13,13 +13,14 @@ if(!cutoff||!Number.isFinite(Date.parse(cutoff))||!Number.isInteger(minTest)||mi
  process.exitCode=2;
 }else{
  const pool=new pg.Pool({connectionString:process.env.DATABASE_URL,max:1,statement_timeout:120000,connectionTimeoutMillis:10000});
+ const client=await pool.connect();
  try{
-  await pool.query('BEGIN READ ONLY');
+  await client.query('BEGIN READ ONLY');
   for(const version of ['v3','v4'] as const){
-   const result=await evaluateStoredEntryFilters(pool,version,cutoff,minTest);
+   const result=await evaluateStoredEntryFilters(client as pg.Pool,version,cutoff,minTest);
    console.log(JSON.stringify({kind:'fixed-oos-entry-filter-study',generatedAt:new Date().toISOString(),...result}));
   }
-  await pool.query('ROLLBACK');
- }catch(e){console.error('OOS_STUDY_FAILED',e);process.exitCode=1}
- finally{await pool.end()}
+  await client.query('ROLLBACK');
+ }catch(e){console.error('OOS_STUDY_FAILED',e);process.exitCode=1;try{await client.query('ROLLBACK')}catch{ /* connection may be lost */ }}
+ finally{client.release();await pool.end()}
 }
