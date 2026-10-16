@@ -106,5 +106,7 @@ export async function v3Report(pool:pg.Pool){
  COALESCE(SUM(t.pnl) FILTER(WHERE t.pnl<0),0)::float8 AS gross_losses
  FROM v3_accounts a LEFT JOIN v3_trades t ON t.config_id=a.id LEFT JOIN drawdowns d ON d.config_id=a.id
  GROUP BY a.id,d.max_drawdown_closed ORDER BY a.symbol,a.dip,a.stop,a.take,a.hold,a.side`);
- return {version:'v3-forward-only',at:new Date().toISOString(),initialBalance:100,configs:q.rows.length,accounts:q.rows};
+ const activeIds=new Set(V3_CONFIGS.map(c=>c.id));
+ const accounts=q.rows.map(a=>({...a,active:activeIds.has(a.id)}));
+ return {version:'v3-forward-only',at:new Date().toISOString(),initialBalance:100,configs:accounts.length,activeConfigs:accounts.filter(a=>a.active).length,archivedConfigs:accounts.filter(a=>!a.active).length,accounts};
 }
