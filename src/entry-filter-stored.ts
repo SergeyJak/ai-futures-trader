@@ -1,7 +1,8 @@
 import type pg from 'pg';
+type QueryConnection=Pick<pg.PoolClient,'query'>;
 import {evaluateEntryFilters,priorCandleFeatures,ENTRY_FILTER_CANDIDATES,type EntryObservation} from './entry-filter-oos.js';
 type Version='v3'|'v4';
-export async function evaluateStoredEntryFilters(pool:pg.Pool,version:Version,cutoff:string,minTest=30){
+export async function evaluateStoredEntryFilters(pool:QueryConnection,version:Version,cutoff:string,minTest=30){
  if(!Number.isFinite(Date.parse(cutoff)))throw Error('Invalid cutoff');
  const table=version==='v3'?'v3_trades':'v4_trades';
  // Limit the lookback to entries in the requested study; exclude entries without full confirmed history.
