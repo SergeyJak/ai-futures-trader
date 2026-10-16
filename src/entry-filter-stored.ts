@@ -28,7 +28,8 @@ export async function evaluateStoredEntryFilters(pool:QueryConnection,version:Ve
  for(const t of trades.rows){
   // Reject inconsistent/mock outcomes as well as malformed historical rows.
   const exitMs=Date.parse(t.exited_at),entryTime=Date.parse(t.at);
-  if(!Number.isFinite(Number(t.net))||!Number.isFinite(exitMs)||exitMs<entryTime||exitMs>Date.parse(cutoff)+7*86400000||(entryTime<Date.parse(cutoff)&&exitMs>=Date.parse(cutoff))){invalidOutcomes++;continue}
+  if(t.net===null||t.net===undefined||!Number.isFinite(Number(t.net))||!Number.isFinite(entryTime)||!Number.isFinite(exitMs)||exitMs<entryTime||exitMs>Date.parse(cutoff)+7*86400000||(entryTime<Date.parse(cutoff)&&exitMs>=Date.parse(cutoff))){invalidOutcomes++;continue}
+  if(t.side!=='LONG'&&t.side!=='SHORT'){invalidOutcomes++;continue}
   const entryMs=Date.parse(t.at),index=candleIndex.get(t.symbol);
   const prior=Array.from({length:30},(_,i)=>index?.get(entryMs-(30-i)*60000));
   if(prior.some(c=>!c)){missingHistory++;continue}
