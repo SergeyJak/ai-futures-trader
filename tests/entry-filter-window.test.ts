@@ -8,3 +8,10 @@ test('fixed OOS study exposes explicit start and end',async()=>{
  const r=await evaluateStoredEntryFilters(pool,'v4','2026-10-05T00:00:00Z');
  assert.equal(r.studyStart,'2026-09-05T00:00:00.000Z');assert.equal(r.studyEnd,'2026-10-12T00:00:00.000Z');
 });
+
+test('fixed OOS refuses a partial seven-day holdout and never queries DB',async()=>{
+ let queries=0;const pool={query:async()=>{queries++;return {rows:[]}}} as any;
+ const recent=new Date(Date.now()-6*86400000).toISOString();
+ await assert.rejects(()=>evaluateStoredEntryFilters(pool,'v3',recent),/holdout window is incomplete/);
+ assert.equal(queries,0);
+});

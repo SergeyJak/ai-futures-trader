@@ -4,6 +4,7 @@ import {evaluateEntryFilters,priorCandleFeatures,ENTRY_FILTER_CANDIDATES,type En
 type Version='v3'|'v4';
 export async function evaluateStoredEntryFilters(pool:QueryConnection,version:Version,cutoff:string,minTest=30){
  if(!Number.isFinite(Date.parse(cutoff)))throw Error('Invalid cutoff');
+ if(Date.parse(cutoff)+7*86400000>Date.now())throw Error('OOS holdout window is incomplete; choose a cutoff at least 7 days in the past');
  const table=version==='v3'?'v3_trades':'v4_trades';
  // Limit the lookback to entries in the requested study; exclude entries without full confirmed history.
  const trades=await pool.query(`SELECT config_id,symbol,side,entry_at::text AS at,exit_at::text AS exited_at,pnl::float8 AS net
