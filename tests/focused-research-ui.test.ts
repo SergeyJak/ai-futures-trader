@@ -9,7 +9,7 @@ test('focused menu prioritizes progress and preserves legacy pages only in archi
  assert.equal((unifiedHeader.match(/<\/nav>/g)||[]).length,1);
 });
 test('overview links to progress without duplicate legacy navigation',()=>{
- assert.match(overviewHtml,/Смотреть прогресс/);
+ assert.match(overviewHtml,/Прогресс/);
  assert.doesNotMatch(overviewHtml,/Подробные разделы и диагностика/);
  assert.match(overviewHtml,/api\/v3/);
 });
