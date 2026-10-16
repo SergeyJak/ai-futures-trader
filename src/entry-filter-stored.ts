@@ -14,7 +14,7 @@ export async function evaluateStoredEntryFilters(pool:QueryConnection,version:Ve
  AND (entry_at >= $1::timestamptz OR exit_at < $1::timestamptz)
  ORDER BY entry_at,config_id,id LIMIT 20001`,[cutoff]);
  if(trades.rows.length>20000)throw Error('OOS sample exceeds 20000 rows; use a smaller fixed window or paginated study');
- const rows:EntryObservation[]=[];let missingHistory=0,invalidOutcomes=0;
+ const rows:EntryObservation[]=[];let missingHistory=0,invalidOutcomes=0,invalidCandles=0;
  // One bounded candle scan per symbol, not one query per trade.
  const candleIndex=new Map<string,Map<number,{open:number;high:number;low:number;close:number}>>();
  for(const symbol of [...new Set(trades.rows.map(t=>String(t.symbol)))]){
@@ -32,9 +32,12 @@ export async function evaluateStoredEntryFilters(pool:QueryConnection,version:Ve
   const entryMs=Date.parse(t.at),index=candleIndex.get(t.symbol);
   const prior=Array.from({length:30},(_,i)=>index?.get(entryMs-(30-i)*60000));
   if(prior.some(c=>!c)){missingHistory++;continue}
-  rows.push({at:t.at,symbol:t.symbol,side:t.side,net:Number(t.net),features:priorCandleFeatures(prior as {open:number;high:number;low:number;close:number}[])});
+  try{
+   const features=priorCandleFeatures(prior as {open:number;high:number;low:number;close:number}[]);
+   rows.push({at:t.at,symbol:t.symbol,side:t.side,net:Number(t.net),features});
+  }catch(e){if(e instanceof Error&&e.message==='Invalid candles'){invalidCandles++;continue}throw e}
  }
- return {version,cutoff,studyStart:new Date(Date.parse(cutoff)-30*86400000).toISOString(),studyEnd:new Date(Date.parse(cutoff)+7*86400000).toISOString(),loadedTrades:trades.rows.length,usableTrades:rows.length,missingHistory,invalidOutcomes,
+ return {version,cutoff,studyStart:new Date(Date.parse(cutoff)-30*86400000).toISOString(),studyEnd:new Date(Date.parse(cutoff)+7*86400000).toISOString(),loadedTrades:trades.rows.length,usableTrades:rows.length,missingHistory,invalidOutcomes,invalidCandles,
   // A fixed cutoff is specified by the caller. Never rank or tune candidates on test results.
   scores:evaluateEntryFilters(rows,ENTRY_FILTER_CANDIDATES,cutoff,minTest)};
 }
