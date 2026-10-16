@@ -10,14 +10,21 @@ export async function evaluateStoredEntryFilters(pool:pg.Pool,version:Version,cu
  ORDER BY entry_at,config_id,id LIMIT 20001`,[cutoff]);
  if(trades.rows.length>20000)throw Error('OOS sample exceeds 20000 rows; use a smaller fixed window or paginated study');
  const rows:EntryObservation[]=[];let missingHistory=0;
+ // One bounded candle scan per symbol, not one query per trade.
+ const candleIndex=new Map<string,Map<number,{open:number;high:number;low:number;close:number}>>();
+ for(const symbol of [...new Set(trades.rows.map(t=>String(t.symbol)))]){
+  const q=await pool.query(`SELECT start_at::text AS at,open::float8,high::float8,low::float8,close::float8
+   FROM market_candles WHERE symbol=$1 AND confirmed=true
+   AND start_at >= $2::timestamptz - interval '30 minutes'
+   AND start_at < $3::timestamptz ORDER BY start_at`,
+   [symbol,new Date(Date.parse(cutoff)-30*86400000).toISOString(),new Date(Date.parse(cutoff)+7*86400000).toISOString()]);
+  candleIndex.set(symbol,new Map(q.rows.map(c=>[Date.parse(c.at),c])));
+ }
  for(const t of trades.rows){
-  const candles=await pool.query(`SELECT open::float8,high::float8,low::float8,close::float8,start_at::text AS at
-   FROM market_candles WHERE symbol=$1 AND confirmed=true AND start_at<$2::timestamptz
-   ORDER BY start_at DESC LIMIT 30`,[t.symbol,t.at]);
-  const prior=candles.rows.reverse();
-  const entryMs=Date.parse(t.at);
-  if(prior.length!==30||prior.some((c,i)=>Date.parse(c.at)!==entryMs-(30-i)*60000)){missingHistory++;continue}
-  rows.push({at:t.at,symbol:t.symbol,side:t.side,net:Number(t.net),features:priorCandleFeatures(prior)});
+  const entryMs=Date.parse(t.at),index=candleIndex.get(t.symbol);
+  const prior=Array.from({length:30},(_,i)=>index?.get(entryMs-(30-i)*60000));
+  if(prior.some(c=>!c)){missingHistory++;continue}
+  rows.push({at:t.at,symbol:t.symbol,side:t.side,net:Number(t.net),features:priorCandleFeatures(prior as {open:number;high:number;low:number;close:number}[])});
  }
  return {version,cutoff,studyStart:new Date(Date.parse(cutoff)-30*86400000).toISOString(),studyEnd:new Date(Date.parse(cutoff)+7*86400000).toISOString(),loadedTrades:trades.rows.length,usableTrades:rows.length,missingHistory,
   // A fixed cutoff is specified by the caller. Never rank or tune candidates on test results.
