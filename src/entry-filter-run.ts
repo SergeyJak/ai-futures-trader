@@ -17,7 +17,7 @@ if(!cutoff||!Number.isFinite(Date.parse(cutoff))||!Number.isInteger(minTest)||mi
  try{
   await client.query('BEGIN READ ONLY');
   for(const version of ['v3','v4'] as const){
-   const result=await evaluateStoredEntryFilters(client as pg.Pool,version,cutoff,minTest);
+   const result=await evaluateStoredEntryFilters(client,version,cutoff,minTest);
    console.log(JSON.stringify({kind:'fixed-oos-entry-filter-study',generatedAt:new Date().toISOString(),...result}));
   }
   await client.query('ROLLBACK');
