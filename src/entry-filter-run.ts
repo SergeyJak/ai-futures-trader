@@ -17,13 +17,22 @@ if(!cutoff||!Number.isFinite(Date.parse(cutoff))||!Number.isInteger(minTest)||mi
  let client:pg.PoolClient|undefined;
  try{
   client=await pool.connect();
-  await client.query('BEGIN READ ONLY');
   for(const version of ['v3','v4'] as const){
-   const result=await evaluateStoredEntryFilters(client,version,cutoff,minTest);
-   const decisions=summarizeOos(result.scores);
-   console.log(JSON.stringify({kind:'fixed-oos-entry-filter-study',generatedAt:new Date().toISOString(),...result,decisions,candidateCount:decisions.filter(d=>d.decision==='candidate-for-paper').length}));
+   // Each version gets its own read-only transaction. A failed SQL statement
+   // must not leave the next version inside an aborted transaction.
+   try{
+    await client.query('BEGIN READ ONLY');
+    const result=await evaluateStoredEntryFilters(client,version,cutoff,minTest);
+    const decisions=summarizeOos(result.scores);
+    console.log(JSON.stringify({kind:'fixed-oos-entry-filter-study',generatedAt:new Date().toISOString(),...result,decisions,candidateCount:decisions.filter(d=>d.decision==='candidate-for-paper').length}));
+   }catch(e){
+    console.error('OOS_VERSION_FAILED',version,e);
+    process.exitCode=1;
+   }finally{
+    // ROLLBACK also clears PostgreSQL's failed-transaction state.
+    await client.query('ROLLBACK');
+   }
   }
-  await client.query('ROLLBACK');
  }catch(e){console.error('OOS_STUDY_FAILED',e);process.exitCode=1;if(client){try{await client.query('ROLLBACK')}catch{ /* connection may be lost */ }}}
  finally{client?.release();await pool.end()}
 }
