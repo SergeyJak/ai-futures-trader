@@ -17,10 +17,17 @@ export function createResearchProgress(pool:pg.Pool,now:()=>number=Date.now){
   cutoff=new Date(today.getTime()-8*DAY).toISOString();
   const next:Study[]=[];let client:pg.PoolClient|undefined;
   try{
-   client=await pool.connect();await client.query('BEGIN READ ONLY');
+   client=await pool.connect();
    for(const version of ['v3','v4'] as const){
-    try{const result=await evaluateStoredEntryFilters(client,version,cutoff,30);next.push({version,status:'ready',result,decisions:summarizeOos(result.scores)})}
-    catch(e){lastError=true;next.push({version,status:'error',error:e instanceof Error?e.message:'Study unavailable'})}
+    try{
+     await client.query('BEGIN READ ONLY');
+     const result=await evaluateStoredEntryFilters(client,version,cutoff,30);
+     next.push({version,status:'ready',result,decisions:summarizeOos(result.scores)});
+    }catch(e){lastError=true;next.push({version,status:'error',error:e instanceof Error?e.message:'Study unavailable'})}
+    finally{
+     // A failed SQL query aborts its transaction. Clear it before the next study.
+     try{await client.query('ROLLBACK')}catch{lastError=true}
+    }
    }
   }catch(e){lastError=true;for(const version of ['v3','v4'] as const)if(!next.some(s=>s.version===version))next.push({version,status:'error',error:e instanceof Error?e.message:'Database unavailable'})}
   finally{if(client){try{await client.query('ROLLBACK')}catch{}client.release()}completed=now();studies=next;running=false}
