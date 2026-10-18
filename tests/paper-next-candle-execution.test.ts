@@ -6,7 +6,7 @@ const v7=readFileSync(new URL('../src/v7.ts',import.meta.url),'utf8');
 test('SOL fills queued signal only on a subsequently observed confirmed bar',()=>{
  assert.match(sol,/pendingAt:bar.time\+60000/);
  assert.match(sol,/bar.time===pending.pendingAt/);
- assert.match(sol,/observedAt=Date.now\(\),entry=bar.close\*\(1\+slip\)/);
+ assert.match(sol,/observedAt=confirmedCandleCloseTime\(bar.time\),entry=bar.close\*\(1\+slip\)/);
  assert.match(sol,/entryAt:observedAt/);
  assert.match(sol,/bar.time\+60000<=position.entryAt\?null:exitDecision/);
  assert.doesNotMatch(sol,/entry=bar.open\*\(1\+slip\)/);

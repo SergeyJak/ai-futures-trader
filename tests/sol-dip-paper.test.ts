@@ -1,4 +1,4 @@
-import test from 'node:test';import assert from 'node:assert/strict';import {SOL_VARIANTS,dipSignal,exitDecision,solPaperReport} from '../src/sol-dip-paper.js';
+import test from 'node:test';import assert from 'node:assert/strict';import {SOL_VARIANTS,dipSignal,exitDecision,solPaperReport,confirmedCandleCloseTime} from '../src/sol-dip-paper.js';
 test('exactly three SOL exit modes',()=>{assert.deepEqual(SOL_VARIANTS.map(x=>x.minutes),[30,240,null])});
 test('dip reversal requires a bounce after decline',()=>{assert.equal(dipSignal([{close:100},{close:99.8},{close:99.2},{close:99.5}]),true);assert.equal(dipSignal([{close:100},{close:99.8},{close:99.2},{close:99.1}]),false)});
 test('stop wins when stop and take touched in same candle',()=>{assert.equal(exitDecision({entry:100,entryAt:0},{time:60000,high:103,low:98,close:100},null)?.reason,'STOP')});
@@ -23,3 +23,5 @@ test('SOL summary uses all-time aggregate, not limited recent trade rows',async(
  assert.equal(variant?.trades.length,1);
  assert.ok(calls.some(sql=>sql.includes('GROUP BY variant')));
 });
+
+test('SOL LONG and SHORT entries use candle close, not wall-clock time',()=>{const start=Date.parse('2026-10-18T05:00:00Z');const entryAt=confirmedCandleCloseTime(start);assert.equal(entryAt,start+60000);assert.equal(entryAt-start,60000);assert.equal(entryAt<=start+120000,true)});
