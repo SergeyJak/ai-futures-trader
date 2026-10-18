@@ -51,6 +51,14 @@ export async function historicalCostStressReport(pool: pg.Pool, split: FrozenSpl
   const excludedCrossBoundaryEntries = all.filter(crossesTestBoundary).length;
   const eligible = deduplicateClosedPositions(all.filter(row => !crossesTestBoundary(row)).map(convertHistoricalCostRow).filter((p): p is ClosedPosition => p !== null));
   const cohorts = groupFrozenOosBySource(eligible, split);
+  const fundingCoverage = (['kopyon', 'okx'] as const).map(source => ({
+    source,
+    testPositions: cohorts[source].test.length,
+    fundedPositions: cohorts[source].test.filter(position => Number.isFinite(position.fundingPct)).length,
+    missingPositions: cohorts[source].test.filter(position => !Number.isFinite(position.fundingPct)).length,
+    status: 'unavailable' as const,
+    reason: 'Historical settlement rates and exact position funding cash flows are not ingested. Missing funding must not be treated as zero.',
+  }));
   return {
     mode: 'observed-historical-fills-only',
     realOrders: false,
@@ -61,6 +69,7 @@ export async function historicalCostStressReport(pool: pg.Pool, split: FrozenSpl
     excludedOrDuplicate: all.length - eligible.length,
     excludedCrossBoundaryEntries,
     frozenSplit: split,
+    fundingCoverage,
     results: (['kopyon', 'okx'] as const).map(source => ({
       source,
       trainCount: cohorts[source].train.length,
@@ -69,6 +78,6 @@ export async function historicalCostStressReport(pool: pg.Pool, split: FrozenSpl
       outsideCount: cohorts[source].outside,
       observedTestCostScenarios: stressBySource(cohorts[source].test).find(r => r.source === source)!.scenarios,
     })),
-    warning: 'Historical trader fills only. Latest 5000 rows per source; truncated sources do not represent complete history. Funding unavailable; net returns remain null. Not a strategy backtest or evidence of profitability.',
+    warning: 'Historical trader fills only. Latest 5000 rows per source; truncated sources do not represent complete history. Funding coverage is explicitly reported; net returns remain null until verified settlement data are ingested. Not a strategy backtest or evidence of profitability.',
   };
 }
