@@ -44,8 +44,8 @@ export async function solShortTradeCandles(pool:pg.Pool,id:number){
  const trade=await pool.query('SELECT id,variant,entry_at,exit_at,entry_price,exit_price,net_pnl,reason FROM sol_short_trades WHERE id=$1',[id]);
  if(!trade.rowCount)return null;
  const t=trade.rows[0];
- const candles=await pool.query(`SELECT start_at AS time,open,high,low,close FROM market_candles WHERE symbol='SOLUSDT' AND confirmed=true AND start_at BETWEEN $1::timestamptz-interval '10 minutes' AND $2::timestamptz+interval '10 minutes' ORDER BY start_at LIMIT 1500`,[t.entry_at,t.exit_at]);
- return {trade:t,candles:candles.rows};
+ const candles=await pool.query(`SELECT start_at AS time,open,high,low,close FROM market_candles WHERE symbol='SOLUSDT' AND confirmed=true AND start_at BETWEEN GREATEST($1::timestamptz-interval '10 minutes',$2::timestamptz-interval '24 hours') AND $2::timestamptz+interval '10 minutes' ORDER BY start_at DESC LIMIT 1500`,[t.entry_at,t.exit_at]);
+ return {trade:t,candles:candles.rows.reverse()};
 }
 export async function solShortActiveTradeCandles(pool:pg.Pool,variant:string){
  if(!SOL_SHORT_VARIANTS.some(v=>v.id===variant))return null;
