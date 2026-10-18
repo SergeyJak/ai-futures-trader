@@ -1,0 +1,7 @@
+type Trade={id:number;variant:string;entry_at:string|Date;exit_at:string|Date;entry_price:number;exit_price:number;net_pnl:number;reason:string};
+type Variant={id:string;position?:{entry:number;entryAt:number}|null;closedTrades:number;realizedNetPnl:number;trades:Trade[]};
+type Report={variants:Variant[];feeRate:number;slippageRate:number};
+export function solPaperDiagnostics(long:Report,short:Report,now=new Date()){
+ const summarize=(report:Report,side:'LONG'|'SHORT')=>({side,feeRate:report.feeRate,slippageRate:report.slippageRate,variants:report.variants.map(v=>({id:v.id,active:!!v.position&&Number.isFinite(v.position.entryAt),closed:v.closedTrades,netPnl:v.realizedNetPnl,lastTrades:v.trades.slice(0,3).map(t=>{const entry=Date.parse(String(t.entry_at)),exit=Date.parse(String(t.exit_at));const durationMinutes=(exit-entry)/60000;return {id:t.id,reason:t.reason,entryAt:new Date(entry).toISOString(),exitAt:new Date(exit).toISOString(),durationMinutes,entryPrice:Number(t.entry_price),exitPrice:Number(t.exit_price),netPnl:Number(t.net_pnl),validClock:Number.isInteger(durationMinutes)&&durationMinutes>0&&entry%60000===0&&exit%60000===0}})}))});
+ return {at:now.toISOString(),mode:'forward-paper-only',realOrders:false,long:summarize(long,'LONG'),short:summarize(short,'SHORT')};
+}
