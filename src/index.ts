@@ -1,3 +1,5 @@
+import {initSol5m,tickSol5m,sol5mReport} from './sol-5m-paper.js';
+import {sol5mHtml} from './sol-5m-page.js';
 import {solPaperDiagnostics} from './sol-paper-diagnostics.js';
 import {initSolShort,tickSolShort,solShortReport,solShortHtml,solShortTradeCandles,solShortActiveTradeCandles} from './sol-short-paper.js';
 import {createResearchProgress} from './research-progress.js';
@@ -36,7 +38,7 @@ if(!url)throw new Error('DATABASE_URL required');
 if(!endpoint.startsWith('wss://'))throw new Error('Secure WebSocket required');
 if(!Number.isInteger(port)||port<1||port>65535)throw new Error('Invalid port');
 installOutboundTelemetry();
-const db=new Database(url);await db.init();await db.initExperiments();await db.initShadow();await db.initV3();await db.initV4();await db.initV5();await initV6(db.v6Pool());await initOkxHistory(db.v6Pool());await initSolPaper(db.v6Pool());await initSolShort(db.v6Pool());await initStrategyPaper(db.v6Pool());await initV7(db.v6Pool());await initDipOos(db.v6Pool());const stream=new MarketStream(endpoint,symbols,db);stream.start();
+const db=new Database(url);await db.init();await db.initExperiments();await db.initShadow();await db.initV3();await db.initV4();await db.initV5();await initV6(db.v6Pool());await initOkxHistory(db.v6Pool());await initSolPaper(db.v6Pool());await initSolShort(db.v6Pool());await initSol5m(db.v6Pool());await initStrategyPaper(db.v6Pool());await initV7(db.v6Pool());await initDipOos(db.v6Pool());const stream=new MarketStream(endpoint,symbols,db);stream.start();
 const researchProgress=createResearchProgress(db.v6Pool());
 // A bounded observational job, never part of the trade execution tick.
 const researchTimer=setInterval(()=>{void researchProgress.run().catch(e=>console.error('RESEARCH_PROGRESS_ERROR',e))},6*3600000);
@@ -88,6 +90,8 @@ const server=http.createServer(async(req,res)=>{
  if(req.url==='/api/sol-short'){try{res.setHeader('content-type','application/json');res.writeHead(200).end(JSON.stringify(await solShortReport(db.v6Pool())))}catch(e){console.error('SOL_SHORT_REPORT_ERROR',e);res.writeHead(503).end(JSON.stringify({error:'SOL SHORT unavailable'}))}return}
  if(req.url?.startsWith('/api/sol-short/trade?')){const id=Number(new URL(req.url,'http://localhost').searchParams.get('id'));if(!Number.isSafeInteger(id)||id<=0){res.writeHead(400).end('Invalid ID');return}try{const result=await solShortTradeCandles(db.v6Pool(),id);res.setHeader('content-type','application/json');res.writeHead(result?200:404).end(JSON.stringify(result??{error:'Not found'}))}catch(e){console.error('SOL_SHORT_CHART_ERROR',e);res.writeHead(503).end(JSON.stringify({error:'Chart unavailable'}))}return}
  if(req.url?.startsWith('/api/sol-short/active?')){const variant=new URL(req.url,'http://localhost').searchParams.get('variant')??'';try{const result=await solShortActiveTradeCandles(db.v6Pool(),variant);res.setHeader('content-type','application/json');res.writeHead(result?200:404).end(JSON.stringify(result??{error:'Not found'}))}catch(e){console.error('SOL_SHORT_ACTIVE_ERROR',e);res.writeHead(503).end(JSON.stringify({error:'Chart unavailable'}))}return}
+ if(req.url==='/sol-5m'){res.setHeader('content-type','text/html; charset=utf-8');res.setHeader('content-security-policy',"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'");res.writeHead(200).end(withUnifiedHeader(sol5mHtml));return}
+ if(req.url==='/api/sol-5m'){try{res.setHeader('content-type','application/json');res.writeHead(200).end(JSON.stringify(await sol5mReport(db.v6Pool())))}catch(e){console.error('SOL_5M_REPORT_ERROR',e);res.writeHead(503).end(JSON.stringify({error:'SOL 5m unavailable'}))}return}
  if(req.url==='/sol-dip'){res.setHeader('content-type','text/html; charset=utf-8');res.setHeader('content-security-policy',"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'");res.writeHead(200).end(withUnifiedHeader(solPaperHtml));return}
  if(req.url==='/api/sol-dip/audit'){try{res.setHeader('content-type','application/json');res.writeHead(200).end(JSON.stringify(await auditSolSignals(db.v6Pool())))}catch(e){console.error('SOL_DIP_AUDIT_ERROR',e);res.writeHead(503).end(JSON.stringify({error:'SOL signal audit unavailable'}))}return}
  if(req.url?.startsWith('/api/sol-dip/trade?')){const id=Number(new URL(req.url,'http://localhost').searchParams.get('id'));if(!Number.isSafeInteger(id)||id<=0){res.writeHead(400).end('Invalid trade ID');return}try{const result=await solTradeCandles(db.v6Pool(),id);res.setHeader('content-type','application/json');res.writeHead(result?200:404).end(JSON.stringify(result??{error:'Trade not found'}))}catch(e){console.error('SOL_TRADE_CHART_ERROR',e);res.writeHead(503).end(JSON.stringify({error:'Trade chart unavailable'}))}return}
@@ -313,6 +317,9 @@ const paperTimer=setInterval(()=>{void runPaper()},15000);setTimeout(()=>{void r
 let solShortRunning=false;
 async function runSolShort(){if(solShortRunning||closing)return;solShortRunning=true;try{await tickSolShort(db.v6Pool())}catch(e){console.error('SOL_SHORT_TICK_ERROR',e)}finally{solShortRunning=false}}
 const solShortTimer=setInterval(()=>{void runSolShort()},15000);setTimeout(()=>{void runSolShort()},27000);
+let sol5mRunning=false;
+async function runSol5m(){if(sol5mRunning||closing)return;sol5mRunning=true;try{await tickSol5m(db.v6Pool())}catch(e){console.error('SOL_5M_TICK_ERROR',e)}finally{sol5mRunning=false}}
+const sol5mTimer=setInterval(()=>{void runSol5m()},15000);setTimeout(()=>{void runSol5m()},29000);
 let solPaperRunning=false;
 async function runSolPaper(){if(solPaperRunning||closing)return;solPaperRunning=true;try{await tickSolPaper(db.v6Pool())}catch(e){console.error('SOL_DIP_TICK_ERROR',e)}finally{solPaperRunning=false}}
 let strategyPaperRunning=false;
