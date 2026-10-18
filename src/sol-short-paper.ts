@@ -1,4 +1,5 @@
 import type pg from 'pg';
+import {confirmedCandleCloseTime} from './sol-dip-paper.js';
 export const SOL_SHORT_VARIANTS=[{id:'30m',label:'30 минут',minutes:30},{id:'4h',label:'4 часа',minutes:240},{id:'unlimited',label:'До стопа или тейка',minutes:null}] as const;
 const fee=.0006,slip=.0003,stop=.01,target=.02;
 export function shortSignal(bars:{close:number}[]){if(bars.length<4)return false;const b=bars.slice(-4);return b[2].close/b[0].close>=1.005&&b[3].close<b[2].close}
@@ -30,7 +31,7 @@ export async function tickSolShort(pool:pg.Pool){
   if(row.last_bar&&new Date(row.last_bar).getTime()>=bar.time)continue;
   if(row.last_bar&&bar.time-new Date(row.last_bar).getTime()>120000){await client.query('UPDATE sol_short_accounts SET last_bar=to_timestamp($2/1000.0),position=CASE WHEN position ? \'pendingAt\' THEN NULL ELSE position END WHERE id=$1',[variant.id,bar.time]);continue}
   let balance=Number(row.balance),position=row.position as {entry:number;entryAt:number;quantity:number}|null;
-  if(position&&'pendingAt' in position){const pending=position as unknown as {pendingAt:number};if(bar.time===pending.pendingAt){const observedAt=bar.time+60000,entry=bar.close*(1-slip);position={entry,entryAt:observedAt,quantity:Math.max(0,balance)*.1/entry}}else position=null}
+  if(position&&'pendingAt' in position){const pending=position as unknown as {pendingAt:number};if(bar.time===pending.pendingAt){const observedAt=confirmedCandleCloseTime(bar.time),entry=bar.close*(1-slip);position={entry,entryAt:observedAt,quantity:Math.max(0,balance)*.1/entry}}else position=null}
    else if(position){const decision=bar.time+60000<=position.entryAt?null:shortExitDecision(position,bar,variant.minutes);if(decision){const exitPrice=decision.price*(1+slip);const netPnl=position.quantity*(position.entry-exitPrice)-fee*position.quantity*(position.entry+exitPrice);balance+=netPnl;await client.query('INSERT INTO sol_short_trades(variant,entry_at,exit_at,entry_price,exit_price,net_pnl,reason) VALUES($1,to_timestamp($2/1000.0),to_timestamp($3/1000.0),$4,$5,$6,$7)',[variant.id,position.entryAt,bar.time,position.entry,exitPrice,netPnl,decision.reason]);position=null}}
   else if(row.last_bar&&signal){position={pendingAt:bar.time+60000} as unknown as typeof position}
   await client.query('UPDATE sol_short_accounts SET balance=$2,position=$3,last_bar=to_timestamp($4/1000.0) WHERE id=$1',[variant.id,balance,position===null?null:JSON.stringify(position),bar.time]);
