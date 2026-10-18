@@ -1,3 +1,4 @@
+import {solPaperDiagnostics} from './sol-paper-diagnostics.js';
 import {initSolShort,tickSolShort,solShortReport,solShortHtml,solShortTradeCandles,solShortActiveTradeCandles} from './sol-short-paper.js';
 import {createResearchProgress} from './research-progress.js';
 import {researchProgressHtml} from './research-progress-page.js';
@@ -345,7 +346,7 @@ const v3Timer=setInterval(()=>{void runIndependentV3()},15000);
 setTimeout(()=>{void runIndependentV3()},12000);
 
 async function reportTelemetry(){
- try{console.info('AI_FUTURES_ACCOUNTS',JSON.stringify(await db.telemetrySnapshot()));console.info('AI_FUTURES_PAIRS',JSON.stringify(await db.pairedDiagnostics()));const summarize=(report:any)=>{const accounts=report.accounts??[];return {at:report.at,configs:report.configs,active:accounts.filter((a:any)=>a.position).length,closed:accounts.reduce((n:number,a:any)=>n+Number(a.trades??0),0),wins:accounts.reduce((n:number,a:any)=>n+Number(a.wins??0),0),processed:accounts.filter((a:any)=>a.last_at).length,lastAt:accounts.reduce((max:string,a:any)=>a.last_at&&a.last_at>max?a.last_at:max,''),netRealizedPnl:accounts.reduce((n:number,a:any)=>n+Number(a.realized_pnl??a.net??0),0),fees:accounts.reduce((n:number,a:any)=>n+Number(a.fees??0),0),accounts};};const [v3,v4]=await Promise.all([db.v3Report(),db.v4Report()]);console.info('AI_FUTURES_V3',JSON.stringify(summarize(v3)));console.info('AI_FUTURES_V4',JSON.stringify(summarize(v4)))}
+ try{const [solLong,solShort]=await Promise.all([solPaperReport(db.v6Pool()),solShortReport(db.v6Pool())]);console.info('AI_FUTURES_SOL_PAPER',JSON.stringify(solPaperDiagnostics(solLong,solShort)));console.info('AI_FUTURES_ACCOUNTS',JSON.stringify(await db.telemetrySnapshot()));console.info('AI_FUTURES_PAIRS',JSON.stringify(await db.pairedDiagnostics()));const summarize=(report:any)=>{const accounts=report.accounts??[];return {at:report.at,configs:report.configs,active:accounts.filter((a:any)=>a.position).length,closed:accounts.reduce((n:number,a:any)=>n+Number(a.trades??0),0),wins:accounts.reduce((n:number,a:any)=>n+Number(a.wins??0),0),processed:accounts.filter((a:any)=>a.last_at).length,lastAt:accounts.reduce((max:string,a:any)=>a.last_at&&a.last_at>max?a.last_at:max,''),netRealizedPnl:accounts.reduce((n:number,a:any)=>n+Number(a.realized_pnl??a.net??0),0),fees:accounts.reduce((n:number,a:any)=>n+Number(a.fees??0),0),accounts};};const [v3,v4]=await Promise.all([db.v3Report(),db.v4Report()]);console.info('AI_FUTURES_V3',JSON.stringify(summarize(v3)));console.info('AI_FUTURES_V4',JSON.stringify(summarize(v4)))}
  catch(e){console.error('AI_FUTURES_ACCOUNTS_ERROR',e)}
 }
 const telemetryTimer=setInterval(()=>{void reportTelemetry()},300000);
