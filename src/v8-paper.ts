@@ -10,7 +10,7 @@ export function v8Exit(p:Position,b:V8Bar,holdMinutes=120){
  const stop=dir===1?b.low<=p.stop:b.high>=p.stop,take=dir===1?b.high>=p.take:b.low<=p.take;
  if(stop)return {price:dir===1?Math.min(p.stop,b.open):Math.max(p.stop,b.open),reason:take?'BOTH_STOP_FIRST':'STOP'};
  if(take)return {price:p.take,reason:'TAKE'};
- if(b.time-p.entryAt>=24*60*60000)return {price:b.close,reason:'TIME'};
+ if(b.time+60000-p.entryAt>=holdMinutes*60000)return {price:b.close,reason:'TIME'};
  return null;
 }
 export async function initV8Paper(pool:pg.Pool){
