@@ -1,3 +1,4 @@
+import {v8Backtest} from './v8-liquidity-sweep.js';
 import {initSol5m,tickSol5m,sol5mReport} from './sol-5m-paper.js';
 import {sol5mHtml} from './sol-5m-page.js';
 import {solPaperDiagnostics} from './sol-paper-diagnostics.js';
@@ -49,6 +50,26 @@ const server=http.createServer(async(req,res)=>{
  res.setHeader('cache-control','no-store');
  res.setHeader('x-content-type-options','nosniff');
  res.setHeader('referrer-policy','no-referrer');
+ if(req.url==='/api/research/v8'){
+  try {
+   const results=[];
+   for(const symbol of ['BTCUSDT','ETHUSDT','SOLUSDT']){
+    const rows=await db.recentCandles(symbol,20000);
+    const minute=rows.map(b=>({time:Date.parse(b.start_at),open:Number(b.open),high:Number(b.high),low:Number(b.low),close:Number(b.close)}));
+    for(const timeframe of [5,15]){
+     const grouped=new Map<number,typeof minute>();
+     for(const b of minute){const key=Math.floor(b.time/(timeframe*60000));const group=grouped.get(key)??[];group.push(b);grouped.set(key,group)}
+     const bars=[...grouped.entries()].sort((a,b)=>a[0]-b[0]).filter(([key,g])=>g.length===timeframe&&g[0].time===key*timeframe*60000&&g.every((b,i)=>i===0||b.time-g[i-1].time===60000)).map(([,g])=>({time:g[0].time,open:g[0].open,high:Math.max(...g.map(x=>x.high)),low:Math.min(...g.map(x=>x.low)),close:g.at(-1)!.close}));
+     const split=Math.floor(bars.length*.7);
+     const train=v8Backtest(bars.slice(0,split));
+     const test=v8Backtest(bars.slice(split));
+     results.push({symbol,timeframeMinutes:timeframe,availableBars:bars.length,train:{trades:train.trades,averageNetReturnPct:train.averageNetReturnPct,winRate:train.winRate},test:{trades:test.trades,averageNetReturnPct:test.averageNetReturnPct,winRate:test.winRate},validForDecision:test.trades>=30});
+    }
+   }
+   res.writeHead(200).end(JSON.stringify({mode:'research-only',realOrders:false,method:'5m/15m candle sweep/reclaim, next candle open, stop-first, fixed 70/30 split, fees and slippage; exploratory, not forward-paper or executable proof',results}));
+  }catch(e){console.error('V8_RESEARCH_ERROR',e);res.writeHead(503).end(JSON.stringify({error:'V8 research unavailable'}))}
+  return;
+ }
  if(req.url==='/research-progress'){res.setHeader('content-type','text/html; charset=utf-8');res.setHeader('content-security-policy',"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'");res.writeHead(200).end(withUnifiedHeader(researchProgressHtml));return}
  if(req.url==='/api/research-progress'){res.setHeader('content-type','application/json');res.writeHead(200).end(JSON.stringify(researchProgress.snapshot()));return}
  if(req.url==='/'){res.setHeader('content-type','text/html; charset=utf-8');res.setHeader('content-security-policy',"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'");res.writeHead(200).end(withUnifiedHeader(overviewHtml));return}
