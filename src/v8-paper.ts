@@ -49,7 +49,7 @@ export async function tickV8Paper(pool:pg.Pool){
     }
     if(!position&&!pending){
      const tf=cfg.timeframe;
-     const candles=aggregateV8Bars(bars,tf);
+     const candles=aggregateV8Bars(bars,tf as 5|15);
      const last=candles.at(-1);
      if(last&&last.time+tf*60000===bar.time+60000){const signal=v8Signal(candles.slice(-13));if(signal)pending={side:signal.side,stop:signal.stop,take:signal.take,signalAt:bar.time}}
     }
