@@ -1,0 +1,1 @@
+Telemetry should include bounded strategy summaries, sample counts, drawdown and independent virtual net PnL. Historical copier fills are not forward paper results.
