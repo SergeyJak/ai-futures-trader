@@ -1,0 +1,8 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {v8Exit,V8_CONFIGS} from '../src/v8-paper.js';
+const position={side:'LONG' as const,entry:100,stop:98,take:104,quantity:1,entryAt:0};
+test('V8 keeps six isolated BTC ETH SOL paper variants',()=>{assert.equal(V8_CONFIGS.length,6);assert.equal(new Set(V8_CONFIGS.map(c=>c.id)).size,6)});
+test('V8 stop wins on same candle as take',()=>{assert.deepEqual(v8Exit(position,{time:60000,open:100,high:105,low:97,close:101}),{price:98,reason:'BOTH_STOP_FIRST'})});
+test('V8 gaps fill at opening price on adverse stop',()=>{assert.deepEqual(v8Exit(position,{time:60000,open:95,high:99,low:94,close:98}),{price:95,reason:'STOP'})});
+test('V8 time exit after 24h and short stop',()=>{assert.deepEqual(v8Exit(position,{time:24*3600000,open:100,high:101,low:99,close:100}),{price:100,reason:'TIME'});assert.equal(v8Exit({...position,side:'SHORT',stop:102,take:96},{time:60000,open:100,high:103,low:99,close:102})?.reason,'STOP')});
