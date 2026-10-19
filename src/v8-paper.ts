@@ -5,7 +5,7 @@ import {v8Signal,V8_FEE_PER_SIDE,V8_SLIPPAGE_PER_SIDE,type V8Bar,type V8Side} fr
 export const V8_CONFIGS=[...['BTCUSDT','ETHUSDT','SOLUSDT'].flatMap(symbol=>[5,15].map(timeframe=>({symbol,timeframe,id:symbol+'-'+timeframe+'m'})))];
 type Position={side:V8Side;entry:number;stop:number;take:number;quantity:number;entryAt:number};
 type Pending={side:V8Side;stop:number;take:number;signalAt:number};
-export function v8Exit(p:Position,b:V8Bar){
+export function v8Exit(p:Position,b:V8Bar,holdMinutes=120){
  const dir=p.side==='LONG'?1:-1;
  const stop=dir===1?b.low<=p.stop:b.high>=p.stop,take=dir===1?b.high>=p.take:b.low<=p.take;
  if(stop)return {price:dir===1?Math.min(p.stop,b.open):Math.max(p.stop,b.open),reason:take?'BOTH_STOP_FIRST':'STOP'};
