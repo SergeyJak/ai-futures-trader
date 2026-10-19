@@ -1,5 +1,5 @@
 import type pg from 'pg';
-import {aggregateConfirmed5m} from './sol-5m-paper.js';
+import {aggregateV8Bars} from './v8-candle-aggregation.js';
 import {v8Signal,V8_FEE_PER_SIDE,V8_SLIPPAGE_PER_SIDE,type V8Bar,type V8Side} from './v8-liquidity-sweep.js';
 export const V8_CONFIGS=[...['BTCUSDT','ETHUSDT','SOLUSDT'].flatMap(symbol=>[5,15].map(timeframe=>({symbol,timeframe,id:symbol+'-'+timeframe+'m'})))];
 type Position={side:V8Side;entry:number;stop:number;take:number;quantity:number;entryAt:number};
@@ -48,9 +48,8 @@ export async function tickV8Paper(pool:pg.Pool){
      pending=null;
     }
     if(!position&&!pending){
-     const grouped=aggregateConfirmed5m(bars);
      const tf=cfg.timeframe;
-     const candles=tf===5?grouped:grouped.filter((_,i)=>true).reduce<V8Bar[]>((acc,_,i,all)=>{if(i%3===2){const g=all.slice(i-2,i+1);if(g[0].time%900000===0&&g[2].time-g[0].time===600000)acc.push({time:g[0].time,open:g[0].open,high:Math.max(...g.map(b=>b.high)),low:Math.min(...g.map(b=>b.low)),close:g[2].close})}return acc},[]);
+     const candles=aggregateV8Bars(bars,tf);
      const last=candles.at(-1);
      if(last&&last.time+tf*60000===bar.time+60000){const signal=v8Signal(candles.slice(-13));if(signal)pending={side:signal.side,stop:signal.stop,take:signal.take,signalAt:bar.time}}
     }
