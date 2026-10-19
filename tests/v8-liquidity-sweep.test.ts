@@ -15,7 +15,7 @@ test('short reclaim and no future-bar execution',()=>{
  assert.equal(result.trades,1);
  assert.equal(result.records[0].entryAt,13*60000);
  assert.equal(result.realOrders,false);
- assert.equal(result.records[0].reason,'TAKE');
+ assert.equal(result.records[0].reason,'TIME');
  assert.ok(Number.isFinite(result.records[0].netReturnPct));
 });
 test('missing sample reports unknown average',()=>{
