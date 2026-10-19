@@ -1,3 +1,4 @@
+import {confirmedV8Bars} from './v8-confirmed-bars.js';
 import type pg from 'pg';
 import {aggregateConfirmed5m} from './sol-5m-paper.js';
 import {v8Signal,V8_FEE_PER_SIDE,V8_SLIPPAGE_PER_SIDE,type V8Bar,type V8Side} from './v8-liquidity-sweep.js';
