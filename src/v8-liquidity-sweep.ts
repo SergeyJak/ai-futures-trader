@@ -19,9 +19,9 @@ export function v8Signal(bars: readonly V8Bar[], lookback = 12, rewardRisk = 2):
  return {side,at:last.time,entry,stop,take:long?entry+risk*rewardRisk:entry-risk*rewardRisk};
 }
 export type V8Trade={side:V8Side;signalAt:number;entryAt:number;exitAt:number;entry:number;exit:number;netReturnPct:number;reason:string};
-export function v8Backtest(bars:readonly V8Bar[], opts:{lookback?:number;holdBars?:number;rewardRisk?:number;fee?:number;slippage?:number}={}){
- const lookback=opts.lookback??12,hold=opts.holdBars??24,fee=opts.fee??V8_FEE_PER_SIDE,slip=opts.slippage??V8_SLIPPAGE_PER_SIDE;
- if (!Number.isInteger(hold)||hold<1||![fee,slip].every(x=>Number.isFinite(x)&&x>=0)) throw new Error('Invalid V8 costs or hold');
+export function v8Backtest(bars:readonly V8Bar[], opts:{lookback?:number;holdBars?:number;holdMinutes?:number;rewardRisk?:number;fee?:number;slippage?:number}={}){
+ const lookback=opts.lookback??12,holdBars=opts.holdBars,holdMinutes=opts.holdMinutes??24*60,fee=opts.fee??V8_FEE_PER_SIDE,slip=opts.slippage??V8_SLIPPAGE_PER_SIDE;
+ if ((holdBars!==undefined&&(!Number.isInteger(holdBars)||holdBars<1||opts.holdMinutes!==undefined))||!Number.isInteger(holdMinutes)||holdMinutes<1||![fee,slip].every(x=>Number.isFinite(x)&&x>=0)) throw new Error('Invalid V8 costs or hold');
  const trades:V8Trade[]=[];
  for(let i=lookback;i<bars.length-1;){
   const signal=v8Signal(bars.slice(i-lookback,i+1),lookback,opts.rewardRisk);
@@ -29,17 +29,20 @@ export function v8Backtest(bars:readonly V8Bar[], opts:{lookback?:number;holdBar
   const next=bars[i+1];
   if(next.time-bars[i].time!==bars[i].time-bars[i-1].time){i++;continue}
   const dir=signal.side==='LONG'?1:-1,entry=next.open*(1+dir*slip);
-  let exit=entry,reason='TIME',end=i+1;
-  for(let j=i+1;j<bars.length&&j<=i+hold;j++){
+  let exit=entry,reason='TIME',end=i+1,closed=false;
+  for(let j=i+1;j<bars.length;j++){
    const b=bars[j];
    if(j>i+1&&b.time-bars[j-1].time!==bars[j-1].time-bars[j-2].time)break;
    const stop=dir===1?b.low<=signal.stop:b.high>=signal.stop;
    const take=dir===1?b.high>=signal.take:b.low<=signal.take;
    end=j;
-   if(stop){exit=dir===1?Math.min(signal.stop,b.open):Math.max(signal.stop,b.open);reason=take?'BOTH_STOP_FIRST':'STOP';break}
-   if(take){exit=signal.take;reason='TAKE';break}
+   if(stop){exit=dir===1?Math.min(signal.stop,b.open):Math.max(signal.stop,b.open);reason=take?'BOTH_STOP_FIRST':'STOP';closed=true;break}
+   if(take){exit=signal.take;reason='TAKE';closed=true;break}
    exit=b.close;
+   if(holdBars!==undefined?j>=i+holdBars:b.time-next.time>=holdMinutes*60000){closed=true;break}
   }
+  // An open position at the dataset boundary (or a candle gap) is not a realized trade.
+  if(!closed){i=end+1;continue}
   const executionExit=exit*(1-dir*slip);
   trades.push({side:signal.side,signalAt:signal.at,entryAt:next.time,exitAt:bars[end].time,entry,exit:executionExit,netReturnPct:100*(dir*(executionExit/entry-1)-fee*(1+executionExit/entry)),reason});
   i=end+1;
