@@ -38,19 +38,27 @@ export async function tickSol5m(pool:pg.Pool){
    await client.query("UPDATE sol_5m_accounts SET last_bar=to_timestamp($2/1000.0),position=CASE WHEN position ? 'pendingAt' THEN NULL ELSE position END WHERE id=$1",[variant.id,bar.time]);continue;
   }
   let balance=Number(row.balance),position=row.position as {entry:number;entryAt:number;quantity:number;pendingAt?:number}|null;
+  const hadPosition=position!==null;
   if(position?.pendingAt){
-   if(position.pendingAt===bar.time){const entry=bar.close*(variant.side==='LONG'?1+slip:1-slip);position={entry,entryAt:confirmedCandleCloseTime(bar.time),quantity:Math.max(0,balance)*.1/entry}}else position=null;
-  }else if(position){
+   // Signal was confirmed at the previous minute close. Enter at the next
+   // minute open, then evaluate that minute's full stop/take range.
+   position=position.pendingAt===bar.time?openSol5mPosition(variant.side,bar,balance):null;
+  }
+  if(position&&!position.pendingAt){
    if(confirmedCandleCloseTime(bar.time)>position.entryAt){
     const decision=variant.side==='LONG'?exitDecision(position,bar,variant.minutes):shortExit(position,bar,variant.minutes);
     if(decision){const exitPrice=decision.price*(variant.side==='LONG'?1-slip:1+slip);const pnl=position.quantity*(variant.side==='LONG'?exitPrice-position.entry:position.entry-exitPrice)-fee*position.quantity*(position.entry+exitPrice);balance+=pnl;
      await client.query('INSERT INTO sol_5m_trades(variant,entry_at,exit_at,entry_price,exit_price,net_pnl,reason) VALUES($1,to_timestamp($2/1000.0),to_timestamp($3/1000.0),$4,$5,$6,$7)',[variant.id,position.entryAt,confirmedCandleCloseTime(bar.time),position.entry,exitPrice,pnl,decision.reason]);position=null}
    }
-  }else if(signal===variant.side)position={pendingAt:bar.time+60000,entry:0,entryAt:0,quantity:0};
+  }else if(!position&&!hadPosition&&signal===variant.side)position={pendingAt:bar.time+60000,entry:0,entryAt:0,quantity:0};
   await client.query('UPDATE sol_5m_accounts SET balance=$2,position=$3,last_bar=to_timestamp($4/1000.0) WHERE id=$1',[variant.id,balance,position?JSON.stringify(position):null,bar.time]);
  }
  await client.query('COMMIT');
  }catch(e){await client.query('ROLLBACK');throw e}finally{client.release()}
+}
+export function openSol5mPosition(side:'LONG'|'SHORT',bar:Bar,balance:number){
+ const entry=bar.open*(side==='LONG'?1+slip:1-slip);
+ return {entry,entryAt:bar.time,quantity:Math.max(0,balance)*.1/entry};
 }
 export function shortExit(p:{entry:number;entryAt:number},b:Bar,minutes:number|null){
  if(b.high>=p.entry*1.01)return {reason:'STOP',price:Math.max(b.close,p.entry*1.01)};
