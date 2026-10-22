@@ -48,7 +48,7 @@ export async function tickStrategyPaper(pool:pg.Pool){
  }catch(e){await client.query('ROLLBACK');throw e}finally{client.release()}
 }
 export async function strategyPaperReport(pool:pg.Pool,key:StrategyKey){
- const [a,t]=await Promise.all([pool.query('SELECT variant,balance,position,last_bar FROM v6_paper_accounts WHERE strategy=$1 ORDER BY variant',[key]),pool.query('SELECT id,variant,side,entry_at,exit_at,entry_price,exit_price,net_pnl,reason FROM v6_paper_trades WHERE strategy=$1 ORDER BY id DESC LIMIT 150',[key])]);
+ const [a,t]=await Promise.all([pool.query('SELECT variant,balance,position,last_bar FROM v6_paper_accounts WHERE strategy=$1 ORDER BY variant',[key]),pool.query('SELECT id,variant,side,entry_at,exit_at,entry_price,exit_price,net_pnl,reason FROM (SELECT id,variant,side,entry_at,exit_at,entry_price,exit_price,net_pnl,reason,ROW_NUMBER() OVER (PARTITION BY variant ORDER BY id DESC) AS variant_rank FROM v6_paper_trades WHERE strategy=$1) recent WHERE variant_rank<=150 ORDER BY id DESC',[key])]);
  return {mode:'forward-paper',realOrders:false,startingBalance:100,feePerSide:FEE,slippagePerSide:SLIP,funding:'unknown; excluded from realized PnL',warning:'Paper execution is candle-close based and may not be achievable at the observed close. Not an independent verified executable strategy.',variants:EXIT_MODES.map(v=>({...v,...a.rows.find(x=>x.variant===v.id),trades:t.rows.filter(x=>x.variant===v.id),evidence:forwardEvidence(t.rows.filter(x=>x.variant===v.id).slice().reverse(),100)}))};
 }
 export async function strategyPaperChart(pool:pg.Pool,key:StrategyKey,variant:string,id:string){
