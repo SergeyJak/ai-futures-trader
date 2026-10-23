@@ -9,6 +9,10 @@ export function exitDecision(position:{entry:number;entryAt:number},bar:{time:nu
  if(minutes!==null&&confirmedCandleCloseTime(bar.time)-position.entryAt>=minutes*60000)return {reason:'TIME',price:bar.close};
  return null;
 }
+export function openSolDipPosition(bar:{time:number;open:number},balance:number){
+ const entry=bar.open*(1+slip);
+ return {entry,entryAt:bar.time,quantity:Math.max(0,balance)*.1/entry};
+}
 export async function initSolPaper(pool:pg.Pool){
  await pool.query(`CREATE TABLE IF NOT EXISTS sol_dip_accounts(id TEXT PRIMARY KEY,balance DOUBLE PRECISION NOT NULL DEFAULT 100,position JSONB,last_bar TIMESTAMPTZ,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
  await pool.query(`CREATE TABLE IF NOT EXISTS sol_dip_trades(id BIGSERIAL PRIMARY KEY,variant TEXT NOT NULL,entry_at TIMESTAMPTZ NOT NULL,exit_at TIMESTAMPTZ NOT NULL,entry_price DOUBLE PRECISION NOT NULL,exit_price DOUBLE PRECISION NOT NULL,net_pnl DOUBLE PRECISION NOT NULL,reason TEXT NOT NULL)`);
@@ -23,23 +27,32 @@ export async function tickSolPaper(pool:pg.Pool){
  const bars:Bar[]=r.rows.reverse().map(x=>({time:new Date(x.start_at).getTime(),open:Number(x.open),high:Number(x.high),low:Number(x.low),close:Number(x.close)}));
  if(bars.length<5||Date.now()-bars.at(-1)!.time>180000||bars.some((x,i)=>i>0&&x.time-bars[i-1].time!==60000)){await client.query('COMMIT');return}
  const bar=bars.at(-1)!;
- if(!bars.every(x=>Number.isFinite(x.close)&&x.close>0&&Number.isFinite(x.high)&&Number.isFinite(x.low))){await client.query('COMMIT');return}
+ if(!bars.every(x=>[x.open,x.high,x.low,x.close].every(n=>Number.isFinite(n)&&n>0)&&x.low<=x.high)){await client.query('COMMIT');return}
  const signal=dipSignal(bars.slice(-4));const recent=bars.slice(-4);
  await client.query('INSERT INTO sol_dip_signal_audit(bar_time,signal,dip_pct,bounce_pct) VALUES(to_timestamp($1/1000.0),$2,$3,$4) ON CONFLICT DO NOTHING',[bar.time,signal,(recent[2].close/recent[0].close-1)*100,(recent[3].close/recent[2].close-1)*100]);
  for(const variant of SOL_VARIANTS){
   const a=await client.query('SELECT balance,position,last_bar FROM sol_dip_accounts WHERE id=$1 FOR UPDATE',[variant.id]);const row=a.rows[0];
   if(row.last_bar&&new Date(row.last_bar).getTime()>=bar.time)continue;
   if(row.last_bar&&bar.time-new Date(row.last_bar).getTime()>120000){await client.query('UPDATE sol_dip_accounts SET last_bar=to_timestamp($2/1000.0),position=CASE WHEN position ? \'pendingAt\' THEN NULL ELSE position END WHERE id=$1',[variant.id,bar.time]);continue}
-  let balance=Number(row.balance),position=row.position as {entry:number;entryAt:number;quantity:number}|null;
-  if(position&&'pendingAt' in position){const pending=position as unknown as {pendingAt:number};if(bar.time===pending.pendingAt){const observedAt=confirmedCandleCloseTime(bar.time),entry=bar.close*(1+slip);position={entry,entryAt:observedAt,quantity:Math.max(0,balance)*.1/entry}}else position=null}
-   else if(position){const decision=bar.time+60000<=position.entryAt?null:exitDecision(position,bar,variant.minutes);if(decision){const exitPrice=decision.price*(1-slip);const netPnl=position.quantity*(exitPrice-position.entry)-fee*position.quantity*(position.entry+exitPrice);balance+=netPnl;await client.query('INSERT INTO sol_dip_trades(variant,entry_at,exit_at,entry_price,exit_price,net_pnl,reason) VALUES($1,to_timestamp($2/1000.0),to_timestamp($3/1000.0),$4,$5,$6,$7)',[variant.id,position.entryAt,confirmedCandleCloseTime(bar.time),position.entry,exitPrice,netPnl,decision.reason]);position=null}}
-  else if(row.last_bar&&signal){position={pendingAt:bar.time+60000} as unknown as typeof position}
+  let balance=Number(row.balance),position=row.position as {entry:number;entryAt:number;quantity:number;pendingAt?:number}|null;
+  const hadPosition=position!==null;
+  if(position?.pendingAt){
+   // A confirmed signal fills at the next minute OPEN, not its close.
+   // Its stop/take can be touched during the entry candle.
+   position=position.pendingAt===bar.time?openSolDipPosition(bar,balance):null;
+  }
+  if(position&&!position.pendingAt){
+   const decision=confirmedCandleCloseTime(bar.time)<=position.entryAt?null:exitDecision(position,bar,variant.minutes);
+   if(decision){const exitPrice=decision.price*(1-slip);const netPnl=position.quantity*(exitPrice-position.entry)-fee*position.quantity*(position.entry+exitPrice);balance+=netPnl;await client.query('INSERT INTO sol_dip_trades(variant,entry_at,exit_at,entry_price,exit_price,net_pnl,reason) VALUES($1,to_timestamp($2/1000.0),to_timestamp($3/1000.0),$4,$5,$6,$7)',[variant.id,position.entryAt,confirmedCandleCloseTime(bar.time),position.entry,exitPrice,netPnl,decision.reason]);position=null}
+  }else if(!position&&!hadPosition&&row.last_bar&&signal){
+   position={pendingAt:bar.time+60000,entry:0,entryAt:0,quantity:0};
+  }
   await client.query('UPDATE sol_dip_accounts SET balance=$2,position=$3,last_bar=to_timestamp($4/1000.0) WHERE id=$1',[variant.id,balance,position===null?null:JSON.stringify(position),bar.time]);
  }
  await client.query('COMMIT');
  }catch(e){await client.query('ROLLBACK');throw e}finally{client.release()}
 }
-export async function solPaperReport(pool:pg.Pool){const a=await pool.query('SELECT id,balance,position,last_bar,created_at FROM sol_dip_accounts ORDER BY id');const t=await pool.query('SELECT id,variant,entry_at,exit_at,entry_price,exit_price,net_pnl,reason FROM sol_dip_trades ORDER BY id DESC LIMIT 60');const totals=await pool.query('SELECT variant,COUNT(*)::int AS closed_trades,COALESCE(SUM(net_pnl),0)::double precision AS realized_net_pnl,COUNT(*) FILTER (WHERE net_pnl>0)::int AS wins FROM sol_dip_trades GROUP BY variant');const audit=await pool.query('SELECT COUNT(*)::int AS checked,COUNT(*) FILTER(WHERE signal)::int AS signals,MAX(bar_time) AS latest FROM sol_dip_signal_audit');return {symbol:'SOLUSDT',mode:'forward-paper-only',realOrders:false,signalAudit:audit.rows[0],startingBalance:100,feeRate:fee,slippageRate:slip,stopLoss:stop,takeProfit:target,variants:SOL_VARIANTS.map(v=>({...v,...a.rows.find(x=>x.id===v.id),trades:t.rows.filter(x=>x.variant===v.id),closedTrades:totals.rows.find(x=>x.variant===v.id)?.closed_trades??0,realizedNetPnl:totals.rows.find(x=>x.variant===v.id)?.realized_net_pnl??0,wins:totals.rows.find(x=>x.variant===v.id)?.wins??0}))}}
+export async function solPaperReport(pool:pg.Pool){const a=await pool.query('SELECT id,balance,position,last_bar,created_at FROM sol_dip_accounts ORDER BY id');const t=await pool.query('SELECT id,variant,entry_at,exit_at,entry_price,exit_price,net_pnl,reason FROM (SELECT id,variant,entry_at,exit_at,entry_price,exit_price,net_pnl,reason,ROW_NUMBER() OVER (PARTITION BY variant ORDER BY id DESC) AS variant_rank FROM sol_dip_trades) recent WHERE variant_rank<=60 ORDER BY id DESC');const totals=await pool.query('SELECT variant,COUNT(*)::int AS closed_trades,COALESCE(SUM(net_pnl),0)::double precision AS realized_net_pnl,COUNT(*) FILTER (WHERE net_pnl>0)::int AS wins FROM sol_dip_trades GROUP BY variant');const audit=await pool.query('SELECT COUNT(*)::int AS checked,COUNT(*) FILTER(WHERE signal)::int AS signals,MAX(bar_time) AS latest FROM sol_dip_signal_audit');return {symbol:'SOLUSDT',mode:'forward-paper-only',realOrders:false,signalAudit:audit.rows[0],startingBalance:100,feeRate:fee,slippageRate:slip,stopLoss:stop,takeProfit:target,variants:SOL_VARIANTS.map(v=>({...v,...a.rows.find(x=>x.id===v.id),trades:t.rows.filter(x=>x.variant===v.id),closedTrades:totals.rows.find(x=>x.variant===v.id)?.closed_trades??0,realizedNetPnl:totals.rows.find(x=>x.variant===v.id)?.realized_net_pnl??0,wins:totals.rows.find(x=>x.variant===v.id)?.wins??0}))}}
 export async function solTradeCandles(pool:pg.Pool,id:number){
  const trade=await pool.query('SELECT id,variant,entry_at,exit_at,entry_price,exit_price,net_pnl,reason FROM sol_dip_trades WHERE id=$1',[id]);
  if(!trade.rowCount)return null;
