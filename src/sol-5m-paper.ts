@@ -69,7 +69,7 @@ export function shortExit(p:{entry:number;entryAt:number},b:Bar,minutes:number|n
 export async function sol5mReport(pool:pg.Pool){
  const [accounts,trades,totals]=await Promise.all([
  pool.query('SELECT id,balance,position,last_bar FROM sol_5m_accounts ORDER BY id'),
- pool.query('SELECT id,variant,entry_at,exit_at,entry_price,exit_price,net_pnl,reason FROM sol_5m_trades ORDER BY id DESC LIMIT 90'),
+ pool.query('SELECT id,variant,entry_at,exit_at,entry_price,exit_price,net_pnl,reason FROM (SELECT id,variant,entry_at,exit_at,entry_price,exit_price,net_pnl,reason,ROW_NUMBER() OVER (PARTITION BY variant ORDER BY id DESC) AS variant_rank FROM sol_5m_trades) recent WHERE variant_rank<=90 ORDER BY id DESC'),
  pool.query('SELECT variant,COUNT(*)::int AS closed,COALESCE(SUM(net_pnl),0)::double precision AS net,COUNT(*) FILTER(WHERE net_pnl>0)::int AS wins FROM sol_5m_trades GROUP BY variant')]);
  return {symbol:'SOLUSDT',signalTimeframe:'5m',executionTimeframe:'1m',mode:'forward-paper-only',realOrders:false,feeRate:fee,slippageRate:slip,variants:SOL_5M_VARIANTS.map(v=>({...v,...accounts.rows.find(a=>a.id===v.id),closedTrades:totals.rows.find(t=>t.variant===v.id)?.closed??0,realizedNetPnl:totals.rows.find(t=>t.variant===v.id)?.net??0,wins:totals.rows.find(t=>t.variant===v.id)?.wins??0,trades:trades.rows.filter(t=>t.variant===v.id)}))};
 }
