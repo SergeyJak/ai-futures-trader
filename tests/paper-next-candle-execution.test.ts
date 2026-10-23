@@ -4,12 +4,13 @@ import {readFileSync} from 'node:fs';
 const sol=readFileSync(new URL('../src/sol-dip-paper.ts',import.meta.url),'utf8');
 const v7=readFileSync(new URL('../src/v7.ts',import.meta.url),'utf8');
 test('SOL 1m fills at next confirmed close without replaying entry-bar extremes',()=>{
- assert.match(sol,/pendingAt:bar.time\+60000/);
- assert.match(sol,/position.pendingAt===bar.time\?openSolDipPosition\(bar,balance\):null/);
- assert.match(sol,/const entry=bar.open\*\(1\+slip\)/);
+ assert.match(sol,/pendingAt:bar\.time\+60000/);
+ assert.match(sol,/position\.pendingAt===bar\.time\?openSolDipPosition\(bar,balance\):null/);
+ assert.match(sol,/const entry=bar\.close\*\(1\+slip\)/);
  assert.match(sol,/entryAt:confirmedCandleCloseTime\(bar\.time\)/);
- assert.match(sol,/confirmedCandleCloseTime\(bar.time\)<=position.entryAt\?null:exitDecision/);
- assert.doesNotMatch(sol,/entry=bar.close\*\(1\+slip\)/);
+ assert.match(sol,/confirmedCandleCloseTime\(bar\.time\)<=position\.entryAt\?null:exitDecision/);
+ assert.match(sol,/execution_model='next-confirmed-close-v3'/);
+ assert.doesNotMatch(sol,/entry=bar\.open\*\(1\+slip\)/);
 });
 test('V7 records observed entry time and does not replay prior intrabar extremes',()=>{
  assert.match(v7,/pendingAt:bar.time\+300000/);
