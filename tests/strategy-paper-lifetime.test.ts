@@ -29,4 +29,6 @@ test('strategy UI exposes closed-trade sample, lifetime net and closed-equity dr
  assert.match(html,/v\.realizedNetPnl/);
  assert.match(html,/v\.maxDrawdownClosed/);
  assert.match(html,/расхождение баланса и истории/);
+ assert.match(html,/Четыре виртуальных счёта по 100 USDT/);
+ assert.doesNotMatch(html,/Девять независимых виртуальных счетов/);
 });
