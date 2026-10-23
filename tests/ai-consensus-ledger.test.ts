@@ -16,3 +16,17 @@ test('skipped signals never produce experimental fills',()=>{
  const skipped={...accepted,decision:evaluateConsensus({...snapshot,confidence:0.1})};
  assert.throws(()=>summarizeForwardCohort([skipped],[{signalId:'signal-1',closedAtMs:3000,grossPnl:1,fees:0,slippage:0,funding:0}]),/unknown-or-skipped/);
 });
+test('rejects non-finite signal and observation clocks',()=>{
+ for(const time of [NaN,Infinity,-Infinity]){
+  assert.throws(()=>summarizeForwardCohort([{...accepted,observedAtMs:time}],[]),/non-forward/);
+  assert.throws(()=>summarizeForwardCohort([{...accepted,snapshot:{...snapshot,latestCandleCloseMs:time}}],[]),/non-forward/);
+ }
+ assert.throws(()=>summarizeForwardCohort([{...accepted,snapshot:{...snapshot,signalTimeMs:0}}],[]),/non-forward/);
+});
+test('rejects outcome before observation even if after signal',()=>{
+ const observedLater={...accepted,observedAtMs:2500};
+ const fill={signalId:'signal-1',closedAtMs:2400,grossPnl:10,fees:1,slippage:0,funding:0};
+ assert.throws(()=>summarizeForwardCohort([observedLater],[fill]),/outcome-before-observation/);
+ assert.throws(()=>summarizeForwardCohort([accepted],[{...fill,closedAtMs:NaN}]),/outcome-before-observation/);
+ assert.equal(summarizeForwardCohort([observedLater],[{...fill,closedAtMs:2500}]).netPnl,9);
+});
