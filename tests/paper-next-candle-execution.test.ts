@@ -4,12 +4,12 @@ import {readFileSync} from 'node:fs';
 const sol=readFileSync(new URL('../src/sol-dip-paper.ts',import.meta.url),'utf8');
 const v7=readFileSync(new URL('../src/v7.ts',import.meta.url),'utf8');
 test('SOL 1m fills after confirmed signal at next minute open and checks first candle',()=>{
- assert.match(sol,/pendingAt:bar.time\\+60000/);
- assert.match(sol,/position.pendingAt===bar.time\\?openSolDipPosition\\(bar,balance\\):null/);
- assert.match(sol,/const entry=bar.open\\*\\(1\\+slip\\)/);
+ assert.match(sol,/pendingAt:bar.time\+60000/);
+ assert.match(sol,/position.pendingAt===bar.time\?openSolDipPosition\(bar,balance\):null/);
+ assert.match(sol,/const entry=bar.open\*\(1\+slip\)/);
  assert.match(sol,/entryAt:bar.time/);
- assert.match(sol,/confirmedCandleCloseTime\\(bar.time\\)<=position.entryAt\\?null:exitDecision/);
- assert.doesNotMatch(sol,/entry=bar.close\\*\\(1\\+slip\\)/);
+ assert.match(sol,/confirmedCandleCloseTime\(bar.time\)<=position.entryAt\?null:exitDecision/);
+ assert.doesNotMatch(sol,/entry=bar.close\*\(1\+slip\)/);
 });
 test('V7 records observed entry time and does not replay prior intrabar extremes',()=>{
  assert.match(v7,/pendingAt:bar.time\+300000/);
