@@ -22,7 +22,7 @@ test('paper evidence query limits each variant independently, not all variants t
  assert.match(queries[1],/variant_rank<=150/);
  assert.doesNotMatch(queries[1],/ORDER BY id DESC LIMIT 150/);
  assert.equal(queries.length,3);
- assert.match(queries[2],/FROM v6_paper_trades WHERE strategy=\\$1/);
+ assert.match(queries[2],/FROM v6_paper_trades WHERE strategy=\$1/);
  assert.match(queries[2],/PARTITION BY variant ORDER BY id/);
  assert.doesNotMatch(queries[2],/variant_rank<=150/);
  assert.equal(report.variants.length,4);
