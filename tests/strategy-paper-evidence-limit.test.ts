@@ -13,6 +13,7 @@ test('paper evidence query limits each variant independently, not all variants t
  const pool={query:async(sql:string)=>{
   queries.push(sql);
   if(sql.includes('v6_paper_accounts'))return {rows:accounts};
+  if(sql.includes('WITH equity AS'))return {rows:EXIT_MODES.map(v=>({variant:v.id,closed:170,net:1.7,wins:100,max_drawdown_closed:0.035}))};
   if(sql.includes('v6_paper_trades'))return {rows:trades};
   throw Error('unexpected query');
  }} as unknown as pg.Pool;
@@ -20,9 +21,17 @@ test('paper evidence query limits each variant independently, not all variants t
  assert.match(queries[1],/ROW_NUMBER\(\) OVER \(PARTITION BY variant ORDER BY id DESC\)/);
  assert.match(queries[1],/variant_rank<=150/);
  assert.doesNotMatch(queries[1],/ORDER BY id DESC LIMIT 150/);
+ assert.equal(queries.length,3);
+ assert.match(queries[2],/FROM v6_paper_trades WHERE strategy=\$1/);
+ assert.match(queries[2],/PARTITION BY variant ORDER BY id/);
+ assert.doesNotMatch(queries[2],/variant_rank<=150/);
  assert.equal(report.variants.length,4);
  for(const variant of report.variants){
   assert.equal(variant.trades.length,150);
+  assert.equal(variant.closedTrades,170);
+  assert.equal(variant.realizedNetPnl,1.7);
+  assert.equal(variant.wins,100);
+  assert.equal(variant.maxDrawdownClosed,0.035);
   assert.ok(variant.trades.every(t=>t.variant===variant.id));
  }
  assert.equal(report.realOrders,false);
