@@ -1,4 +1,4 @@
-import test from 'node:test';import assert from 'node:assert/strict';import {SOL_VARIANTS,dipSignal,exitDecision,solPaperReport,confirmedCandleCloseTime,openSolDipPosition} from '../src/sol-dip-paper.js';
+import test from 'node:test';import assert from 'node:assert/strict';import {SOL_VARIANTS,dipSignal,exitDecision,solPaperReport,confirmedCandleCloseTime,openSolDipPosition,initSolPaper} from '../src/sol-dip-paper.js';
 test('exactly three SOL exit modes',()=>{assert.deepEqual(SOL_VARIANTS.map(x=>x.minutes),[30,240,null])});
 test('dip reversal requires a bounce after decline',()=>{assert.equal(dipSignal([{close:100},{close:99.8},{close:99.2},{close:99.5}]),true);assert.equal(dipSignal([{close:100},{close:99.8},{close:99.2},{close:99.1}]),false)});
 test('stop wins when stop and take touched in same candle',()=>{assert.equal(exitDecision({entry:100,entryAt:0},{time:60000,high:103,low:98,close:100},null)?.reason,'STOP')});
@@ -11,7 +11,7 @@ test('SOL summary uses all-time aggregate, not limited recent trade rows',async(
  const pool={query:async(sql:string)=>{
   calls.push(sql);
   if(sql.includes('FROM sol_dip_accounts'))return {rows:[{id:'30m',balance:101,position:null}]};
-  if(sql.includes('FROM sol_dip_trades GROUP BY variant'))return {rows:[{variant:'30m',closed_trades:125,realized_net_pnl:1,wins:70}]};
+  if(sql.includes('FROM sol_dip_trades GROUP BY variant'))return {rows:[{variant:'30m',closed_trades:125,realized_net_pnl:1,wins:70,post_fix_closed:5,post_fix_net:-0.2,post_fix_wins:2}]};
   if(sql.includes('ROW_NUMBER() OVER (PARTITION BY variant'))return {rows:[{variant:'30m',net_pnl:.01}]};
   return {rows:[{checked:10,signals:1,latest:null}]};
  }};
@@ -20,6 +20,9 @@ test('SOL summary uses all-time aggregate, not limited recent trade rows',async(
  assert.equal(variant?.closedTrades,125);
  assert.equal(variant?.realizedNetPnl,1);
  assert.equal(variant?.wins,70);
+ assert.equal(variant?.postFixClosedTrades,5);
+ assert.equal(variant?.postFixRealizedNetPnl,-0.2);
+ assert.equal(variant?.postFixWins,2);
  assert.equal(variant?.trades.length,1);
  assert.ok(calls.some(sql=>sql.includes('GROUP BY variant')));
  assert.ok(calls.some(sql=>sql.includes('ROW_NUMBER() OVER (PARTITION BY variant ORDER BY id DESC)')&&sql.includes('variant_rank<=60')));
@@ -32,4 +35,12 @@ test('SOL 1m LONG enters at next minute open, not its close',()=>{
  assert.equal(p.entry,100.03);
  assert.ok(p.quantity>0);
  assert.equal(confirmedCandleCloseTime(time),time+60000);
+});
+
+test('schema migration tags existing paper trades as legacy without modifying history',async()=>{
+ const queries:string[]=[];
+ const pool={query:async(sql:string)=>{queries.push(sql);return {rows:[]}}};
+ await initSolPaper(pool as never);
+ assert.ok(queries.some(sql=>sql.includes("ADD COLUMN IF NOT EXISTS execution_model")&&sql.includes("DEFAULT 'legacy-close-v1'")));
+ assert.ok(queries.every(sql=>!/^UPDATE sol_dip_trades|^DELETE FROM sol_dip_trades/.test(sql)));
 });
