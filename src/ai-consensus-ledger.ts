@@ -21,7 +21,11 @@ export function summarizeForwardCohort(
  for(const row of observations){
   if(ids.has(row.id))throw new Error('duplicate-signal');
   ids.add(row.id);
-  if(row.observedAtMs<row.snapshot.signalTimeMs ||
+  // A forward-only result cannot be based on a signal or observation from the future.
+  if(!Number.isFinite(row.snapshot.signalTimeMs) || row.snapshot.signalTimeMs<=0 ||
+     !Number.isFinite(row.snapshot.latestCandleCloseMs) ||
+     !Number.isFinite(row.observedAtMs) ||
+     row.observedAtMs<row.snapshot.signalTimeMs ||
      row.snapshot.latestCandleCloseMs>row.snapshot.signalTimeMs ||
      row.decision.signalTimeMs!==row.snapshot.signalTimeMs)
     throw new Error('non-forward-observation');
@@ -34,7 +38,9 @@ export function summarizeForwardCohort(
   outcomeIds.add(o.signalId);
   const signal=byId.get(o.signalId);
   if(!signal || signal.decision.decision!=='allow')throw new Error('unknown-or-skipped-outcome');
-  if(o.closedAtMs<signal.snapshot.signalTimeMs)throw new Error('outcome-before-signal');
+  // A fill cannot close before the signal was actually observed.
+  if(!Number.isFinite(o.closedAtMs) || o.closedAtMs<signal.observedAtMs)
+   throw new Error('outcome-before-observation');
   if(![o.grossPnl,o.fees,o.slippage,o.funding].every(Number.isFinite) ||
     o.fees<0 || o.slippage<0)throw new Error('invalid-cost');
   const net=o.grossPnl-o.fees-o.slippage-o.funding;
