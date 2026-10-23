@@ -48,8 +48,29 @@ export async function tickStrategyPaper(pool:pg.Pool){
  }catch(e){await client.query('ROLLBACK');throw e}finally{client.release()}
 }
 export async function strategyPaperReport(pool:pg.Pool,key:StrategyKey){
- const [a,t]=await Promise.all([pool.query('SELECT variant,balance,position,last_bar FROM v6_paper_accounts WHERE strategy=$1 ORDER BY variant',[key]),pool.query('SELECT id,variant,side,entry_at,exit_at,entry_price,exit_price,net_pnl,reason FROM (SELECT id,variant,side,entry_at,exit_at,entry_price,exit_price,net_pnl,reason,ROW_NUMBER() OVER (PARTITION BY variant ORDER BY id DESC) AS variant_rank FROM v6_paper_trades WHERE strategy=$1) recent WHERE variant_rank<=150 ORDER BY id DESC',[key])]);
- return {mode:'forward-paper',realOrders:false,startingBalance:100,feePerSide:FEE,slippagePerSide:SLIP,funding:'unknown; excluded from realized PnL',warning:'Paper execution is candle-close based and may not be achievable at the observed close. Not an independent verified executable strategy.',variants:EXIT_MODES.map(v=>({...v,...a.rows.find(x=>x.variant===v.id),trades:t.rows.filter(x=>x.variant===v.id),evidence:forwardEvidence(t.rows.filter(x=>x.variant===v.id).slice().reverse(),100)}))};
+ const [a,t,totals]=await Promise.all([
+  pool.query('SELECT variant,balance,position,last_bar FROM v6_paper_accounts WHERE strategy=$1 ORDER BY variant',[key]),
+  pool.query('SELECT id,variant,side,entry_at,exit_at,entry_price,exit_price,net_pnl,reason FROM (SELECT id,variant,side,entry_at,exit_at,entry_price,exit_price,net_pnl,reason,ROW_NUMBER() OVER (PARTITION BY variant ORDER BY id DESC) AS variant_rank FROM v6_paper_trades WHERE strategy=$1) recent WHERE variant_rank<=150 ORDER BY id DESC',[key]),
+  pool.query(`WITH equity AS (
+   SELECT variant,id,net_pnl,100 + SUM(net_pnl) OVER (PARTITION BY variant ORDER BY id ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS balance
+   FROM v6_paper_trades WHERE strategy=$1
+  ), peaks AS (
+   SELECT variant,net_pnl,balance,GREATEST(100,MAX(balance) OVER (PARTITION BY variant ORDER BY id ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)) AS peak
+   FROM equity
+  )
+  SELECT variant,COUNT(*)::int AS closed,COALESCE(SUM(net_pnl),0)::double precision AS net,
+   COUNT(*) FILTER (WHERE net_pnl>0)::int AS wins,
+   COALESCE(MAX((peak-balance)/peak),0)::double precision AS max_drawdown_closed
+  FROM peaks GROUP BY variant`,[key])
+ ]);
+ return {mode:'forward-paper',realOrders:false,startingBalance:100,feePerSide:FEE,slippagePerSide:SLIP,funding:'unknown; excluded from realized PnL',warning:'Paper execution is candle-close based and may not be achievable at the observed close. Lifetime closed-equity drawdown excludes open positions and funding. Not independent verified executable performance.',variants:EXIT_MODES.map(v=>{
+  const summary=totals.rows.find(x=>x.variant===v.id);
+  const recent=t.rows.filter(x=>x.variant===v.id);
+  return {...v,...a.rows.find(x=>x.variant===v.id),
+   closedTrades:summary?.closed??0,realizedNetPnl:summary?.net??0,wins:summary?.wins??0,
+   maxDrawdownClosed:summary?.max_drawdown_closed??0,
+   trades:recent,evidence:forwardEvidence(recent.slice().reverse(),100)};
+ })};
 }
 export async function strategyPaperChart(pool:pg.Pool,key:StrategyKey,variant:string,id:string){
  if(!EXIT_MODES.some(v=>v.id===variant))return null;
