@@ -16,7 +16,7 @@ test('SOL 1m forward execution fills at next open and honors first-minute stop w
  bars[6]={...bars[6],open:99.5,high:99.6,low:98.0,close:98.5};
  const accounts=new Map(SOL_VARIANTS.map(v=>[v.id,{
   balance:100,position:null as Record<string,number>|null,last_bar:new Date(first-minute)
- }]));
+ }] as const));
  const closed:{variant:string;entryAt:number;exitAt:number;entry:number;exit:number;net:number;reason:string}[]=[];
  let tick=0;
  const client={
