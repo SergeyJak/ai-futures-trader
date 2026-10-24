@@ -2,7 +2,7 @@ import type pg from 'pg';
 import { deduplicateClosedPositions, stressBySource, type ClosedPosition } from './v6CostStress.js';
 import { groupFrozenOosBySource, type FrozenSplit } from './v6FrozenOos.js';
 
-type SourceRow = { source: 'kopyon' | 'okx'; trader_id: string; position_id: string; symbol: string; side: string | null; opened_at: string; closed_at: string; entry_price: string; exit_price: string };
+type SourceRow = { source: 'kopyon' | 'okx'; trader_id: string; position_id: string; symbol: string; side: string | null; opened_at: string; closed_at: string; entry_price: string; exit_price: string; funding_fee_raw?: string | null };
 const validTime = (value: string) => Number.isFinite(Date.parse(value));
 
 export function convertHistoricalCostRow(row: SourceRow): ClosedPosition | null {
@@ -26,7 +26,8 @@ export async function historicalCostStressReport(pool: pg.Pool, split: FrozenSpl
       raw->>'symbol' AS symbol,raw->>'side' AS side,
       to_timestamp((raw->>'opened_time')::float8/1000)::text AS opened_at,
       to_timestamp((raw->>'closed_time')::float8/1000)::text AS closed_at,
-      raw->>'avg_entry_price' AS entry_price,raw->>'avg_close_price' AS exit_price
+      raw->>'avg_entry_price' AS entry_price,raw->>'avg_close_price' AS exit_price,
+      raw->>'funding_fee' AS funding_fee_raw
       FROM v6_position_observations WHERE kind='history'
       AND raw->>'opened_time' ~ '^[0-9]{13}$' AND raw->>'closed_time' ~ '^[0-9]{13}$'
       AND upper(coalesce(raw->>'status','')) !~ 'PARTIAL|OPEN|ACTIVE|PENDING'
@@ -35,7 +36,8 @@ export async function historicalCostStressReport(pool: pg.Pool, split: FrozenSpl
     pool.query<SourceRow>(`SELECT 'okx' AS source,concat('okx:',unique_code) AS trader_id,
       sub_pos_id AS position_id,raw->>'instId' AS symbol,
       raw->>'posSide' AS side,open_at::text AS opened_at,close_at::text AS closed_at,
-      raw->>'openAvgPx' AS entry_price,raw->>'closeAvgPx' AS exit_price
+      raw->>'openAvgPx' AS entry_price,raw->>'closeAvgPx' AS exit_price,
+      raw->>'fundingFee' AS funding_fee_raw
       FROM v6_okx_history ORDER BY close_at DESC, unique_code ASC, sub_pos_id ASC LIMIT 5001`),
   ]);
   const truncatedSources = { kopyon: kopyon.rows.length > 5000, okx: okx.rows.length > 5000 };
@@ -51,13 +53,31 @@ export async function historicalCostStressReport(pool: pg.Pool, split: FrozenSpl
   const excludedCrossBoundaryEntries = all.filter(crossesTestBoundary).length;
   const eligible = deduplicateClosedPositions(all.filter(row => !crossesTestBoundary(row)).map(convertHistoricalCostRow).filter((p): p is ClosedPosition => p !== null));
   const cohorts = groupFrozenOosBySource(eligible, split);
+  // Provider fields can contain a reported funding fee, but their currency,
+  // settlement completeness and notional normalization are unverified.
+  // Audit their presence without interpreting them as a funding return.
+  const rawFundingFieldEvidence = (['kopyon', 'okx'] as const).map(source => {
+    const start = Date.parse(split.testFrom), end = Date.parse(split.testBefore);
+    const rows = all.filter(row => row.source === source && !crossesTestBoundary(row)
+      && convertHistoricalCostRow(row) !== null
+      && Date.parse(row.closed_at) >= start && Date.parse(row.closed_at) < end);
+    const present = rows.map(row => row.funding_fee_raw)
+      .filter((value): value is string => typeof value === 'string' && value.trim() !== '');
+    const numeric = present.map(Number).filter(Number.isFinite);
+    return {
+      source, rawTestRows: rows.length, fieldPresentRows: present.length,
+      numericRows: numeric.length, nonzeroRows: numeric.filter(value => value !== 0).length,
+      verifiedSettlementPositions: 0,
+      note: 'Raw provider field only; rows may contain duplicate observations. No verified funding cash flow or percent-of-notional conversion.',
+    };
+  });
   const fundingCoverage = (['kopyon', 'okx'] as const).map(source => ({
     source,
     testPositions: cohorts[source].test.length,
     fundedPositions: cohorts[source].test.filter(position => Number.isFinite(position.fundingPct)).length,
     missingPositions: cohorts[source].test.filter(position => !Number.isFinite(position.fundingPct)).length,
     status: 'unavailable' as const,
-    reason: 'Historical settlement rates and exact position funding cash flows are not ingested. Missing funding must not be treated as zero.',
+    reason: 'Raw provider funding fields are not verified as complete settlement cash flows or normalized by notional. Missing funding must not be treated as zero.',
   }));
   return {
     mode: 'observed-historical-fills-only',
@@ -70,6 +90,7 @@ export async function historicalCostStressReport(pool: pg.Pool, split: FrozenSpl
     excludedCrossBoundaryEntries,
     frozenSplit: split,
     fundingCoverage,
+    rawFundingFieldEvidence,
     results: (['kopyon', 'okx'] as const).map(source => ({
       source,
       trainCount: cohorts[source].train.length,
