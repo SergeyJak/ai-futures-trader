@@ -11,7 +11,8 @@ import {discoverOkxTraderCodes} from './okx-discovery.js';
 import {initOkxHistory,collectOkxHistory} from './okx-history.js';
 import {dipOosHtml} from './dip-oos-page.js';
 import {initDipOos,tickDipOos,dipOosReport,dipOosChart} from './dip-oos.js';
-import {initStrategyPaper,tickStrategyPaper,strategyPaperReport,strategyPaperChart} from './strategy-paper.js';
+import {EXPERIMENT_KEYS,initStrategyPaper,tickStrategyPaper,strategyPaperReport,strategyPaperChart} from './strategy-paper.js';
+import {summarizeStrategyPaperTelemetry} from './strategy-paper-telemetry.js';
 import {initV7,tickV7,v7Report} from './v7.js';
 import {v7Html} from './v7-page.js';
 import {v7HistoricalReport} from './v7-backtest.js';
@@ -386,6 +387,15 @@ async function reportTelemetry(){
 }
 const telemetryTimer=setInterval(()=>{void reportTelemetry()},300000);
 setTimeout(()=>{void reportTelemetry()},25000);
+async function reportStrategyPaperTelemetry(){
+ try{
+  const reports=await Promise.all(EXPERIMENT_KEYS.map(key=>strategyPaperReport(db.v6Pool(),key)));
+  const byKey=Object.fromEntries(EXPERIMENT_KEYS.map((key,i)=>[key,reports[i]])) as Record<(typeof EXPERIMENT_KEYS)[number],(typeof reports)[number]>;
+  console.info('AI_FUTURES_STRATEGY_PAPER',JSON.stringify(summarizeStrategyPaperTelemetry(byKey)));
+ }catch(e){console.error('AI_FUTURES_STRATEGY_PAPER_ERROR',e)}
+}
+const strategyTelemetryTimer=setInterval(()=>{if(!closing)void reportStrategyPaperTelemetry()},30*60000);
+setTimeout(()=>{if(!closing)void reportStrategyPaperTelemetry()},45000);
 async function reportBounceResearch(){
  try{
   const results=[];
@@ -431,7 +441,7 @@ const okxTimer=setInterval(()=>{void runOkx()},6*3600000);
 setTimeout(()=>{void runOkx()},60000);
 const v6Timer=setInterval(()=>{if(closing)return;void runV6(db.v6Pool()).then(result=>console.info('V6_DISCOVERY',JSON.stringify(result))).catch(e=>console.error('V6_ERROR',e))},6*3600000);
 setTimeout(()=>{if(closing)return;void runV6(db.v6Pool()).then(result=>console.info('V6_DISCOVERY',JSON.stringify(result))).catch(e=>console.error('V6_ERROR',e))},20000);
-let closing=false;async function stop(){if(closing)return;closing=true;clearInterval(statsTimer);clearInterval(storageTimer);clearInterval(repairTimer);clearInterval(historyTimer);clearInterval(paperTimer);clearInterval(telemetryTimer);clearInterval(bounceResearchTimer);clearInterval(v3Timer);clearInterval(v4Timer);clearInterval(v5Timer);clearInterval(v6Timer);clearInterval(v6BackfillTimer);clearInterval(v6CostTimer);clearInterval(solPaperTimer);clearInterval(solShortTimer);clearInterval(strategyPaperTimer);server.close();
+let closing=false;async function stop(){if(closing)return;closing=true;clearInterval(statsTimer);clearInterval(storageTimer);clearInterval(repairTimer);clearInterval(historyTimer);clearInterval(paperTimer);clearInterval(telemetryTimer);clearInterval(strategyTelemetryTimer);clearInterval(bounceResearchTimer);clearInterval(v3Timer);clearInterval(v4Timer);clearInterval(v5Timer);clearInterval(v6Timer);clearInterval(v6BackfillTimer);clearInterval(v6CostTimer);clearInterval(solPaperTimer);clearInterval(solShortTimer);clearInterval(strategyPaperTimer);server.close();
  // Existing jobs may still be using the pools after timers have stopped.
  // Drain paper-trading ticks before closing the shared database pools.
  const drainDeadline=Date.now()+15000;
