@@ -33,3 +33,18 @@ test('short bracket stop and take direction',()=>{
  assert.equal(r.status,'evaluated');
  if(r.status==='evaluated'){assert.equal(r.reason,'take');assert.equal(r.exitPrice,98)}
 });
+
+test('duplicate confirmed minute candles invalidate replay instead of silently choosing last',()=>{
+ const cs=candles(30);
+ const duplicate={...cs[5],close:100.5};
+ assert.equal(replayV6Exit(trade,[...cs,duplicate],{kind:'time',minutes:30}).status,'insufficient_candles');
+ // Duplicates outside the requested window cannot affect the evaluated exit.
+ assert.equal(replayV6Exit(trade,[...cs,{...cs[0],startMs:start+40*60000}],{kind:'time',minutes:30}).status,'evaluated');
+});
+test('non-finite costs and impossible bracket targets are invalid input',()=>{
+ for(const value of [NaN,Infinity,-Infinity,-0.01]){
+  assert.equal(replayV6Exit(trade,candles(30),{kind:'time',minutes:30},{feePerSide:value,slippagePerSide:0.0003,trainFraction:0.7,minimumTrain:30,minimumTest:15}).status,'invalid_input');
+  assert.equal(replayV6Exit(trade,candles(30),{kind:'time',minutes:30},{feePerSide:0.0006,slippagePerSide:value,trainFraction:0.7,minimumTrain:30,minimumTest:15}).status,'invalid_input');
+ }
+ assert.equal(replayV6Exit(trade,candles(30),{kind:'bracket',stopPct:0.02,takePct:1,maxMinutes:30}).status,'invalid_input');
+});
