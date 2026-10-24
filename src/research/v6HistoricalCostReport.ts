@@ -2,12 +2,12 @@ import type pg from 'pg';
 import { deduplicateClosedPositions, stressBySource, type ClosedPosition } from './v6CostStress.js';
 import { groupFrozenOosBySource, type FrozenSplit } from './v6FrozenOos.js';
 
-type SourceRow = { source: 'kopyon' | 'okx'; trader_id: string; position_id: string; symbol: string; side: string; opened_at: string; closed_at: string; entry_price: string; exit_price: string };
+type SourceRow = { source: 'kopyon' | 'okx'; trader_id: string; position_id: string; symbol: string; side: string | null; opened_at: string; closed_at: string; entry_price: string; exit_price: string };
 const validTime = (value: string) => Number.isFinite(Date.parse(value));
 
 export function convertHistoricalCostRow(row: SourceRow): ClosedPosition | null {
   const entry = Number(row.entry_price), exit = Number(row.exit_price);
-  const side = row.side.toUpperCase();
+  const side = row.side?.toUpperCase() ?? '';
   if (!row.trader_id || !row.position_id || !row.symbol || !validTime(row.opened_at) || !validTime(row.closed_at)
     || Date.parse(row.closed_at) <= Date.parse(row.opened_at)
     || !Number.isFinite(entry) || !Number.isFinite(exit) || entry <= 0 || exit <= 0

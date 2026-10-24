@@ -16,6 +16,7 @@ test('historical long and short price returns are direction aware', () => {
 test('rejects non-closed and malformed historical records', () => {
   assert.equal(convertHistoricalCostRow({ ...base, closed_at: base.opened_at }), null);
   assert.equal(convertHistoricalCostRow({ ...base, side: 'net' }), null);
+  assert.equal(convertHistoricalCostRow({ ...base, side: null }), null);
   assert.equal(convertHistoricalCostRow({ ...base, entry_price: '0' }), null);
   assert.equal(convertHistoricalCostRow({ ...base, closed_at: 'invalid' }), null);
 });
