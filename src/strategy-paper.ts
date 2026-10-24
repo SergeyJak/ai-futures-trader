@@ -92,22 +92,35 @@ export async function strategyPaperReport(pool:pg.Pool,key:StrategyKey){
   ), peaks AS (
    SELECT variant,net_pnl,execution_model,balance,GREATEST(100,MAX(balance) OVER (PARTITION BY variant ORDER BY id ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)) AS peak
    FROM equity
-  )
+  ), post_fix_equity AS (
+   -- Independent equity curve: historical candle-close fills cannot distort corrected drawdown.
+   SELECT variant,id,100 + SUM(net_pnl) OVER (PARTITION BY variant ORDER BY id ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS balance
+   FROM v6_paper_trades WHERE strategy=$1 AND execution_model='next-open-v2'
+  ), post_fix_peaks AS (
+   SELECT variant,balance,GREATEST(100,MAX(balance) OVER (PARTITION BY variant ORDER BY id ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)) AS peak
+   FROM post_fix_equity
+  ), post_fix_drawdown AS (
+   SELECT variant,COALESCE(MAX((peak-balance)/peak),0)::double precision AS post_fix_max_drawdown_closed
+   FROM post_fix_peaks GROUP BY variant
+  ), lifetime AS (
   SELECT variant,COUNT(*)::int AS closed,COALESCE(SUM(net_pnl),0)::double precision AS net,
    COUNT(*) FILTER (WHERE net_pnl>0)::int AS wins,
    COUNT(*) FILTER (WHERE execution_model='next-open-v2')::int AS post_fix_closed,
    COALESCE(SUM(net_pnl) FILTER (WHERE execution_model='next-open-v2'),0)::double precision AS post_fix_net,
    COUNT(*) FILTER (WHERE execution_model='next-open-v2' AND net_pnl>0)::int AS post_fix_wins,
    COALESCE(MAX((peak-balance)/peak),0)::double precision AS max_drawdown_closed
-  FROM peaks GROUP BY variant`,[key])
+  FROM peaks GROUP BY variant
+  )
+  SELECT lifetime.*,COALESCE(post_fix_drawdown.post_fix_max_drawdown_closed,0)::double precision AS post_fix_max_drawdown_closed
+  FROM lifetime LEFT JOIN post_fix_drawdown USING(variant)`,[key])
  ]);
- return {mode:'forward-paper',realOrders:false,startingBalance:100,feePerSide:FEE,slippagePerSide:SLIP,funding:'unknown; excluded from realized PnL',warning:'Historical fills use legacy candle-close execution; next-open-v2 trades are reported separately. Drawdown includes legacy history, excludes open positions and funding. No independently verified executable edge.',variants:EXIT_MODES.map(v=>{
+ return {mode:'forward-paper',realOrders:false,startingBalance:100,feePerSide:FEE,slippagePerSide:SLIP,funding:'unknown; excluded from realized PnL',warning:'Historical fills use legacy candle-close execution; next-open-v2 trades are reported separately. Lifetime drawdown includes legacy history; corrected-model drawdown is computed separately. Both exclude open positions and funding. No independently verified executable edge.',variants:EXIT_MODES.map(v=>{
   const summary=totals.rows.find(x=>x.variant===v.id);
   const recent=t.rows.filter(x=>x.variant===v.id);
   return {...v,...a.rows.find(x=>x.variant===v.id),
    closedTrades:summary?.closed??0,realizedNetPnl:summary?.net??0,wins:summary?.wins??0,
    postFixClosedTrades:summary?.post_fix_closed??0,postFixRealizedNetPnl:summary?.post_fix_net??0,postFixWins:summary?.post_fix_wins??0,
-   maxDrawdownClosed:summary?.max_drawdown_closed??0,
+   maxDrawdownClosed:summary?.max_drawdown_closed??0,postFixMaxDrawdownClosed:summary?.post_fix_max_drawdown_closed??0,
    trades:recent,evidence:forwardEvidence(recent.slice().reverse(),100)};
  })};
 }
