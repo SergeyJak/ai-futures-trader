@@ -9,14 +9,20 @@ export type ReplayResult={status:'evaluated';exitMs:number;exitPrice:number;reas
  * An incomplete minute or any missing minute invalidates the simulation.
  */
 export function replayV6Exit(trade:Pick<CompletedTrade,'openedMs'|'side'|'entry'>,candles:ExitCandle[],policy:ExitPolicy,costs:BacktestConfig=DEFAULT_OOS_CONFIG):ReplayResult{
- if(!Number.isSafeInteger(trade.openedMs)||trade.openedMs<=0||!Number.isFinite(trade.entry)||trade.entry<=0||!['LONG','SHORT'].includes(trade.side)||costs.feePerSide<0||costs.slippagePerSide<0)return {status:'invalid_input',reason:'Invalid entry or costs'};
+ if(!Number.isSafeInteger(trade.openedMs)||trade.openedMs<=0||!Number.isFinite(trade.entry)||trade.entry<=0||!['LONG','SHORT'].includes(trade.side)||![costs.feePerSide,costs.slippagePerSide].every(x=>Number.isFinite(x)&&x>=0))return {status:'invalid_input',reason:'Invalid entry or costs'};
  const minutes=policy.kind==='time'?policy.minutes:policy.maxMinutes;
- if(!Number.isSafeInteger(minutes)||minutes<1||minutes>10080||policy.kind==='bracket'&&(!Number.isFinite(policy.stopPct)||!Number.isFinite(policy.takePct)||policy.stopPct<=0||policy.takePct<=0||policy.stopPct>=1))return {status:'invalid_input',reason:'Invalid exit policy'};
+ if(!Number.isSafeInteger(minutes)||minutes<1||minutes>10080||policy.kind==='bracket'&&(!Number.isFinite(policy.stopPct)||!Number.isFinite(policy.takePct)||policy.stopPct<=0||policy.takePct<=0||policy.stopPct>=1||policy.takePct>=1))return {status:'invalid_input',reason:'Invalid exit policy'};
  const start=Math.ceil(trade.openedMs/60000)*60000;
- const byTime=new Map(candles.map(c=>[c.startMs,c]));
+ const byTime=new Map<number,ExitCandle>();
+ const duplicateMinutes=new Set<number>();
+ for(const candle of candles){
+  if(byTime.has(candle.startMs))duplicateMinutes.add(candle.startMs);
+  byTime.set(candle.startMs,candle);
+ }
  const dir=trade.side==='LONG'?1:-1;
  for(let i=0;i<minutes;i++){
   const ms=start+i*60000,c=byTime.get(ms);
+  if(duplicateMinutes.has(ms))return {status:'insufficient_candles',reason:'Duplicate confirmed minute candle'};
   if(!c||![c.open,c.high,c.low,c.close].every(x=>Number.isFinite(x)&&x>0)||c.low>c.high||c.open<c.low||c.open>c.high||c.close<c.low||c.close>c.high)return {status:'insufficient_candles',reason:'Missing or invalid confirmed minute candle'};
   let exit:number|undefined;let reason:'time'|'stop'|'take'|'both_hit_stop_first'='time';
   if(policy.kind==='bracket'){
