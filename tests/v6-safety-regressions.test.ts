@@ -29,7 +29,7 @@ test('V6 excludes partial and open position snapshots',()=>{
  assert.equal(isFullyClosedHistory({status:'PARTIAL',closed_time:1700000000000}),false);
  assert.equal(isFullyClosedHistory({status:'OPEN',closed_time:1700000000000}),false);
  assert.equal(isFullyClosedHistory({status:'CLOSED'}),false);
- assert.equal(isFullyClosedHistory({status:'CLOSED',closed_time:1700000000000}),true);
+ assert.equal(isFullyClosedHistory({status:'CLOSED',symbol:'SOLUSDT',side:'LONG',opened_time:1699999940000,closed_time:1700000000000}),true);
 });
 test('V6 insights do not count open snapshots as closed profit',()=>{
  const item={trader_id:'t',kind:'open',raw:{status:'OPEN',closing_pnl:99999,closed_time:1700000000000}};
