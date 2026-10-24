@@ -20,3 +20,14 @@ test('SOL paper diagnostics preserve side, durations, net PnL and bounded sample
  assert.equal(result.short.variants[0].active,true);
  assert.equal(result.short.variants[0].netPnl,0.2);
 });
+
+test('SOL telemetry survives corrupt trade timestamps and flags unreliable evidence',()=>{
+ const invalid={id:9,variant:'30m',entry_at:'bad timestamp',exit_at:'2026-10-24T05:30:00.000Z',entry_price:100,exit_price:101,net_pnl:0.1,reason:'TIME'};
+ const report={feeRate:.0006,slippageRate:.0003,variants:[{id:'30m',position:null,closedTrades:1,realizedNetPnl:.1,trades:[invalid]}]};
+ const result=solPaperDiagnostics(report,report);
+ const trade=result.long.variants[0].lastTrades[0];
+ assert.equal(trade.entryAt,null);
+ assert.equal(trade.durationMinutes,null);
+ assert.equal(trade.validClock,false);
+ assert.equal(trade.validEvidence,false);
+});

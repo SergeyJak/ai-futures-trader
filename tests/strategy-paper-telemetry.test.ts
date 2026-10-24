@@ -28,3 +28,30 @@ test('paper telemetry separates corrected from legacy and reports sample/freshne
  assert.equal(pending.stale,true);
  assert.equal(pending.active,false);
 });
+
+test('paper telemetry rejects future bars and inconsistent corrected trade evidence',()=>{
+ const now=new Date('2026-10-24T05:30:00.000Z');
+ const bad={realOrders:false,funding:'excluded',variants:[{
+  id:'4h',position:null,last_bar:'2026-10-24T05:31:00.000Z',closedTrades:3,realizedNetPnl:1,
+  postFixClosedTrades:4,postFixRealizedNetPnl:Infinity,postFixWins:5,postFixMaxDrawdownClosed:1.2
+ }]};
+ const reports=Object.fromEntries(EXPERIMENT_KEYS.map(key=>[key,bad])) as Parameters<typeof summarizeStrategyPaperTelemetry>[0];
+ const variant=summarizeStrategyPaperTelemetry(reports,now).strategies[0].variants[0];
+ assert.equal(variant.stale,true);
+ assert.equal(variant.lastBarLagMinutes,null);
+ assert.equal(variant.postFixMetricsValid,false);
+ assert.deepEqual(variant.qualityIssues,['invalid_postfix_count','invalid_postfix_wins','invalid_pnl','invalid_drawdown','future_bar']);
+});
+test('paper telemetry accepts valid corrected evidence without declaring profitability',()=>{
+ const now=new Date('2026-10-24T05:30:00.000Z');
+ const report={realOrders:false,funding:'excluded',variants:[{
+  id:'4h',position:null,last_bar:'2026-10-24T05:28:00.000Z',closedTrades:40,realizedNetPnl:-1,
+  postFixClosedTrades:30,postFixRealizedNetPnl:-0.4,postFixWins:12,postFixMaxDrawdownClosed:.02
+ }]};
+ const reports=Object.fromEntries(EXPERIMENT_KEYS.map(key=>[key,report])) as Parameters<typeof summarizeStrategyPaperTelemetry>[0];
+ const variant=summarizeStrategyPaperTelemetry(reports,now).strategies[0].variants[0];
+ assert.equal(variant.stale,false);
+ assert.equal(variant.postFixMetricsValid,true);
+ assert.deepEqual(variant.qualityIssues,[]);
+ assert.equal(variant.insufficientSample,false);
+});
