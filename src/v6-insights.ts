@@ -1,9 +1,12 @@
 type Item={trader_id:string;kind:string;raw:Record<string,unknown>};
-const numeric=(x:unknown)=>x===null||x===undefined||x===''?null:Number.isFinite(Number(x))?Number(x):null;
+const numeric=(x:unknown)=>{if(x===null||x===undefined||typeof x==='boolean'||(typeof x==='string'&&x.trim()===''))return null;const n=Number(x);return Number.isFinite(n)?n:null};
 const ms=(x:unknown)=>{const n=numeric(x);if(n!==null)return n>1e12?n:n>1e9?n*1000:null;const d=Date.parse(String(x));return Number.isFinite(d)?d:null};
 export function isFullyClosedHistory(raw:Record<string,unknown>):boolean{
  const status=String(raw.status??'').toUpperCase();
- return !/PARTIAL|OPEN|ACTIVE|PENDING/.test(status)&&ms(raw.closed_time)!==null;
+ if(/PARTIAL|OPEN|ACTIVE|PENDING/.test(status))return false;
+ const opened=ms(raw.opened_time),closed=ms(raw.closed_time);
+ const side=String(raw.side??'').trim().toUpperCase(),symbol=String(raw.symbol??'').trim();
+ return opened!==null&&closed!==null&&closed>opened&&symbol.length>0&&/^(LONG|SHORT|BUY|SELL)$/.test(side);
 }
 function positionKey(x:Item){const r=x.raw;return [x.trader_id,r.symbol,r.side,r.opened_time,r.closed_time].join('|')}
 export function v6Insights(items:Item[]){
@@ -29,5 +32,5 @@ export function v6Insights(items:Item[]){
  const feeCovered=feeEstimates.filter((x):x is number=>x!==null);
  return {trader:id,sides,symbols,medianLeverage:leverage.length?leverage[Math.floor(leverage.length/2)]:null,records:positions.length,withPnl:pnls.length,winRate:pnls.length?wins.length/pnls.length:null,reportedPnl:sum(pnls),profitFactor:losses.length?sum(wins)/Math.abs(sum(losses)):null,averageWin:avgWin,averageLoss:avgLoss,observedRewardRisk:avgWin!==null&&avgLoss!==null?avgWin/avgLoss:null,breakEvenWinRate:avgWin!==null&&avgLoss!==null?avgLoss/(avgWin+avgLoss):null,estimatedRoundTripFees:sum(feeCovered),costCoverage:feeCovered.length,estimatedNetBeforeSlippage:feeCovered.length===positions.length&&pnls.length===positions.length?sum(pnls)-sum(feeCovered):null,medianHoldMinutes:times.length?times[Math.floor(times.length/2)]:null,shortUnder15:times.filter(n=>n<15).length,under60:times.filter(n=>n<60).length,over240:times.filter(n=>n>=240).length};
  }).sort((a,b)=>b.records-a.records);
- return {historyRecords:closed.length,rawHistoryRecords:history.length,partialHistoryRecords:partial.length,unclassifiedHistoryRecords:history.length-complete.length-partial.length,duplicateHistoryRecords:complete.length-closed.length,openSnapshots:items.filter(x=>x.kind==='open').length,traders:results,readyToTrade:false,caveat:'Only positions with a closing timestamp and non-partial status count as closed. Gross PnL is provider-reported; fee estimates assume 0.06% taker each side, omit slippage and funding, and are not copy-trading returns. No out-of-sample validation.'};
+ return {historyRecords:closed.length,rawHistoryRecords:history.length,partialHistoryRecords:partial.length,unclassifiedHistoryRecords:history.length-complete.length-partial.length,duplicateHistoryRecords:complete.length-closed.length,openSnapshots:items.filter(x=>x.kind==='open').length,traders:results,readyToTrade:false,caveat:'Only chronologically valid, directional positions with a symbol and non-partial status count as closed. Gross PnL is provider-reported; fee estimates assume 0.06% taker each side, omit slippage and funding, and are not copy-trading returns. No out-of-sample validation.'};
 }
