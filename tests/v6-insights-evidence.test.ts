@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {isFullyClosedHistory,v6Insights} from '../src/v6-insights.js';
+import {summarizeV6HoldingCohorts} from '../src/v6-holding-cohorts.js';
 
 const valid={status:'CLOSED',symbol:'SOLUSDT',side:'LONG',opened_time:1767770000000,closed_time:1767770600000,closing_pnl:'3.5'};
 
@@ -53,4 +54,31 @@ test('V6 deduplicates equivalent provider position clocks and side aliases witho
  assert.equal(trader?.records,2);
  assert.equal(trader?.reportedPnl,7);
  assert.equal(report.traders.find(x=>x.trader==='another')?.reportedPnl,5);
+});
+
+
+test('V6 uses the central pair for even-sized holding and leverage medians',()=>{
+ const holds=[10,10,10,3000,3000,3000],leverages=[1,2,3,7,8,9];
+ const rows=holds.map((minutes,i)=>{
+  const opened=Date.parse('2026-10-10T00:00:00Z')+i*3600000;
+  return {trader_id:'even',kind:'history',raw:{...valid,opened_time:opened,closed_time:opened+minutes*60000,leverage:leverages[i],closed_volume:1,avg_entry_price:100,avg_close_price:101}};
+ });
+ const report=v6Insights(rows);
+ assert.equal(report.traders[0].medianHoldMinutes,1505);
+ assert.equal(report.traders[0].medianLeverage,5);
+ assert.equal(summarizeV6HoldingCohorts(report).cohorts.find(c=>c.style==='swing')?.closedPositions,6);
+ assert.equal(summarizeV6HoldingCohorts(report).cohorts.find(c=>c.style==='multiday')?.closedPositions,0);
+});
+
+test('V6 ignores non-decimal provider PnL and fee inputs instead of coercing them',()=>{
+ const rows=[
+  {...valid,closing_pnl:'0x10',closed_volume:'0b10',avg_entry_price:100,avg_close_price:101},
+  {...valid,opened_time:valid.opened_time+60000,closed_time:valid.closed_time+60000,closing_pnl:'1.2e2',closed_volume:'2',avg_entry_price:'100',avg_close_price:'101'},
+ ];
+ const report=v6Insights(rows.map(raw=>({trader_id:'numeric',kind:'history',raw})));
+ assert.equal(report.historyRecords,2);
+ assert.equal(report.traders[0].withPnl,1);
+ assert.equal(report.traders[0].reportedPnl,120);
+ assert.equal(report.traders[0].costCoverage,1);
+ assert.equal(report.traders[0].estimatedNetBeforeSlippage,null);
 });
