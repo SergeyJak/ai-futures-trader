@@ -23,8 +23,22 @@ export function v6Insights(items:Item[]){
  const complete=history.filter(x=>isFullyClosedHistory(x.raw));
  const partial=history.filter(x=>/PARTIAL/i.test(String(x.raw.status??'')));
  const byKey=new Map<string,Item>();
- for(const item of complete){const key=positionKey(item),prev=byKey.get(key);if(!prev||(ms(item.raw.update_time)??0)>=(ms(prev.raw.update_time)??0))byKey.set(key,item)}
- const closed=[...byKey.values()];
+ const ambiguousLatestPnl=new Set<string>();
+ for(const item of complete){
+  const key=positionKey(item),prev=byKey.get(key);
+  if(!prev){byKey.set(key,item);continue}
+  const updated=ms(item.raw.update_time)??0,previousUpdated=ms(prev.raw.update_time)??0;
+  if(updated>previousUpdated){
+   byKey.set(key,item);
+   ambiguousLatestPnl.delete(key);
+  }else if(updated===previousUpdated&&numeric(item.raw.closing_pnl)!==numeric(prev.raw.closing_pnl)){
+   // Equal-time provider snapshots disagree. Neither row is authoritative:
+   // keep the position for holding cohorts but exclude its uncertain PnL.
+   ambiguousLatestPnl.add(key);
+  }
+ }
+ const closed=[...byKey.entries()].map(([key,item])=>ambiguousLatestPnl.has(key)
+  ?{...item,raw:{...item.raw,closing_pnl:null}}:item);
  const byTrader=new Map<string,Item[]>();
  for(const item of closed)byTrader.set(item.trader_id,[...(byTrader.get(item.trader_id)??[]),item]);
  const results=[...byTrader].map(([id,positions])=>{
@@ -41,5 +55,5 @@ export function v6Insights(items:Item[]){
  const feeCovered=feeEstimates.filter((x):x is number=>x!==null);
  return {trader:id,sides,symbols,medianLeverage:medianSorted(leverage),records:positions.length,withPnl:pnls.length,winRate:pnls.length?wins.length/pnls.length:null,reportedPnl:sum(pnls),profitFactor:losses.length?sum(wins)/Math.abs(sum(losses)):null,averageWin:avgWin,averageLoss:avgLoss,observedRewardRisk:avgWin!==null&&avgLoss!==null?avgWin/avgLoss:null,breakEvenWinRate:avgWin!==null&&avgLoss!==null?avgLoss/(avgWin+avgLoss):null,estimatedRoundTripFees:sum(feeCovered),costCoverage:feeCovered.length,estimatedNetBeforeSlippage:feeCovered.length===positions.length&&pnls.length===positions.length?sum(pnls)-sum(feeCovered):null,medianHoldMinutes:medianSorted(times),shortUnder15:times.filter(n=>n<15).length,under60:times.filter(n=>n<60).length,over240:times.filter(n=>n>=240).length};
  }).sort((a,b)=>b.records-a.records);
- return {historyRecords:closed.length,rawHistoryRecords:history.length,partialHistoryRecords:partial.length,unclassifiedHistoryRecords:history.length-complete.length-partial.length,duplicateHistoryRecords:complete.length-closed.length,openSnapshots:items.filter(x=>x.kind==='open').length,traders:results,readyToTrade:false,caveat:'Only chronologically valid, directional positions with a symbol and non-partial status count as closed. Gross PnL is provider-reported; fee estimates assume 0.06% taker each side, omit slippage and funding, and are not copy-trading returns. No out-of-sample validation.'};
+ return {historyRecords:closed.length,rawHistoryRecords:history.length,partialHistoryRecords:partial.length,unclassifiedHistoryRecords:history.length-complete.length-partial.length,duplicateHistoryRecords:complete.length-closed.length,ambiguousLatestPnlPositions:ambiguousLatestPnl.size,openSnapshots:items.filter(x=>x.kind==='open').length,traders:results,readyToTrade:false,caveat:'Only chronologically valid, directional positions with a symbol and non-partial status count as closed. Gross PnL is provider-reported; fee estimates assume 0.06% taker each side, omit slippage and funding, and are not copy-trading returns. Conflicting equal-time snapshots have no trusted PnL. No out-of-sample validation.'};
 }
