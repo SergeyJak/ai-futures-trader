@@ -13,9 +13,9 @@ export function summarizeV6HoldingCohorts(insights:ReturnType<typeof v6Insights>
   const grossPnl=traders.reduce((n,t)=>n+t.reportedPnl,0);
   const estimatedFees=traders.reduce((n,t)=>n+t.estimatedRoundTripFees,0);
   return {style,traders:traders.length,closedPositions,pnlCovered,costCovered,
-   grossReportedPnl:pnlCovered===closedPositions?grossPnl:null,
-   estimatedFees:costCovered===closedPositions?estimatedFees:null,
-   estimatedNetBeforeSlippageAndFunding:pnlCovered===closedPositions&&costCovered===closedPositions?grossPnl-estimatedFees:null,
+   grossReportedPnl:closedPositions>0&&pnlCovered===closedPositions?grossPnl:null,
+   estimatedFees:closedPositions>0&&costCovered===closedPositions?estimatedFees:null,
+   estimatedNetBeforeSlippageAndFunding:closedPositions>0&&pnlCovered===closedPositions&&costCovered===closedPositions?grossPnl-estimatedFees:null,
    incompleteCosts:costCovered!==closedPositions,
    traderIds:traders.map(t=>t.trader),
   };
