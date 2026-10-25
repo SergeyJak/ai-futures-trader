@@ -71,7 +71,7 @@ export async function historicalCostStressReport(pool: pg.Pool, split: FrozenSpl
       positions.set(key, [...(positions.get(key) ?? []), row]);
     }
     const numericField = (value: string | null | undefined): number | null => {
-      if (typeof value !== 'string' || !/^[+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)(?:[eE][+-]?\\d+)?$/.test(value.trim())) return null;
+      if (typeof value !== 'string' || !/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(value.trim())) return null;
       const number = Number(value.trim());
       return Number.isFinite(number) ? number : null;
     };
