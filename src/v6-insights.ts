@@ -1,5 +1,5 @@
 type Item={trader_id:string;kind:string;raw:Record<string,unknown>};
-const numeric=(x:unknown)=>{if(x===null||x===undefined||typeof x==='boolean'||(typeof x==='string'&&x.trim()===''))return null;const n=Number(x);return Number.isFinite(n)?n:null};
+const numeric=(x:unknown)=>{if(typeof x==='number')return Number.isFinite(x)?x:null;if(typeof x!=='string'||!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(x.trim()))return null;const n=Number(x.trim());return Number.isFinite(n)?n:null};
 const ms=(x:unknown)=>{const n=numeric(x);if(n!==null)return n>1e12?n:n>1e9?n*1000:null;const d=Date.parse(String(x));return Number.isFinite(d)?d:null};
 export function isFullyClosedHistory(raw:Record<string,unknown>):boolean{
  const status=String(raw.status??'').toUpperCase();
@@ -8,6 +8,8 @@ export function isFullyClosedHistory(raw:Record<string,unknown>):boolean{
  const side=String(raw.side??'').trim().toUpperCase(),symbol=String(raw.symbol??'').trim();
  return opened!==null&&closed!==null&&closed>opened&&symbol.length>0&&/^(LONG|SHORT|BUY|SELL)$/.test(side);
 }
+/** Values are sorted by callers; for even samples use both central observations. */
+const medianSorted=(values:number[])=>values.length?(values[Math.floor((values.length-1)/2)]+values[Math.floor(values.length/2)])/2:null;
 function positionKey(x:Item){
  const r=x.raw;
  // Provider snapshots may express the same position with ISO/epoch clocks and BUY/LONG aliases.
@@ -37,7 +39,7 @@ export function v6Insights(items:Item[]){
  // Hypothetical taker commission (0.06% per side), NOT actual exchange fees.
  const feeEstimates=positions.map(p=>{const q=numeric(p.raw.closed_volume),entry=numeric(p.raw.avg_entry_price),exit=numeric(p.raw.avg_close_price);return q!==null&&q>0&&entry!==null&&entry>0&&exit!==null&&exit>0?q*(entry+exit)*0.0006:null});
  const feeCovered=feeEstimates.filter((x):x is number=>x!==null);
- return {trader:id,sides,symbols,medianLeverage:leverage.length?leverage[Math.floor(leverage.length/2)]:null,records:positions.length,withPnl:pnls.length,winRate:pnls.length?wins.length/pnls.length:null,reportedPnl:sum(pnls),profitFactor:losses.length?sum(wins)/Math.abs(sum(losses)):null,averageWin:avgWin,averageLoss:avgLoss,observedRewardRisk:avgWin!==null&&avgLoss!==null?avgWin/avgLoss:null,breakEvenWinRate:avgWin!==null&&avgLoss!==null?avgLoss/(avgWin+avgLoss):null,estimatedRoundTripFees:sum(feeCovered),costCoverage:feeCovered.length,estimatedNetBeforeSlippage:feeCovered.length===positions.length&&pnls.length===positions.length?sum(pnls)-sum(feeCovered):null,medianHoldMinutes:times.length?times[Math.floor(times.length/2)]:null,shortUnder15:times.filter(n=>n<15).length,under60:times.filter(n=>n<60).length,over240:times.filter(n=>n>=240).length};
+ return {trader:id,sides,symbols,medianLeverage:medianSorted(leverage),records:positions.length,withPnl:pnls.length,winRate:pnls.length?wins.length/pnls.length:null,reportedPnl:sum(pnls),profitFactor:losses.length?sum(wins)/Math.abs(sum(losses)):null,averageWin:avgWin,averageLoss:avgLoss,observedRewardRisk:avgWin!==null&&avgLoss!==null?avgWin/avgLoss:null,breakEvenWinRate:avgWin!==null&&avgLoss!==null?avgLoss/(avgWin+avgLoss):null,estimatedRoundTripFees:sum(feeCovered),costCoverage:feeCovered.length,estimatedNetBeforeSlippage:feeCovered.length===positions.length&&pnls.length===positions.length?sum(pnls)-sum(feeCovered):null,medianHoldMinutes:medianSorted(times),shortUnder15:times.filter(n=>n<15).length,under60:times.filter(n=>n<60).length,over240:times.filter(n=>n>=240).length};
  }).sort((a,b)=>b.records-a.records);
  return {historyRecords:closed.length,rawHistoryRecords:history.length,partialHistoryRecords:partial.length,unclassifiedHistoryRecords:history.length-complete.length-partial.length,duplicateHistoryRecords:complete.length-closed.length,openSnapshots:items.filter(x=>x.kind==='open').length,traders:results,readyToTrade:false,caveat:'Only chronologically valid, directional positions with a symbol and non-partial status count as closed. Gross PnL is provider-reported; fee estimates assume 0.06% taker each side, omit slippage and funding, and are not copy-trading returns. No out-of-sample validation.'};
 }
