@@ -63,12 +63,40 @@ export async function historicalCostStressReport(pool: pg.Pool, split: FrozenSpl
       && Date.parse(row.closed_at) >= start && Date.parse(row.closed_at) < end);
     const present = rows.map(row => row.funding_fee_raw)
       .filter((value): value is string => typeof value === 'string' && value.trim() !== '');
-    const numeric = present.map(Number).filter(Number.isFinite);
+    // Count distinct closed positions separately from raw snapshots. Repeated
+    // provider observations must not inflate the apparent funding coverage.
+    const positions = new Map<string, SourceRow[]>();
+    for (const row of rows) {
+      const key = JSON.stringify([row.source, row.trader_id, row.symbol, row.position_id, row.closed_at]);
+      positions.set(key, [...(positions.get(key) ?? []), row]);
+    }
+    const numericField = (value: string | null | undefined): number | null => {
+      if (typeof value !== 'string' || !/^[+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)(?:[eE][+-]?\\d+)?$/.test(value.trim())) return null;
+      const number = Number(value.trim());
+      return Number.isFinite(number) ? number : null;
+    };
+    const numeric = present.map(numericField).filter((value): value is number => value !== null);
+    const groups = [...positions.values()];
+    const positionsWithPresentField = groups.filter(group => group.some(row =>
+      typeof row.funding_fee_raw === 'string' && row.funding_fee_raw.trim() !== '')).length;
+    const positionsWithConsistentNumericField = groups.filter(group => {
+      const values = group.map(row => numericField(row.funding_fee_raw));
+      return values.every((value): value is number => value !== null)
+        && values.every(value => value === values[0]);
+    }).length;
+    const positionsWithConflictingNumericValues = groups.filter(group => {
+      const values = group.map(row => numericField(row.funding_fee_raw))
+        .filter((value): value is number => value !== null);
+      return new Set(values).size > 1;
+    }).length;
     return {
       source, rawTestRows: rows.length, fieldPresentRows: present.length,
       numericRows: numeric.length, nonzeroRows: numeric.filter(value => value !== 0).length,
+      distinctPositions: positions.size, duplicateObservationRows: rows.length - positions.size,
+      positionsWithPresentField, positionsWithConsistentNumericField,
+      positionsWithConflictingNumericValues,
       verifiedSettlementPositions: 0,
-      note: 'Raw provider field only; rows may contain duplicate observations. No verified funding cash flow or percent-of-notional conversion.',
+      note: 'Raw provider fields are unverified. Position-level counts exclude duplicate observations; consistent numeric values still do not prove settlement completeness, units or notional normalization.',
     };
   });
   const fundingCoverage = (['kopyon', 'okx'] as const).map(source => ({
