@@ -15,3 +15,21 @@ test('missing fee inputs block net claims',()=>{
  const s=summarizeV6HoldingCohorts(v6Insights(rows));
  assert.equal(s.cohorts.find(c=>c.style==='swing')?.estimatedNetBeforeSlippageAndFunding,null);
 });
+
+test('empty V6 cohorts have no financial evidence, not a zero return',()=>{
+ const report=summarizeV6HoldingCohorts(v6Insights([]));
+ for(const cohort of report.cohorts){
+  assert.equal(cohort.closedPositions,0);
+  assert.equal(cohort.grossReportedPnl,null);
+  assert.equal(cohort.estimatedFees,null);
+  assert.equal(cohort.estimatedNetBeforeSlippageAndFunding,null);
+ }
+});
+test('a populated cohort with verified zero gross PnL retains the real zero',()=>{
+ const rows=Array.from({length:5},(_,i)=>({...obs('flat',.04,i),raw:{...obs('flat',.04,i).raw,closing_pnl:0}}));
+ const cohort=summarizeV6HoldingCohorts(v6Insights(rows)).cohorts.find(c=>c.style==='intraday');
+ assert.equal(cohort?.closedPositions,5);
+ assert.equal(cohort?.grossReportedPnl,0);
+ assert.ok((cohort?.estimatedFees??0)>0);
+ assert.ok((cohort?.estimatedNetBeforeSlippageAndFunding??0)<0);
+});
