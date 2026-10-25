@@ -82,3 +82,32 @@ test('V6 ignores non-decimal provider PnL and fee inputs instead of coercing the
  assert.equal(report.traders[0].costCoverage,1);
  assert.equal(report.traders[0].estimatedNetBeforeSlippage,null);
 });
+
+
+test('V6 excludes contradictory equal-time snapshots from reported PnL independent of row order',()=>{
+ const first={...valid,closing_pnl:'2',update_time:'2026-10-10T10:00:00Z'};
+ const conflicting={...valid,closing_pnl:'9',update_time:'2026-10-10T10:00:00Z'};
+ for(const raw of [[first,conflicting],[conflicting,first]]){
+  const report=v6Insights(raw.map(row=>({trader_id:'ambiguous',kind:'history',raw:row})));
+  assert.equal(report.historyRecords,1);
+  assert.equal(report.duplicateHistoryRecords,1);
+  assert.equal(report.ambiguousLatestPnlPositions,1);
+  assert.equal(report.traders[0].records,1);
+  assert.equal(report.traders[0].withPnl,0);
+  assert.equal(report.traders[0].estimatedNetBeforeSlippage,null);
+ }
+ const resolved=v6Insights([first,conflicting,{...first,closing_pnl:'5',update_time:'2026-10-11T10:00:00Z'}]
+  .map(raw=>({trader_id:'ambiguous',kind:'history',raw})));
+ assert.equal(resolved.ambiguousLatestPnlPositions,0);
+ assert.equal(resolved.traders[0].reportedPnl,5);
+ assert.equal(resolved.traders[0].withPnl,1);
+});
+
+test('V6 treats numeric-equivalent equal-time snapshots as consistent evidence',()=>{
+ const a={...valid,closing_pnl:'3',update_time:'2026-10-10T10:00:00Z'};
+ const b={...valid,closing_pnl:'3.00',update_time:'2026-10-10T10:00:00Z'};
+ const report=v6Insights([a,b].map(raw=>({trader_id:'consistent',kind:'history',raw})));
+ assert.equal(report.ambiguousLatestPnlPositions,0);
+ assert.equal(report.traders[0].withPnl,1);
+ assert.equal(report.traders[0].reportedPnl,3);
+});
