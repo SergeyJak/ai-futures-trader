@@ -111,3 +111,32 @@ test('V6 treats numeric-equivalent equal-time snapshots as consistent evidence',
  assert.equal(report.traders[0].withPnl,1);
  assert.equal(report.traders[0].reportedPnl,3);
 });
+
+test('V6 suppresses conflicting equal-time fee inputs without losing consistent PnL',()=>{
+ const first={...valid,closing_pnl:'3',closed_volume:'2',avg_entry_price:'100',avg_close_price:'101',update_time:'2026-10-10T10:00:00Z'};
+ const conflicting={...first,closed_volume:'20'};
+ for(const rows of [[first,conflicting],[conflicting,first]]){
+  const report=v6Insights(rows.map(raw=>({trader_id:'fee-conflict',kind:'history',raw})));
+  assert.equal(report.historyRecords,1);
+  assert.equal(report.ambiguousLatestPnlPositions,0);
+  assert.equal(report.ambiguousLatestCostPositions,1);
+  assert.equal(report.traders[0].withPnl,1);
+  assert.equal(report.traders[0].reportedPnl,3);
+  assert.equal(report.traders[0].costCoverage,0);
+  assert.equal(report.traders[0].estimatedNetBeforeSlippage,null);
+  const resolved=v6Insights([...rows,{...first,closed_volume:'4',update_time:'2026-10-11T10:00:00Z'}]
+   .map(raw=>({trader_id:'fee-conflict',kind:'history',raw})));
+  assert.equal(resolved.ambiguousLatestCostPositions,0);
+  assert.equal(resolved.traders[0].costCoverage,1);
+  assert.ok(resolved.traders[0].estimatedNetBeforeSlippage!==null);
+ }
+});
+
+test('V6 treats numeric-equivalent equal-time fee inputs as consistent',()=>{
+ const a={...valid,closing_pnl:'3',closed_volume:'2',avg_entry_price:'100',avg_close_price:'101',update_time:'2026-10-10T10:00:00Z'};
+ const b={...a,closed_volume:2,avg_entry_price:'100.00',avg_close_price:101};
+ const report=v6Insights([a,b].map(raw=>({trader_id:'fee-consistent',kind:'history',raw})));
+ assert.equal(report.ambiguousLatestCostPositions,0);
+ assert.equal(report.traders[0].costCoverage,1);
+ assert.ok(report.traders[0].estimatedNetBeforeSlippage!==null);
+});
