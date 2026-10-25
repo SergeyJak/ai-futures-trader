@@ -8,7 +8,14 @@ export function isFullyClosedHistory(raw:Record<string,unknown>):boolean{
  const side=String(raw.side??'').trim().toUpperCase(),symbol=String(raw.symbol??'').trim();
  return opened!==null&&closed!==null&&closed>opened&&symbol.length>0&&/^(LONG|SHORT|BUY|SELL)$/.test(side);
 }
-function positionKey(x:Item){const r=x.raw;return [x.trader_id,r.symbol,r.side,r.opened_time,r.closed_time].join('|')}
+function positionKey(x:Item){
+ const r=x.raw;
+ // Provider snapshots may express the same position with ISO/epoch clocks and BUY/LONG aliases.
+ // Canonicalize only validated closed-position fields to avoid double-counting history.
+ const side=String(r.side??'').trim().toUpperCase();
+ const direction=side==='BUY'?'LONG':side==='SELL'?'SHORT':side;
+ return [x.trader_id,String(r.symbol??'').trim().toUpperCase(),direction,ms(r.opened_time),ms(r.closed_time)].join('|');
+}
 export function v6Insights(items:Item[]){
  const history=items.filter(x=>x.kind==='history');
  const complete=history.filter(x=>isFullyClosedHistory(x.raw));
