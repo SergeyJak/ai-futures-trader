@@ -27,11 +27,18 @@ export function summarizeStrategyPaperTelemetry(reports:Record<StrategyKey,Repor
     if(!Number.isFinite(v.postFixMaxDrawdownClosed)||v.postFixMaxDrawdownClosed<0||v.postFixMaxDrawdownClosed>1)qualityIssues.push('invalid_drawdown');
     if(futureBar)qualityIssues.push('future_bar');
     if(v.last_bar!=null&&!Number.isFinite(lastBarMs))qualityIssues.push('invalid_bar_time');
+    // No corrected closed trades means no observed financial return or drawdown.
+    // Nonzero realized PnL/drawdown with zero trades is contradictory source evidence.
+    if(v.postFixClosedTrades===0&&Number.isFinite(v.postFixRealizedNetPnl)&&v.postFixRealizedNetPnl!==0)qualityIssues.push('pnl_without_trades');
+    if(v.postFixClosedTrades===0&&Number.isFinite(v.postFixMaxDrawdownClosed)&&v.postFixMaxDrawdownClosed!==0)qualityIssues.push('drawdown_without_trades');
+    const hasCorrectedSample=Number.isInteger(v.postFixClosedTrades)&&v.postFixClosedTrades>0&&v.postFixClosedTrades<=v.closedTrades;
+    const validWins=Number.isInteger(v.postFixWins)&&v.postFixWins>=0&&v.postFixWins<=v.postFixClosedTrades;
+    const validDrawdown=Number.isFinite(v.postFixMaxDrawdownClosed)&&v.postFixMaxDrawdownClosed>=0&&v.postFixMaxDrawdownClosed<=1;
     return {
      id:v.id,closed:v.closedTrades,legacyClosed:Math.max(0,v.closedTrades-v.postFixClosedTrades),
-     postFixClosed:v.postFixClosedTrades,postFixNetPnl:v.postFixRealizedNetPnl,
-     postFixWinRate:v.postFixClosedTrades>0?v.postFixWins/v.postFixClosedTrades:null,
-     postFixMaxDrawdownClosed:v.postFixMaxDrawdownClosed,
+     postFixClosed:v.postFixClosedTrades,postFixNetPnl:hasCorrectedSample&&Number.isFinite(v.postFixRealizedNetPnl)?v.postFixRealizedNetPnl:null,
+     postFixWinRate:hasCorrectedSample&&validWins?v.postFixWins/v.postFixClosedTrades:null,
+     postFixMaxDrawdownClosed:hasCorrectedSample&&validDrawdown?v.postFixMaxDrawdownClosed:null,
      insufficientSample:v.postFixClosedTrades<30,
      active:typeof v.position==='object'&&v.position!==null&&!('pendingAt' in v.position),
      lastBarLagMinutes:lagMinutes,stale:lagMinutes===null||lagMinutes>3,
