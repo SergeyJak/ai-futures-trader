@@ -24,6 +24,8 @@ export function v6Insights(items:Item[]){
  const partial=history.filter(x=>/PARTIAL/i.test(String(x.raw.status??'')));
  const byKey=new Map<string,Item>();
  const ambiguousLatestPnl=new Set<string>();
+ const ambiguousLatestCosts=new Set<string>();
+ const costEvidence=(raw:Record<string,unknown>)=>[raw.closed_volume,raw.avg_entry_price,raw.avg_close_price].map(numeric);
  for(const item of complete){
   const key=positionKey(item),prev=byKey.get(key);
   if(!prev){byKey.set(key,item);continue}
@@ -31,14 +33,22 @@ export function v6Insights(items:Item[]){
   if(updated>previousUpdated){
    byKey.set(key,item);
    ambiguousLatestPnl.delete(key);
-  }else if(updated===previousUpdated&&numeric(item.raw.closing_pnl)!==numeric(prev.raw.closing_pnl)){
-   // Equal-time provider snapshots disagree. Neither row is authoritative:
-   // keep the position for holding cohorts but exclude its uncertain PnL.
-   ambiguousLatestPnl.add(key);
+   ambiguousLatestCosts.delete(key);
+  }else if(updated===previousUpdated){
+   // Equal-time snapshots must agree independently on PnL and fee inputs.
+   // A conflict in either cannot be resolved by the order of provider rows.
+   if(numeric(item.raw.closing_pnl)!==numeric(prev.raw.closing_pnl))ambiguousLatestPnl.add(key);
+   const costs=costEvidence(item.raw),previousCosts=costEvidence(prev.raw);
+   if(costs.some((value,i)=>value!==previousCosts[i]))ambiguousLatestCosts.add(key);
   }
  }
- const closed=[...byKey.entries()].map(([key,item])=>ambiguousLatestPnl.has(key)
-  ?{...item,raw:{...item.raw,closing_pnl:null}}:item);
+ const closed=[...byKey.entries()].map(([key,item])=>({
+  ...item,
+  raw:{...item.raw,
+   ...(ambiguousLatestPnl.has(key)?{closing_pnl:null}:{}),
+   ...(ambiguousLatestCosts.has(key)?{closed_volume:null}:{}),
+  },
+ }));
  const byTrader=new Map<string,Item[]>();
  for(const item of closed)byTrader.set(item.trader_id,[...(byTrader.get(item.trader_id)??[]),item]);
  const results=[...byTrader].map(([id,positions])=>{
@@ -55,5 +65,5 @@ export function v6Insights(items:Item[]){
  const feeCovered=feeEstimates.filter((x):x is number=>x!==null);
  return {trader:id,sides,symbols,medianLeverage:medianSorted(leverage),records:positions.length,withPnl:pnls.length,winRate:pnls.length?wins.length/pnls.length:null,reportedPnl:sum(pnls),profitFactor:losses.length?sum(wins)/Math.abs(sum(losses)):null,averageWin:avgWin,averageLoss:avgLoss,observedRewardRisk:avgWin!==null&&avgLoss!==null?avgWin/avgLoss:null,breakEvenWinRate:avgWin!==null&&avgLoss!==null?avgLoss/(avgWin+avgLoss):null,estimatedRoundTripFees:sum(feeCovered),costCoverage:feeCovered.length,estimatedNetBeforeSlippage:feeCovered.length===positions.length&&pnls.length===positions.length?sum(pnls)-sum(feeCovered):null,medianHoldMinutes:medianSorted(times),shortUnder15:times.filter(n=>n<15).length,under60:times.filter(n=>n<60).length,over240:times.filter(n=>n>=240).length};
  }).sort((a,b)=>b.records-a.records);
- return {historyRecords:closed.length,rawHistoryRecords:history.length,partialHistoryRecords:partial.length,unclassifiedHistoryRecords:history.length-complete.length-partial.length,duplicateHistoryRecords:complete.length-closed.length,ambiguousLatestPnlPositions:ambiguousLatestPnl.size,openSnapshots:items.filter(x=>x.kind==='open').length,traders:results,readyToTrade:false,caveat:'Only chronologically valid, directional positions with a symbol and non-partial status count as closed. Gross PnL is provider-reported; fee estimates assume 0.06% taker each side, omit slippage and funding, and are not copy-trading returns. Conflicting equal-time snapshots have no trusted PnL. No out-of-sample validation.'};
+ return {historyRecords:closed.length,rawHistoryRecords:history.length,partialHistoryRecords:partial.length,unclassifiedHistoryRecords:history.length-complete.length-partial.length,duplicateHistoryRecords:complete.length-closed.length,ambiguousLatestPnlPositions:ambiguousLatestPnl.size,ambiguousLatestCostPositions:ambiguousLatestCosts.size,openSnapshots:items.filter(x=>x.kind==='open').length,traders:results,readyToTrade:false,caveat:'Only chronologically valid, directional positions with a symbol and non-partial status count as closed. Gross PnL is provider-reported; fee estimates assume 0.06% taker each side, omit slippage and funding, and are not copy-trading returns. Conflicting equal-time snapshots have no trusted PnL or fee inputs. No out-of-sample validation.'};
 }
