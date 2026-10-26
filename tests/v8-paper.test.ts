@@ -32,3 +32,35 @@ test('V8 audits an interrupted position instead of fabricating an exit or realiz
  assert.equal(resets[0].args?.[0],'SOLUSDT-5m');
  assert.ok(queries.some(q=>q.sql==='COMMIT'));
 });
+
+
+test('V8 audits interrupted positions immediately despite a gap inside historical signal lookback',async()=>{
+ const {tickV8Paper}=await import('../src/v8-paper.js');
+ const last=Math.floor(Date.now()/60000)*60000-60000;
+ const bars=Array.from({length:205},(_,i)=>({start_at:new Date(last-(204-i)*60000),open:100,high:101,low:99,close:100}));
+ // Historical discontinuity lies inside the 205-minute signal lookback,
+ // but the newest minute is valid and must still be processed.
+ for(let i=0;i<100;i++)bars[i].start_at=new Date(bars[i].start_at.getTime()-60000);
+ bars.at(-1)!.low=97;
+ const queries:{sql:string;args:unknown[]|undefined}[]=[];
+ const position={side:'LONG',entry:100,stop:98,take:104,quantity:1,entryAt:last-3600000};
+ const pool={connect:async()=>({query:async(sql:string,args?:unknown[])=>{
+  queries.push({sql,args});
+  if(sql.startsWith('SELECT start_at'))return {rows:args?.[0]==='SOLUSDT'?[...bars].reverse():[]};
+  if(sql.startsWith('SELECT balance'))return {rows:[{
+   balance:100,position,pending:null,
+   last_bar:new Date(last-(args?.[0]==='SOLUSDT-5m'?120000:60000))
+  }]};
+  return {rows:[]};
+ },release:()=>{}})};
+ await tickV8Paper(pool as never);
+ const audits=queries.filter(q=>q.sql.startsWith('INSERT INTO v8_paper_gap_audit'));
+ assert.equal(audits.length,1);
+ assert.equal(audits[0].args?.[0],'SOLUSDT-5m');
+ const exits=queries.filter(q=>q.sql.startsWith('INSERT INTO v8_paper_trades'));
+ assert.equal(exits.length,1);
+ assert.equal(exits[0].args?.[0],'SOLUSDT-15m');
+ assert.equal(exits[0].args?.[7],'STOP');
+ assert.equal(queries.filter(q=>q.sql.includes('position=NULL')).length,1);
+ assert.ok(queries.some(q=>q.sql==='COMMIT'));
+});
