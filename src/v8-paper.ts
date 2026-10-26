@@ -31,7 +31,9 @@ export async function tickV8Paper(pool:pg.Pool){
    // A gap or invalid *historical* candle must block new signals, not prevent
    // processing the latest valid candle or auditing an interrupted position.
    if(!validCandle(bar))continue;
-   // Short history must not freeze existing exits; keep the original minimum\n   // history requirement for new signals only.\n   const validSignalHistory=bars.length>=181&&bars.every((b,i)=>validCandle(b)&&(i===0||b.time-bars[i-1].time===60000));
+   // Short history must not freeze existing exits; keep the original minimum
+   // history requirement for new signals only.
+   const validSignalHistory=bars.length>=181&&bars.every((b,i)=>validCandle(b)&&(i===0||b.time-bars[i-1].time===60000));
    for(const cfg of V8_CONFIGS.filter(c=>c.symbol===symbol)){
     const a=await client.query('SELECT balance,position,pending,last_bar FROM v8_paper_accounts WHERE id=$1 FOR UPDATE',[cfg.id]);const row=a.rows[0];
     if(row.last_bar&&new Date(row.last_bar).getTime()>=bar.time)continue;
