@@ -44,3 +44,18 @@ test('V8 still realizes stop exits before the 24-hour horizon and includes costs
 test('V8 rejects ambiguous hold units',()=>{
  assert.throws(()=>v8Backtest(flat(25),{holdBars:24,holdMinutes:1440}),/Invalid V8 costs or hold/);
 });
+
+// A missing 5m candle must not turn a sparse history into a valid sweep signal.
+test('V8 rejects noncontiguous signal history even when next candle is present',()=>{
+ const bars=setup();
+ bars[5]={...bars[5],time:bars[5].time+30_000};
+ const result=v8Backtest([...bars,bar(13,100,100.5,97,98)],{holdBars:1});
+ assert.equal(result.trades,0);
+});
+
+test('V8 rejects uniformly sparse bars when the expected 5m cadence is explicit',()=>{
+ const bars=[...setup(),bar(13,100,100.5,97,98)].map(b=>({...b,time:b.time*10}));
+ assert.equal(v8Backtest(bars,{holdBars:1,expectedBarMinutes:5}).trades,0);
+ assert.equal(v8Backtest(bars,{holdBars:1,expectedBarMinutes:10}).trades,1);
+ assert.throws(()=>v8Backtest(bars,{expectedBarMinutes:0}),/Invalid V8 costs or hold/);
+});
