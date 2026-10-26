@@ -64,3 +64,30 @@ test('V8 audits interrupted positions immediately despite a gap inside historica
  assert.equal(queries.filter(q=>q.sql.includes('position=NULL')).length,1);
  assert.ok(queries.some(q=>q.sql==='COMMIT'));
 });
+
+
+test('V8 closes an existing paper position with fewer than 181 historical candles',async()=>{
+ const {tickV8Paper}=await import('../src/v8-paper.js');
+ const last=Math.floor(Date.now()/60000)*60000-60000;
+ const bars=Array.from({length:40},(_,i)=>({start_at:new Date(last-(39-i)*60000),open:100,high:101,low:99,close:100}));
+ bars.at(-1)!.low=97;
+ const queries:{sql:string;args:unknown[]|undefined}[]=[];
+ const pool={connect:async()=>({query:async(sql:string,args?:unknown[])=>{
+  queries.push({sql,args});
+  if(sql.startsWith('SELECT start_at'))return {rows:args?.[0]==='SOLUSDT'?[...bars].reverse():[]};
+  if(sql.startsWith('SELECT balance'))return {rows:[{
+   balance:100,
+   position:args?.[0]==='SOLUSDT-5m'?{side:'LONG',entry:100,stop:98,take:104,quantity:1,entryAt:last-3600000}:null,
+   pending:null,last_bar:new Date(last-60000)
+  }]};
+  return {rows:[]};
+ },release:()=>{}})};
+ await tickV8Paper(pool as never);
+ const exits=queries.filter(q=>q.sql.startsWith('INSERT INTO v8_paper_trades'));
+ assert.equal(exits.length,1);
+ assert.equal(exits[0].args?.[0],'SOLUSDT-5m');
+ assert.equal(exits[0].args?.[7],'STOP');
+ assert.equal(queries.filter(q=>q.sql.startsWith('UPDATE v8_paper_accounts')).length,2);
+ assert.equal(queries.filter(q=>q.sql.startsWith('INSERT INTO v8_paper_gap_audit')).length,0);
+ assert.ok(queries.some(q=>q.sql==='COMMIT'));
+});
