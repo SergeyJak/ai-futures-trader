@@ -14,7 +14,7 @@ test('V8 audits an interrupted position instead of fabricating an exit or realiz
  const queries:{sql:string;args:unknown[]|undefined}[]=[];
  const pool={connect:async()=>({query:async(sql:string,args?:unknown[])=>{
   queries.push({sql,args});
-  if(sql.startsWith('SELECT start_at'))return {rows:args?.[0]==='SOLUSDT'?bars:[]};
+  if(sql.startsWith('SELECT start_at'))return {rows:args?.[0]==='SOLUSDT'?[...bars].reverse():[]};
   if(sql.startsWith('SELECT balance'))return {rows:[{
    balance:100,position:args?.[0]==='SOLUSDT-5m'?{side:'LONG',entry:100,stop:98,take:104,quantity:1,entryAt:last-3600000}:null,
    pending:{side:'SHORT',signalAt:last-120000,stop:102,take:96},
