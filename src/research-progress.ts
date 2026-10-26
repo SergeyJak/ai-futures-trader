@@ -2,7 +2,7 @@ import type pg from 'pg';
 import {evaluateStoredEntryFilters} from './entry-filter-stored.js';
 import {summarizeOos} from './entry-filter-decision.js';
 
-type Version='v3'|'v4';
+type Version='v4';
 type Study={version:Version;status:'ready'|'error';result?:Awaited<ReturnType<typeof evaluateStoredEntryFilters>>;decisions?:ReturnType<typeof summarizeOos>;error?:string};
 export type ResearchProgress={kind:'entry-oos-progress';state:'pending'|'running'|'ready'|'error';lastStartedAt:string|null;lastCompletedAt:string|null;cutoff:string|null;nextRunAt:string|null;studies:Study[];notes:string[]};
 const DAY=86400000,INTERVAL=6*3600000;
@@ -15,10 +15,11 @@ export function createResearchProgress(pool:pg.Pool,now:()=>number=Date.now){
   running=true;started=now();lastError=false;const today=new Date(now());today.setUTCHours(0,0,0,0);
   // Fixed UTC day boundary, full holdout is guaranteed complete before study begins.
   cutoff=new Date(today.getTime()-8*DAY).toISOString();
+  // Keep archived strategy collection independent; periodic OOS research only evaluates V4.
   const next:Study[]=[];let client:pg.PoolClient|undefined;
   try{
    client=await pool.connect();
-   for(const version of ['v3','v4'] as const){
+   for(const version of ['v4'] as const){
     try{
      await client.query('BEGIN READ ONLY');
      const result=await evaluateStoredEntryFilters(client,version,cutoff,30);
@@ -29,7 +30,7 @@ export function createResearchProgress(pool:pg.Pool,now:()=>number=Date.now){
      try{await client.query('ROLLBACK')}catch{lastError=true}
     }
    }
-  }catch(e){lastError=true;for(const version of ['v3','v4'] as const)if(!next.some(s=>s.version===version))next.push({version,status:'error',error:e instanceof Error?e.message:'Database unavailable'})}
+  }catch(e){lastError=true;for(const version of ['v4'] as const)if(!next.some(s=>s.version===version))next.push({version,status:'error',error:e instanceof Error?e.message:'Database unavailable'})}
   finally{if(client){try{await client.query('ROLLBACK')}catch{}client.release()}completed=now();studies=next;running=false}
   return snapshot();
  }
