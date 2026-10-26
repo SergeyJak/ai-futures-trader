@@ -68,3 +68,13 @@ test('SOL telemetry rejects contradictory and nonfinite paper financial evidence
  assert.equal(variants[4].netPnl,null);
  assert.deepEqual(variants[4].qualityIssues,['lifetime_pnl_without_trades']);
 });
+
+test('SOL pending next-open signal is not an active position',()=>{
+ const report={feeRate:.0006,slippageRate:.0003,variants:[{
+  id:'4h',position:{entry:0,entryAt:0,pendingAt:Date.parse('2026-10-26T01:00:00Z')},
+  closedTrades:0,realizedNetPnl:0,postFixClosedTrades:0,postFixRealizedNetPnl:0,postFixWins:0,trades:[]
+ }]};
+ const variant=solPaperDiagnostics(report,report).long.variants[0];
+ assert.equal(variant.active,false);
+ assert.equal(variant.postFixNetPnl,null);
+});
