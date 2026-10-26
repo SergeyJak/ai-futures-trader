@@ -66,8 +66,8 @@ const server=http.createServer(async(req,res)=>{
      for(const b of minute){const key=Math.floor(b.time/(timeframe*60000));const group=grouped.get(key)??[];group.push(b);grouped.set(key,group)}
      const bars=[...grouped.entries()].sort((a,b)=>a[0]-b[0]).filter(([key,g])=>g.length===timeframe&&g[0].time===key*timeframe*60000&&g.every((b,i)=>i===0||b.time-g[i-1].time===60000)).map(([,g])=>({time:g[0].time,open:g[0].open,high:Math.max(...g.map(x=>x.high)),low:Math.min(...g.map(x=>x.low)),close:g.at(-1)!.close}));
      const split=Math.floor(bars.length*.7);
-     const train=v8Backtest(bars.slice(0,split));
-     const test=v8Backtest(bars.slice(split));
+     const train=v8Backtest(bars.slice(0,split),{expectedBarMinutes:timeframe});
+     const test=v8Backtest(bars.slice(split),{expectedBarMinutes:timeframe});
      results.push({symbol,timeframeMinutes:timeframe,availableBars:bars.length,train:{trades:train.trades,averageNetReturnPct:train.averageNetReturnPct,winRate:train.winRate},test:{trades:test.trades,averageNetReturnPct:test.averageNetReturnPct,winRate:test.winRate},validForDecision:test.trades>=30});
     }
    }
