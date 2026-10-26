@@ -51,7 +51,7 @@ export async function tickV8Paper(pool:pg.Pool){
      const tf=cfg.timeframe;
      const candles=aggregateV8Bars(bars,tf as 5|15);
      const last=candles.at(-1);
-     if(last&&last.time+tf*60000===bar.time+60000){const signal=v8Signal(candles.slice(-13));if(signal)pending={side:signal.side,stop:signal.stop,take:signal.take,signalAt:bar.time}}
+     if(last&&last.time+tf*60000===bar.time+60000){const signal=v8Signal(candles.slice(-13),12,2,tf*60000);if(signal)pending={side:signal.side,stop:signal.stop,take:signal.take,signalAt:bar.time}}
     }
     await client.query('UPDATE v8_paper_accounts SET balance=$2,position=$3,pending=$4,last_bar=to_timestamp($5/1000.0) WHERE id=$1',[cfg.id,balance,position?JSON.stringify(position):null,pending?JSON.stringify(pending):null,bar.time]);
    }
