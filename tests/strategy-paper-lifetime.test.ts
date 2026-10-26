@@ -30,6 +30,10 @@ test('strategy UI exposes closed-trade sample, lifetime net and closed-equity dr
  assert.match(html,/v\.realizedNetPnl/);
  assert.match(html,/v.maxDrawdownClosed/);
  assert.match(html,/v.postFixMaxDrawdownClosed/);
+ assert.match(html,/validCorrected=Number\.isInteger\(correctedClosed\)&&correctedClosed>0/);
+ assert.match(html,/sampled\?\(total>=0/);
+ assert.match(html,/Нет данных/);
+ assert.match(html,/lifetimeClosed>0&&Number\.isFinite\(lifetimeNet\)/);
  assert.match(html,/расхождение баланса и истории/);
  assert.match(html,/Четыре виртуальных счёта по 100 USDT/);
  assert.doesNotMatch(html,/Девять независимых виртуальных счетов/);
