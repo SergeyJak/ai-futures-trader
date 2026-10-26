@@ -15,6 +15,7 @@ export function v8Exit(p:Position,b:V8Bar){
 export async function initV8Paper(pool:pg.Pool){
  await pool.query('CREATE TABLE IF NOT EXISTS v8_paper_accounts(id TEXT PRIMARY KEY,balance DOUBLE PRECISION NOT NULL DEFAULT 100,position JSONB,pending JSONB,last_bar TIMESTAMPTZ,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())');
  await pool.query('CREATE TABLE IF NOT EXISTS v8_paper_trades(id BIGSERIAL PRIMARY KEY,variant TEXT NOT NULL,side TEXT NOT NULL,entry_at TIMESTAMPTZ NOT NULL,exit_at TIMESTAMPTZ NOT NULL,entry_price DOUBLE PRECISION NOT NULL,exit_price DOUBLE PRECISION NOT NULL,net_pnl DOUBLE PRECISION NOT NULL,reason TEXT NOT NULL)');
+ await pool.query('CREATE TABLE IF NOT EXISTS v8_paper_gap_audit(id BIGSERIAL PRIMARY KEY,variant TEXT NOT NULL,gap_from TIMESTAMPTZ,gap_to TIMESTAMPTZ NOT NULL,position JSONB NOT NULL,created_at TIMESTAMPTZ NOT NULL DEFAULT NOW())');
  for(const c of V8_CONFIGS)await pool.query('INSERT INTO v8_paper_accounts(id) VALUES($1) ON CONFLICT DO NOTHING',[c.id]);
 }
 export async function tickV8Paper(pool:pg.Pool){
@@ -29,8 +30,14 @@ export async function tickV8Paper(pool:pg.Pool){
    for(const cfg of V8_CONFIGS.filter(c=>c.symbol===symbol)){
     const a=await client.query('SELECT balance,position,pending,last_bar FROM v8_paper_accounts WHERE id=$1 FOR UPDATE',[cfg.id]);const row=a.rows[0];
     if(row.last_bar&&new Date(row.last_bar).getTime()>=bar.time)continue;
-    if(!row.last_bar||bar.time-new Date(row.last_bar).getTime()>120000){
-     await client.query('UPDATE v8_paper_accounts SET last_bar=to_timestamp($2/1000.0),pending=NULL WHERE id=$1',[cfg.id,bar.time]);continue;
+    // Any unobserved minute invalidates OHLC-based exit evidence. Never book a
+    // synthetic stop, take or time exit after a data gap or process outage.
+    const previousBar=row.last_bar==null?NaN:new Date(row.last_bar).getTime();
+    if(!Number.isFinite(previousBar)||bar.time-previousBar!==60000){
+     if(row.position){
+      await client.query('INSERT INTO v8_paper_gap_audit(variant,gap_from,gap_to,position) VALUES($1,$2,to_timestamp($3/1000.0),$4::jsonb)',[cfg.id,row.last_bar,bar.time,JSON.stringify(row.position)]);
+     }
+     await client.query('UPDATE v8_paper_accounts SET last_bar=to_timestamp($2/1000.0),pending=NULL,position=NULL WHERE id=$1',[cfg.id,bar.time]);continue;
     }
     let balance=Number(row.balance),position=row.position as Position|null,pending=row.pending as Pending|null;
     if(position){
