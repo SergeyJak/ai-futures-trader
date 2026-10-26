@@ -1,5 +1,5 @@
 type Trade={id:number;variant:string;entry_at:string|Date;exit_at:string|Date;entry_price:number;exit_price:number;net_pnl:number;reason:string};
-type Variant={id:string;position?:{entry:number;entryAt:number}|null;closedTrades:number;realizedNetPnl:number;postFixClosedTrades?:number;postFixRealizedNetPnl?:number;postFixWins?:number;trades:Trade[]};
+type Variant={id:string;position?:{entry:number;entryAt:number;pendingAt?:number}|null;closedTrades:number;realizedNetPnl:number;postFixClosedTrades?:number;postFixRealizedNetPnl?:number;postFixWins?:number;trades:Trade[]};
 type Report={variants:Variant[];feeRate:number;slippageRate:number};
 
 /** Read-only SOL paper evidence. Zero observed trades is not an observed zero return. */
@@ -19,7 +19,7 @@ export function solPaperDiagnostics(long:Report,short:Report,now=new Date()){
    if(v.closedTrades===0&&Number.isFinite(v.realizedNetPnl)&&v.realizedNetPnl!==0)qualityIssues.push('lifetime_pnl_without_trades');
    if(corrected===0&&Number.isFinite(v.postFixRealizedNetPnl)&&v.postFixRealizedNetPnl!==0)qualityIssues.push('postfix_pnl_without_trades');
    return {
-    id:v.id,active:!!v.position&&Number.isFinite(v.position.entryAt),
+    id:v.id,active:!!v.position&&!('pendingAt' in v.position)&&Number.isFinite(v.position.entryAt),
     closed:v.closedTrades,
     netPnl:validClosed&&v.closedTrades>0&&Number.isFinite(v.realizedNetPnl)?v.realizedNetPnl:null,
     legacyClosed:validCorrected?v.closedTrades-corrected:null,
