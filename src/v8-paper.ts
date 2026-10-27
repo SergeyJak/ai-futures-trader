@@ -74,10 +74,11 @@ export async function tickV8Paper(pool:pg.Pool){
  }catch(e){await client.query('ROLLBACK');throw e}finally{client.release()}
 }
 export async function v8PaperReport(pool:pg.Pool){
- const [accounts,trades,totals]=await Promise.all([
+ const [accounts,trades,totals,gaps]=await Promise.all([
   pool.query('SELECT id,balance,position,pending,last_bar FROM v8_paper_accounts ORDER BY id'),
   pool.query('SELECT id,variant,side,entry_at,exit_at,entry_price,exit_price,net_pnl,reason FROM v8_paper_trades ORDER BY id DESC LIMIT 120'),
-  pool.query('SELECT variant,COUNT(*)::int AS closed,COALESCE(SUM(net_pnl),0)::double precision AS net,COUNT(*) FILTER(WHERE net_pnl>0)::int AS wins FROM v8_paper_trades GROUP BY variant')
+  pool.query('SELECT variant,COUNT(*)::int AS closed,COALESCE(SUM(net_pnl),0)::double precision AS net,COUNT(*) FILTER(WHERE net_pnl>0)::int AS wins FROM v8_paper_trades GROUP BY variant'),
+  pool.query('SELECT variant,COUNT(*)::int AS audited FROM v8_paper_gap_audit GROUP BY variant')
  ]);
- return {mode:'forward-only-paper',realOrders:false,startingBalance:100,feePerSide:V8_FEE_PER_SIDE,slippagePerSide:V8_SLIPPAGE_PER_SIDE,funding:'excluded; unknown',warning:'Candle OHLC execution approximation; not real exchange fills',variants:V8_CONFIGS.map(c=>({...c,...accounts.rows.find(a=>a.id===c.id),closedTrades:totals.rows.find(t=>t.variant===c.id)?.closed??0,netPnl:totals.rows.find(t=>t.variant===c.id)?.net??0,wins:totals.rows.find(t=>t.variant===c.id)?.wins??0,trades:trades.rows.filter(t=>t.variant===c.id)}))};
+ return {mode:'forward-only-paper',realOrders:false,startingBalance:100,feePerSide:V8_FEE_PER_SIDE,slippagePerSide:V8_SLIPPAGE_PER_SIDE,funding:'excluded; unknown',warning:'Candle OHLC execution approximation; not real exchange fills',variants:V8_CONFIGS.map(c=>({...c,...accounts.rows.find(a=>a.id===c.id),closedTrades:totals.rows.find(t=>t.variant===c.id)?.closed??0,netPnl:totals.rows.find(t=>t.variant===c.id)?.net??0,wins:totals.rows.find(t=>t.variant===c.id)?.wins??0,gapAudits:gaps.rows.find(g=>g.variant===c.id)?.audited??0,trades:trades.rows.filter(t=>t.variant===c.id)}))};
 }
