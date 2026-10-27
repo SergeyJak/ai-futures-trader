@@ -68,7 +68,7 @@ test('entry window audit rejects gaps, duplicates and unconfirmed minutes',()=>{
 
 test('partial provider history is saved but flagged, never reported as a complete window',async()=>{
  const rows=[{symbol:'AUDITONEUSDT',opened_ms:String(now-2*3600000)},{symbol:'AUDITTWOUSDT',opened_ms:String(now-3*3600000)}];
- const pool={query:async()=>({rows})};
+ const pool={query:async(sql:string)=>sql.includes('confirmed_minutes')?{rows:[{confirmed_minutes:20}]}:{rows}};
  const saved:string[]=[];
  const load=async(symbol:string,start:number)=>{
   const count=symbol==='AUDITONEUSDT'?20:21;
@@ -80,4 +80,23 @@ test('partial provider history is saved but flagged, never reported as a complet
  assert.equal(saved.length,41);
  assert.equal(result.errors.length,1);
  assert.match(result.errors[0],/AUDITONEUSDT: incomplete entry window \(1 missing confirmed minutes\)/);
+});
+
+test('partial provider response is not a false gap when saved and existing candles cover the window',async()=>{
+ const rows=[{symbol:'UNIONUSDT',opened_ms:String(now-2*3600000)}];
+ const queries:{sql:string;params?:unknown[]}[]=[];
+ const pool={query:async(sql:string,params?:unknown[])=>{
+  queries.push({sql,params});
+  return sql.includes('confirmed_minutes')?{rows:[{confirmed_minutes:21}]}:{rows};
+ }};
+ const saved:number[]=[];
+ const load=async(symbol:string,start:number)=>Array.from({length:20},(_,i)=>({
+  symbol,startMs:start+i*60_000,open:'1',high:'1',low:'1',close:'1',volume:'1',turnover:'1',confirmed:true
+ }));
+ const result=await backfillV6EntryCandles(pool as never,async c=>{saved.push(c.startMs)},now,load);
+ assert.equal(saved.length,20);
+ assert.deepEqual(result.errors,[]);
+ assert.equal(queries.length,2);
+ assert.match(queries[1].sql,/COUNT\\(DISTINCT start_at\\)::int AS confirmed_minutes/);
+ assert.deepEqual(queries[1].params?.slice(0,1),['UNIONUSDT']);
 });
