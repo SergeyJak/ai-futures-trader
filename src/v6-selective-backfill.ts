@@ -1,6 +1,7 @@
 import type pg from 'pg';
 import {fetchHistory,MINUTE} from './backfill.js';
 import type {Candle} from './candles.js';
+import {MIN_PAUSE_MS} from './v6-request-policy.js';
 export type V6BackfillTarget={symbol:string;openedMs:number};
 const retryAfter=new Map<string,number>();
 /** Select at most one window per symbol, prioritizing recent closed positions. */
@@ -16,7 +17,11 @@ export function selectV6BackfillTargets(rows:V6BackfillTarget[],nowMs:number,max
 }
 export function v6BackfillCooldownMs(error:unknown):number{
  const msg=String(error);
- return /Symbol Is Invalid|invalid symbol|symbol not found/i.test(msg)?24*3600000:60*60000;
+ if(/Symbol Is Invalid|invalid symbol|symbol not found/i.test(msg))return 24*3600000;
+ // Backfill shares the Bybit quota with other research. Respect the same
+ // conservative minimum pause used by the V6 provider request policy.
+ if(/\b429\b|rate[ -]?limit|too many requests/i.test(msg))return MIN_PAUSE_MS;
+ return 60*60000;
 }
 export async function backfillV6EntryCandles(pool:pg.Pool,save:(c:Candle)=>Promise<unknown>,nowMs=Date.now()){
  // Bound the candidate scan by recent observation ID before checking candles.
