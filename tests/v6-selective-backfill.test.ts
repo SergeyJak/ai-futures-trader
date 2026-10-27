@@ -37,7 +37,10 @@ test('limits work to distinct symbols and skips blocked invalid instruments',()=
 });
 test('invalid exchange symbols have long cooldown, transient failures short cooldown',()=>{
  assert.equal(v6BackfillCooldownMs('Bybit history error: params error: Symbol Is Invalid'),86400000);
- assert.equal(v6BackfillCooldownMs('HTTP 429'),3600000);
+ assert.equal(v6BackfillCooldownMs('HTTP 429'),7200000);
+ assert.equal(v6BackfillCooldownMs('Bybit rate limit exceeded'),7200000);
+ assert.equal(v6BackfillCooldownMs('Too Many Requests'),7200000);
+ assert.equal(v6BackfillCooldownMs('temporary network failure'),3600000);
 });
 
 test('database candidate query ranks recent missing symbols after deduplication',async()=>{
