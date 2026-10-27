@@ -40,5 +40,5 @@ test('V8 UI shows no-data rather than fabricated zero and surfaces audited gaps'
  assert.match(v8PageHtml,/v\.closedTrades>0/);
  assert.match(v8PageHtml,/Нет закрытых сделок/);
  assert.match(v8PageHtml,/gapAudits/);
- assert.match(v8PageHtml,/Недостаточная выборка/);
+ assert.match(v8PageHtml,/Недостаточная новая выборка/);
 });
