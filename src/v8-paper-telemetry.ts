@@ -2,6 +2,7 @@
 type V8Variant={
  id:string;symbol:string;timeframe:number;closedTrades:number;netPnl:number;wins:number;
  balance:number;last_bar?:string|Date|null;position?:unknown;pending?:unknown;gapAudits?:number;
+ postCutoverClosedTrades?:number;postCutoverNetPnl?:number;postCutoverWins?:number;postCutoverMaxDrawdownClosed?:number;
 };
 export function summarizeV8PaperTelemetry(report:{variants:V8Variant[]},now=new Date()){
  return {
@@ -27,6 +28,17 @@ export function summarizeV8PaperTelemetry(report:{variants:V8Variant[]},now=new 
    if(futureBar)qualityIssues.push('future_bar');
    if(closedValid&&v.closedTrades===0&&netValid&&v.netPnl!==0)qualityIssues.push('pnl_without_trades');
    const hasValidSample=closedValid&&v.closedTrades>0&&winsValid&&netValid&&balanceValid;
+   const cutoverCount=v.postCutoverClosedTrades;
+   const cutoverCountValid=Number.isSafeInteger(cutoverCount)&&Number(cutoverCount)>=0&&Number(cutoverCount)<=v.closedTrades;
+   const cutoverWinsValid=Number.isSafeInteger(v.postCutoverWins)&&Number(v.postCutoverWins)>=0&&Number(v.postCutoverWins)<=Number(cutoverCount);
+   const cutoverPnlValid=Number.isFinite(v.postCutoverNetPnl);
+   const cutoverDrawdownValid=Number.isFinite(v.postCutoverMaxDrawdownClosed)&&Number(v.postCutoverMaxDrawdownClosed)>=0&&Number(v.postCutoverMaxDrawdownClosed)<=1;
+   if(cutoverCount!==undefined&&!cutoverCountValid)qualityIssues.push('invalid_cutover_count');
+   if(v.postCutoverWins!==undefined&&!cutoverWinsValid)qualityIssues.push('invalid_cutover_wins');
+   if(v.postCutoverNetPnl!==undefined&&!cutoverPnlValid)qualityIssues.push('invalid_cutover_pnl');
+   if(v.postCutoverMaxDrawdownClosed!==undefined&&!cutoverDrawdownValid)qualityIssues.push('invalid_cutover_drawdown');
+   if(cutoverCountValid&&cutoverCount===0&&cutoverPnlValid&&v.postCutoverNetPnl!==0)qualityIssues.push('cutover_pnl_without_trades');
+   const hasCutoverSample=cutoverCountValid&&Number(cutoverCount)>0&&cutoverWinsValid&&cutoverPnlValid&&cutoverDrawdownValid;
    return {
     id:v.id,symbol:v.symbol,timeframeMinutes:v.timeframe,
     closed:closedValid?v.closedTrades:null,
@@ -34,6 +46,11 @@ export function summarizeV8PaperTelemetry(report:{variants:V8Variant[]},now=new 
     winRate:hasValidSample?v.wins/v.closedTrades:null,
     insufficientSample:!closedValid||v.closedTrades<30,
     gapAudits:gapsValid?gaps:null,
+    postCutoverClosed:cutoverCountValid?cutoverCount:null,
+    postCutoverNetPnl:hasCutoverSample?v.postCutoverNetPnl:null,
+    postCutoverWinRate:hasCutoverSample?Number(v.postCutoverWins)/Number(cutoverCount):null,
+    postCutoverMaxDrawdownClosed:hasCutoverSample?v.postCutoverMaxDrawdownClosed:null,
+    postCutoverInsufficientSample:!cutoverCountValid||Number(cutoverCount)<30,
     active:v.position!=null,
     pending:v.pending!=null,
     lastBarLagMinutes:lagMinutes,

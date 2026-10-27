@@ -1,6 +1,9 @@
 import type pg from 'pg';
 import {aggregateV8Bars} from './v8-candle-aggregation.js';
 import {v8Signal,V8_FEE_PER_SIDE,V8_SLIPPAGE_PER_SIDE,type V8Bar,type V8Side} from './v8-liquidity-sweep.js';
+// First settled production deployment with gap-safe V8 execution and evidence telemetry.
+// Analytical boundary only: no trades, balances or collection are reset.
+export const V8_EVIDENCE_CUTOVER='2026-10-27T00:41:00.000Z';
 export const V8_CONFIGS=[...['BTCUSDT','ETHUSDT','SOLUSDT'].flatMap(symbol=>[5,15].map(timeframe=>({symbol,timeframe,id:symbol+'-'+timeframe+'m'})))];
 type Position={side:V8Side;entry:number;stop:number;take:number;quantity:number;entryAt:number};
 type Pending={side:V8Side;stop:number;take:number;signalAt:number};
@@ -74,11 +77,27 @@ export async function tickV8Paper(pool:pg.Pool){
  }catch(e){await client.query('ROLLBACK');throw e}finally{client.release()}
 }
 export async function v8PaperReport(pool:pg.Pool){
- const [accounts,trades,totals,gaps]=await Promise.all([
+ const [accounts,trades,totals,gaps,postCutover]=await Promise.all([
   pool.query('SELECT id,balance,position,pending,last_bar FROM v8_paper_accounts ORDER BY id'),
   pool.query('SELECT id,variant,side,entry_at,exit_at,entry_price,exit_price,net_pnl,reason FROM v8_paper_trades ORDER BY id DESC LIMIT 120'),
   pool.query('SELECT variant,COUNT(*)::int AS closed,COALESCE(SUM(net_pnl),0)::double precision AS net,COUNT(*) FILTER(WHERE net_pnl>0)::int AS wins FROM v8_paper_trades GROUP BY variant'),
-  pool.query('SELECT variant,COUNT(*)::int AS audited FROM v8_paper_gap_audit GROUP BY variant')
+  pool.query('SELECT variant,COUNT(*)::int AS audited FROM v8_paper_gap_audit GROUP BY variant'),
+  // Only trades entered AND exited after the execution fix count as new evidence.
+  pool.query(`WITH eligible AS (
+    SELECT variant,id,exit_at,net_pnl,
+      SUM(net_pnl) OVER (PARTITION BY variant ORDER BY exit_at,id ROWS UNBOUNDED PRECEDING) AS cumulative
+    FROM v8_paper_trades WHERE entry_at >= $1::timestamptz AND exit_at >= $1::timestamptz
+  ), equity AS (
+    SELECT variant,id,exit_at,net_pnl,100.0+cumulative AS equity FROM eligible
+  ), peaks AS (
+    SELECT variant,net_pnl,equity,
+      GREATEST(100.0,MAX(equity) OVER (PARTITION BY variant ORDER BY exit_at,id ROWS UNBOUNDED PRECEDING)) AS peak
+    FROM equity
+  )
+  SELECT variant,COUNT(*)::int AS closed,SUM(net_pnl)::double precision AS net,
+    COUNT(*) FILTER (WHERE net_pnl>0)::int AS wins,
+    MAX(GREATEST(0.0,(peak-equity)/NULLIF(peak,0)))::double precision AS max_drawdown
+  FROM peaks GROUP BY variant`,[V8_EVIDENCE_CUTOVER])
  ]);
- return {mode:'forward-only-paper',realOrders:false,startingBalance:100,feePerSide:V8_FEE_PER_SIDE,slippagePerSide:V8_SLIPPAGE_PER_SIDE,funding:'excluded; unknown',warning:'Candle OHLC execution approximation; not real exchange fills',variants:V8_CONFIGS.map(c=>({...c,...accounts.rows.find(a=>a.id===c.id),closedTrades:totals.rows.find(t=>t.variant===c.id)?.closed??0,netPnl:totals.rows.find(t=>t.variant===c.id)?.net??0,wins:totals.rows.find(t=>t.variant===c.id)?.wins??0,gapAudits:gaps.rows.find(g=>g.variant===c.id)?.audited??0,trades:trades.rows.filter(t=>t.variant===c.id)}))};
+ return {mode:'forward-only-paper',realOrders:false,startingBalance:100,cutoverAt:V8_EVIDENCE_CUTOVER,cutoverDrawdownMethod:'closed trades, 100 USDT reference equity; excludes open unrealized PnL',feePerSide:V8_FEE_PER_SIDE,slippagePerSide:V8_SLIPPAGE_PER_SIDE,funding:'excluded; unknown',warning:'Candle OHLC execution approximation; not real exchange fills',variants:V8_CONFIGS.map(c=>({...c,...accounts.rows.find(a=>a.id===c.id),closedTrades:totals.rows.find(t=>t.variant===c.id)?.closed??0,netPnl:totals.rows.find(t=>t.variant===c.id)?.net??0,wins:totals.rows.find(t=>t.variant===c.id)?.wins??0,gapAudits:gaps.rows.find(g=>g.variant===c.id)?.audited??0,postCutoverClosedTrades:postCutover.rows.find(t=>t.variant===c.id)?.closed??0,postCutoverNetPnl:postCutover.rows.find(t=>t.variant===c.id)?.net??0,postCutoverWins:postCutover.rows.find(t=>t.variant===c.id)?.wins??0,postCutoverMaxDrawdownClosed:postCutover.rows.find(t=>t.variant===c.id)?.max_drawdown??0,trades:trades.rows.filter(t=>t.variant===c.id)}))};
 }
