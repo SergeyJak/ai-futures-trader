@@ -431,8 +431,11 @@ const v6ResearchJobs=createV6ResearchJobs(
 async function runV6Backfill(){
  if(closing)return;
  try{
-  const started=await v6ResearchJobs.runBackfill();
-  if(started)console.info('V6_SELECTIVE_BACKFILL',JSON.stringify({status:'completed'}));
+  const run=await v6ResearchJobs.runBackfill();
+  if(run.started){
+   const {targets,saved,errors,skippedCooldown}=run.result;
+   console.info('V6_SELECTIVE_BACKFILL',JSON.stringify({status:errors.length?'partial':'completed',targets,saved,errors,skippedCooldown}));
+  }
  }catch(e){console.error('V6_SELECTIVE_BACKFILL_ERROR',e)}
 }
 const v6BackfillTimer=setInterval(()=>{void runV6Backfill()},15*60000);
