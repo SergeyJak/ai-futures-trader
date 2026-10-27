@@ -100,3 +100,22 @@ test('partial provider response is not a false gap when saved and existing candl
  assert.match(queries[1].sql,/COUNT\(DISTINCT start_at\)::int AS confirmed_minutes/);
  assert.deepEqual(queries[1].params?.slice(0,1),['UNIONUSDT']);
 });
+
+test('empty provider history is cooled down for six hours instead of retrying each hour',async()=>{
+ const symbol='EMPTYHISTORYUSDT';
+ const rows=[{symbol,opened_ms:String(now-2*3600000)}];
+ const pool={query:async()=>({rows})};
+ let requests=0;
+ const load=async()=>{requests++;return []};
+ const save=async()=>{};
+ const first=await backfillV6EntryCandles(pool as never,save,now,load as never);
+ assert.deepEqual(first.targets,[symbol]);
+ assert.match(first.errors[0],/no historical candles/);
+ assert.equal(requests,1);
+ const afterOneHour=await backfillV6EntryCandles(pool as never,save,now+3600000,load as never);
+ assert.deepEqual(afterOneHour.targets,[]);
+ assert.equal(requests,1);
+ const afterSixHours=await backfillV6EntryCandles(pool as never,save,now+6*3600000,load as never);
+ assert.deepEqual(afterSixHours.targets,[symbol]);
+ assert.equal(requests,2);
+});
