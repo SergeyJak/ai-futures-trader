@@ -65,7 +65,9 @@ export async function backfillV6EntryCandles(pool:pg.Pool,save:(c:Candle)=>Promi
   const start=end-20*MINUTE;
   try{
    const candles=await load(t.symbol,start,end);
-   if(!candles.length){retryAfter.set(t.symbol,nowMs+60*60000);errors.push(t.symbol+': no historical candles');continue}
+   // Empty historical windows frequently belong to delisted/unavailable markets.
+   // Avoid retrying the same empty window every hour, but keep it eligible later.
+   if(!candles.length){retryAfter.set(t.symbol,nowMs+6*3600000);errors.push(t.symbol+': no historical candles');continue}
    for(const candle of candles){await save(candle);saved++}
    const missing=v6MissingEntryMinutes(candles,t.symbol,start,end);
    if(missing){
