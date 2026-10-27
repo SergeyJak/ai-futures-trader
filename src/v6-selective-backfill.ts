@@ -68,7 +68,18 @@ export async function backfillV6EntryCandles(pool:pg.Pool,save:(c:Candle)=>Promi
    if(!candles.length){retryAfter.set(t.symbol,nowMs+60*60000);errors.push(t.symbol+': no historical candles');continue}
    for(const candle of candles){await save(candle);saved++}
    const missing=v6MissingEntryMinutes(candles,t.symbol,start,end);
-   if(missing){retryAfter.set(t.symbol,nowMs+60*60000);errors.push(t.symbol+': incomplete entry window ('+missing+' missing confirmed minutes)')}
+   if(missing){
+    // The provider may return only the missing subset. Verify the union of
+    // existing and newly saved confirmed candles before declaring a gap.
+    const coverage=await pool.query(`SELECT COUNT(DISTINCT start_at)::int AS confirmed_minutes
+      FROM market_candles WHERE symbol=$1 AND confirmed=true
+      AND start_at BETWEEN to_timestamp($2::float8/1000) AND to_timestamp($3::float8/1000)`,[t.symbol,start,end]);
+    const confirmed=Number(coverage.rows[0]?.confirmed_minutes??0);
+    if(confirmed!==21){
+     retryAfter.set(t.symbol,nowMs+60*60000);
+     errors.push(t.symbol+': incomplete entry window ('+Math.max(0,21-confirmed)+' missing confirmed minutes)');
+    }
+   }
   }catch(e){retryAfter.set(t.symbol,nowMs+v6BackfillCooldownMs(e));errors.push(t.symbol+': '+String(e).slice(0,100))}
  }
  return {targets:targets.map(t=>t.symbol),saved,errors,skippedCooldown:blocked.size,mode:'research-only' as const};
