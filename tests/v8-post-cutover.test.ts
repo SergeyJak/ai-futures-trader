@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import pg from 'pg';
 import {v8PaperReport,V8_EVIDENCE_CUTOVER} from '../src/v8-paper.js';
 import {summarizeV8PaperTelemetry} from '../src/v8-paper-telemetry.js';
 import {v8PageHtml} from '../src/v8-page.js';
@@ -49,4 +50,33 @@ test('V8 UI separates corrected and legacy paper PnL',()=>{
  assert.match(v8PageHtml,/postCutoverMaxDrawdownClosed/);
  assert.match(v8PageHtml,/Вся история/);
  assert.match(v8PageHtml,/Недостаточная новая выборка/);
+});
+
+test('PostgreSQL computes post-cutover closed drawdown and excludes cross-boundary trades',{skip:!process.env.TEST_DATABASE_URL},async()=>{
+ const pool=new pg.Pool({connectionString:process.env.TEST_DATABASE_URL,max:1});
+ const client=await pool.connect();
+ try{
+  await client.query('CREATE TEMP TABLE v8_paper_accounts(id text,balance float8,position jsonb,pending jsonb,last_bar timestamptz)');
+  await client.query('CREATE TEMP TABLE v8_paper_trades(id bigserial,variant text,side text,entry_at timestamptz,exit_at timestamptz,entry_price float8,exit_price float8,net_pnl float8,reason text)');
+  await client.query('CREATE TEMP TABLE v8_paper_gap_audit(variant text)');
+  await client.query("INSERT INTO v8_paper_accounts VALUES('SOLUSDT-5m',99.5,NULL,NULL,'2026-10-27T04:00:00Z')");
+  const rows=[
+   ['2026-10-26T20:00:00Z','2026-10-26T20:30:00Z',-0.2],
+   ['2026-10-27T00:39:00Z','2026-10-27T00:42:00Z',0.5],
+   ['2026-10-27T01:00:00Z','2026-10-27T01:10:00Z',-1],
+   ['2026-10-27T02:00:00Z','2026-10-27T02:10:00Z',0.5]
+  ] as const;
+  for(const [entry,exit,pnl] of rows)await client.query(
+   "INSERT INTO v8_paper_trades(variant,side,entry_at,exit_at,entry_price,exit_price,net_pnl,reason) VALUES('SOLUSDT-5m','LONG',$1,$2,100,100,$3,'TIME')",
+   [entry,exit,pnl]);
+  const adapter={query:(...args:Parameters<typeof client.query>)=>(client.query as Function)(...args)} as unknown as pg.Pool;
+  const report=await v8PaperReport(adapter);
+  const sol=report.variants.find(v=>v.id==='SOLUSDT-5m')!;
+  assert.equal(sol.closedTrades,4);
+  assert.equal(sol.postCutoverClosedTrades,2);
+  assert.equal(sol.postCutoverWins,1);
+  assert.equal(sol.postCutoverNetPnl,-0.5);
+  assert.ok(Math.abs(sol.postCutoverMaxDrawdownClosed-0.01)<1e-10);
+  assert.equal((await client.query('SELECT COUNT(*)::int AS n FROM v8_paper_trades')).rows[0].n,4);
+ }finally{client.release();await pool.end()}
 });
