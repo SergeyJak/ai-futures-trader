@@ -1,5 +1,6 @@
 import {initV8Paper,tickV8Paper,v8PaperReport} from './v8-paper.js';
 import {v8PageHtml} from './v8-page.js';
+import {summarizeV8PaperTelemetry} from './v8-paper-telemetry.js';
 import {v8Backtest} from './v8-liquidity-sweep.js';
 import {initSol5m,tickSol5m,sol5mReport} from './sol-5m-paper.js';
 import {sol5mHtml} from './sol-5m-page.js';
@@ -393,6 +394,9 @@ async function reportStrategyPaperTelemetry(){
   const byKey=Object.fromEntries(EXPERIMENT_KEYS.map((key,i)=>[key,reports[i]])) as Record<(typeof EXPERIMENT_KEYS)[number],(typeof reports)[number]>;
   console.info('AI_FUTURES_STRATEGY_PAPER',JSON.stringify(summarizeStrategyPaperTelemetry(byKey)));
  }catch(e){console.error('AI_FUTURES_STRATEGY_PAPER_ERROR',e)}
+ try{
+  console.info('AI_FUTURES_V8_PAPER',JSON.stringify(summarizeV8PaperTelemetry(await v8PaperReport(db.v6Pool()))));
+ }catch(e){console.error('AI_FUTURES_V8_PAPER_ERROR',e)}
 }
 const strategyTelemetryTimer=setInterval(()=>{if(!closing)void reportStrategyPaperTelemetry()},30*60000);
 setTimeout(()=>{if(!closing)void reportStrategyPaperTelemetry()},45000);
