@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {backfillV6EntryCandles,selectV6BackfillTargets,v6BackfillCooldownMs} from '../src/v6-selective-backfill.js';
+import {backfillV6EntryCandles,selectV6BackfillTargets,v6BackfillCooldownMs,v6MissingEntryMinutes} from '../src/v6-selective-backfill.js';
 const now=Date.parse('2026-10-11T20:00:00Z');
 test('prioritizes latest eligible closed entry per symbol and rejects invalid inputs',()=>{
  const rows=[
@@ -48,10 +48,36 @@ test('database candidate query ranks recent missing symbols after deduplication'
  const pool={query:async(query:string)=>{sql=query;return {rows:[]}}};
  const result=await backfillV6EntryCandles(pool as never,async()=>{},now);
  assert.deepEqual(result.targets,[]);
- assert.match(sql,/JOIN market_candles m ON m.symbol=e.symbol AND m.confirmed=true/);
- assert.match(sql,/JOIN market_candles p ON p.symbol=e.symbol AND p.confirmed=true/);
- assert.match(sql,/interval '16 minutes'/);
  assert.match(sql,/e.confirmed=true/);
+ assert.match(sql,/interval '21 minutes'/);
+ assert.match(sql,/interval '1 minute'/);
+ assert.match(sql,/COUNT\(DISTINCT e.start_at\)=21/);
  assert.match(sql,/SELECT DISTINCT ON \(symbol\) symbol,opened_ms FROM missing[\s\S]*ORDER BY symbol,opened_ms DESC[\s\S]*\) newest_per_symbol[\s\S]*ORDER BY opened_ms DESC LIMIT 150/);
 });
 
+
+test('entry window audit rejects gaps, duplicates and unconfirmed minutes',()=>{
+ const end=now-60_000,start=end-20*60_000;
+ const candle=(i:number,confirmed=true)=>({symbol:'TESTUSDT',startMs:start+i*60_000,open:'1',high:'1',low:'1',close:'1',volume:'1',turnover:'1',confirmed});
+ const full=Array.from({length:21},(_,i)=>candle(i));
+ assert.equal(v6MissingEntryMinutes(full,'TESTUSDT',start,end),0);
+ assert.equal(v6MissingEntryMinutes([...full.slice(0,20),full[0]],'TESTUSDT',start,end),1);
+ assert.equal(v6MissingEntryMinutes([...full.slice(0,20),candle(20,false)],'TESTUSDT',start,end),1);
+ assert.equal(v6MissingEntryMinutes([...full.slice(0,20),{...candle(20),symbol:'OTHERUSDT'}],'TESTUSDT',start,end),1);
+});
+
+test('partial provider history is saved but flagged, never reported as a complete window',async()=>{
+ const rows=[{symbol:'AUDITONEUSDT',opened_ms:String(now-2*3600000)},{symbol:'AUDITTWOUSDT',opened_ms:String(now-3*3600000)}];
+ const pool={query:async()=>({rows})};
+ const saved:string[]=[];
+ const load=async(symbol:string,start:number)=>{
+  const count=symbol==='AUDITONEUSDT'?20:21;
+  return Array.from({length:count},(_,i)=>({symbol,startMs:start+i*60_000,open:'1',high:'1',low:'1',close:'1',volume:'1',turnover:'1',confirmed:true}));
+ };
+ const result=await backfillV6EntryCandles(pool as never,async c=>{saved.push(c.symbol)},now,load);
+ assert.deepEqual(result.targets,['AUDITONEUSDT','AUDITTWOUSDT']);
+ assert.equal(result.saved,41);
+ assert.equal(saved.length,41);
+ assert.equal(result.errors.length,1);
+ assert.match(result.errors[0],/AUDITONEUSDT: incomplete entry window \(1 missing confirmed minutes\)/);
+});
