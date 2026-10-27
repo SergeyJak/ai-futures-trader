@@ -23,7 +23,14 @@ export function v6BackfillCooldownMs(error:unknown):number{
  if(/\b429\b|rate[ -]?limit|too many requests/i.test(msg))return MIN_PAUSE_MS;
  return 60*60000;
 }
-export async function backfillV6EntryCandles(pool:pg.Pool,save:(c:Candle)=>Promise<unknown>,nowMs=Date.now()){
+/** A backfill window is complete only when every confirmed minute is present. */
+export function v6MissingEntryMinutes(candles:readonly Candle[],symbol:string,startMs:number,endMs:number):number{
+ const present=new Set(candles.filter(c=>c.symbol===symbol&&c.confirmed&&Number.isSafeInteger(c.startMs)&&c.startMs%MINUTE===0&&c.startMs>=startMs&&c.startMs<=endMs).map(c=>c.startMs));
+ let missing=0;
+ for(let t=startMs;t<=endMs;t+=MINUTE)if(!present.has(t))missing++;
+ return missing;
+}
+export async function backfillV6EntryCandles(pool:pg.Pool,save:(c:Candle)=>Promise<unknown>,nowMs=Date.now(),load:typeof fetchHistory=fetchHistory){
  // Bound the candidate scan by recent observation ID before checking candles.
  // Distinct symbols prevent a delisted market monopolizing both request slots.
  const q=await pool.query(`WITH recent AS (
@@ -37,11 +44,11 @@ export async function backfillV6EntryCandles(pool:pg.Pool,save:(c:Candle)=>Promi
   SELECT r.symbol,r.opened_ms FROM recent r
   WHERE NOT EXISTS(
     SELECT 1 FROM market_candles e
-    JOIN market_candles m ON m.symbol=e.symbol AND m.confirmed=true AND m.start_at=e.start_at-interval '1 minute'
-    JOIN market_candles p ON p.symbol=e.symbol AND p.confirmed=true
-      AND p.start_at=date_trunc('minute',to_timestamp(r.opened_ms::float8/1000))-interval '16 minutes'
     WHERE e.symbol=r.symbol AND e.confirmed=true
-      AND e.start_at=date_trunc('minute',to_timestamp(r.opened_ms::float8/1000))-interval '1 minute'
+      AND e.start_at BETWEEN
+        date_trunc('minute',to_timestamp(r.opened_ms::float8/1000))-interval '21 minutes'
+        AND date_trunc('minute',to_timestamp(r.opened_ms::float8/1000))-interval '1 minute'
+    GROUP BY e.symbol HAVING COUNT(DISTINCT e.start_at)=21
   )
  )
  SELECT symbol,opened_ms FROM (
@@ -57,9 +64,11 @@ export async function backfillV6EntryCandles(pool:pg.Pool,save:(c:Candle)=>Promi
   const end=Math.floor(t.openedMs/MINUTE)*MINUTE-MINUTE;
   const start=end-20*MINUTE;
   try{
-   const candles=await fetchHistory(t.symbol,start,end);
+   const candles=await load(t.symbol,start,end);
    if(!candles.length){retryAfter.set(t.symbol,nowMs+60*60000);errors.push(t.symbol+': no historical candles');continue}
    for(const candle of candles){await save(candle);saved++}
+   const missing=v6MissingEntryMinutes(candles,t.symbol,start,end);
+   if(missing){retryAfter.set(t.symbol,nowMs+60*60000);errors.push(t.symbol+': incomplete entry window ('+missing+' missing confirmed minutes)')}
   }catch(e){retryAfter.set(t.symbol,nowMs+v6BackfillCooldownMs(e));errors.push(t.symbol+': '+String(e).slice(0,100))}
  }
  return {targets:targets.map(t=>t.symbol),saved,errors,skippedCooldown:blocked.size,mode:'research-only' as const};
