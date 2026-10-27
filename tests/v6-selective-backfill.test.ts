@@ -97,6 +97,6 @@ test('partial provider response is not a false gap when saved and existing candl
  assert.equal(saved.length,20);
  assert.deepEqual(result.errors,[]);
  assert.equal(queries.length,2);
- assert.match(queries[1].sql,/COUNT\\(DISTINCT start_at\\)::int AS confirmed_minutes/);
+ assert.match(queries[1].sql,/COUNT\(DISTINCT start_at\)::int AS confirmed_minutes/);
  assert.deepEqual(queries[1].params?.slice(0,1),['UNIONUSDT']);
 });
