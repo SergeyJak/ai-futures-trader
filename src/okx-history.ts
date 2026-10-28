@@ -7,10 +7,19 @@ export async function initOkxHistory(pool:pg.Pool){
  await pool.query(`CREATE TABLE IF NOT EXISTS v6_okx_history(unique_code TEXT NOT NULL,sub_pos_id TEXT NOT NULL,raw JSONB NOT NULL,open_at TIMESTAMPTZ NOT NULL,close_at TIMESTAMPTZ NOT NULL,observed_at TIMESTAMPTZ NOT NULL DEFAULT now(),PRIMARY KEY(unique_code,sub_pos_id))`);
  await pool.query(`CREATE TABLE IF NOT EXISTS v6_okx_source_status(unique_code TEXT PRIMARY KEY,last_attempt TIMESTAMPTZ,last_success TIMESTAMPTZ,status TEXT NOT NULL,error TEXT)`);
 }
-export function validateOkxClosed(p:Position){
+/** Bounded, identifier-free rejection categories for research data-quality telemetry. */
+export function okxInvalidClosedReason(p:Position):string|null{
+ if(!p.subPosId)return 'missing_position_id';
  const opened=Number(p.openTime),closed=Number(p.closeTime),entry=Number(p.openAvgPx),exit=Number(p.closeAvgPx);
- return Boolean(p.subPosId&&Number.isFinite(opened)&&opened>0&&Number.isFinite(closed)&&closed>=opened&&closed<=Date.now()+60000&&entry>0&&exit>0&&['long','short','net'].includes(String(p.posSide)));
+ if(!Number.isFinite(opened)||opened<=0)return 'invalid_open_time';
+ if(!Number.isFinite(closed)||closed<opened||closed>Date.now()+60000)return 'invalid_close_time';
+ // A positive Infinity previously passed the price check and could enter raw history.
+ if(!Number.isFinite(entry)||entry<=0)return 'invalid_entry_price';
+ if(!Number.isFinite(exit)||exit<=0)return 'invalid_exit_price';
+ if(!['long','short','net'].includes(String(p.posSide)))return 'invalid_side';
+ return null;
 }
+export function validateOkxClosed(p:Position){return okxInvalidClosedReason(p)===null;}
 async function requestHistory(code:string,after?:string){
  const u=new URL('/api/v5/copytrading/public-subpositions-history',BASE);
  u.searchParams.set('instType','SWAP');u.searchParams.set('uniqueCode',code);u.searchParams.set('limit','100');if(after)u.searchParams.set('after',after);
@@ -23,7 +32,7 @@ async function requestHistory(code:string,after?:string){
 }
 /** Explicitly configured trader codes only. Never infer OKX IDs from another exchange. */
 export async function collectOkxHistory(pool:pg.Pool,codes:string[],maxPages=3){
- let inserted=0,invalid=0;const errors:string[]=[];
+ let inserted=0,invalid=0;const invalidReasons:Record<string,number>={};const errors:string[]=[];
  for(const code of codes.slice(0,10)){
   if(!/^(?:[A-Za-z0-9]{16}|[A-Za-z0-9]{18})$/.test(code)){errors.push('invalid uniqueCode');continue;}
   let cursor:string|undefined;const seen=new Set<string>();
@@ -34,7 +43,8 @@ export async function collectOkxHistory(pool:pg.Pool,codes:string[],maxPages=3){
     const rows=await requestHistory(code,cursor);
     if(!rows.length)break;
     for(const row of rows){
-     if(!validateOkxClosed(row)){invalid++;continue;}
+     const reason=okxInvalidClosedReason(row);
+     if(reason){invalid++;invalidReasons[reason]=(invalidReasons[reason]??0)+1;continue;}
      const r=await pool.query(`INSERT INTO v6_okx_history(unique_code,sub_pos_id,raw,open_at,close_at) VALUES($1,$2,$3,to_timestamp($4/1000.0),to_timestamp($5/1000.0)) ON CONFLICT DO NOTHING`,[code,String(row.subPosId),JSON.stringify(row),Number(row.openTime),Number(row.closeTime)]);
      inserted+=r.rowCount??0;
     }
@@ -50,5 +60,5 @@ export async function collectOkxHistory(pool:pg.Pool,codes:string[],maxPages=3){
    if(error.startsWith('OKX_429'))break;
   }
  }
- return {insertedClosed:inserted,invalid,errors};
+ return {insertedClosed:inserted,invalid,invalidReasons,errors};
 }
