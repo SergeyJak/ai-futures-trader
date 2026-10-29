@@ -11,7 +11,7 @@ export type ResearchTrade={
  entry_price:number|string;exit_price:number|string;net_pnl:number|string;
  candles:ResearchCandle[];
 };
-export type ScoredTrade={id:string;entryAt:number;netPnl:number;trendAligned:boolean;volumeRising:boolean;moderateVolatility:boolean;candidate:boolean};
+export type ScoredTrade={id:string;entryAt:number;exitAt:number;netPnl:number;trendAligned:boolean;volumeRising:boolean;moderateVolatility:boolean;candidate:boolean};
 export function scoreDipContinuationTrade(t:ResearchTrade):ScoredTrade|null{
  const entryAt=new Date(t.entry_at).getTime(),exitAt=new Date(t.exit_at).getTime();
  const entry=Number(t.entry_price),exit=Number(t.exit_price),storedPnl=Number(t.net_pnl);
@@ -37,7 +37,7 @@ export function scoreDipContinuationTrade(t:ResearchTrade):ScoredTrade|null{
  // Fixed 10 USDT notional per trade makes filtered and baseline results comparable.
  const netPnl=DIP_RESEARCH_RULES.notionalUsdt*(dir*(exit-entry)/entry-FEE*(1+exit/entry));
  if(!Number.isFinite(netPnl))return null;
- return {id:String(t.id),entryAt,netPnl,trendAligned,volumeRising,moderateVolatility,
+ return {id:String(t.id),entryAt,exitAt,netPnl,trendAligned,volumeRising,moderateVolatility,
   candidate:trendAligned&&volumeRising&&moderateVolatility};
 }
 function metrics(rows:ScoredTrade[]){
@@ -50,6 +50,15 @@ function metrics(rows:ScoredTrade[]){
  return {trades:n,netPnlUsdt:sum,returnOn100Pct:sum,maxDrawdownClosedPct:maxDrawdown*100,
   winRate:n?wins/n:null,meanNetPnlUsdt:mean,
   approximate95MeanCiUsdt:margin===null||mean===null?null:[mean-margin,mean+margin]};
+}
+/** Greedy earliest-exit selection maximizes the number of non-overlapping realized trades. */
+function nonOverlapping(rows:ScoredTrade[]):ScoredTrade[]{
+ const ordered=[...rows].sort((a,b)=>a.exitAt-b.exitAt||a.entryAt-b.entryAt||a.id.localeCompare(b.id));
+ const selected:ScoredTrade[]=[];let lastExit=-Infinity;
+ for(const trade of ordered){
+  if(trade.entryAt>=lastExit){selected.push(trade);lastExit=trade.exitAt}
+ }
+ return selected.sort((a,b)=>a.entryAt-b.entryAt||a.id.localeCompare(b.id));
 }
 export function evaluateDipContinuation(rows:ResearchTrade[],totalRows=rows.length){
  const seen=new Set<number>(),scored:ScoredTrade[]=[];
@@ -65,6 +74,8 @@ export function evaluateDipContinuation(rows:ResearchTrade[],totalRows=rows.leng
  const group=(items:ScoredTrade[])=>({
   baseline:metrics(items),
   candidate:metrics(items.filter(t=>t.candidate)),
+  independentBaseline:metrics(nonOverlapping(items)),
+  independentCandidate:metrics(nonOverlapping(items.filter(t=>t.candidate))),
   rejected:metrics(items.filter(t=>!t.candidate)),
   trendAligned:metrics(items.filter(t=>t.trendAligned)),
   volumeRising:metrics(items.filter(t=>t.volumeRising)),
@@ -72,7 +83,8 @@ export function evaluateDipContinuation(rows:ResearchTrade[],totalRows=rows.leng
  });
  const development=group(scored.filter(t=>t.entryAt<cutoff));
  const holdout=group(scored.filter(t=>t.entryAt>=cutoff));
- const candidate=holdout.candidate,baseline=holdout.baseline;
+ // All-trade metrics remain descriptive; only non-overlapping trades can qualify the holdout.
+ const candidate=holdout.independentCandidate,baseline=holdout.independentBaseline;
  const status=baseline.trades<MIN_FORWARD_TRADES||candidate.trades<MIN_FORWARD_TRADES
   ?'insufficient_forward_sample'
   :candidate.netPnlUsdt<=0||(candidate.meanNetPnlUsdt??-Infinity)<=(baseline.meanNetPnlUsdt??Infinity)
@@ -85,10 +97,10 @@ export function evaluateDipContinuation(rows:ResearchTrade[],totalRows=rows.leng
   cutoff:DIP_RESEARCH_CUTOFF,rules:DIP_RESEARCH_RULES,feePerSide:FEE,slippagePerSide:SLIP,
   pricing:'next-open-v2 fills already include slippage; fixed 10 USDT notional; both sides charged fees',
   funding:'not verified; excluded from all PnL',
-  confidence:'95% normal approximation of mean per-trade PnL assumes IID; overlapping regimes and small samples invalidate proof',
+  confidence:'95% normal approximation assumes IID. Non-overlapping positions reduce dependence but serial market regimes can remain correlated; this is not proof.',
   quality:{totalPostFixTrades:totalRows,loaded:rows.length,covered:scored.length,missingHistory,duplicates,truncated:totalRows>LIMIT},
   development,forwardHoldout:holdout,status,
-  decisionRule:'At least 30 independent holdout trades in baseline and candidate; positive candidate net, better mean net per executed trade than baseline, approximate mean CI above zero; funding still unverified',
+  decisionRule:'At least 30 non-overlapping holdout trades in baseline and candidate; positive independent candidate net, better independent mean per trade than baseline, independent approximate mean CI above zero; funding still unverified',
   warning:'Thresholds frozen before 2026-10-30 UTC; pre-cutoff results are exploratory, not forward validation. No live orders or strategy changes.'
  };
 }
