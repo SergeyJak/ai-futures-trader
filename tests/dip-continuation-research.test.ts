@@ -86,7 +86,9 @@ test('overlapping 12h positions cannot satisfy the independent forward sample th
  assert.equal(result.forwardHoldout.candidate.trades,40);
  assert.equal(result.forwardHoldout.independentBaseline.trades,4);
  assert.equal(result.forwardHoldout.independentCandidate.trades,4);
+ assert.equal(result.forwardHoldout.independentVolumeRising.trades,4);
  assert.equal(result.status,'insufficient_forward_sample');
+ assert.equal(result.volumeOnlyStatus,'insufficient_forward_sample');
 });
 test('earliest-exit selection maximizes non-overlapping trade evidence',()=>{
  const at=Date.parse(DIP_RESEARCH_CUTOFF);
@@ -100,4 +102,26 @@ test('earliest-exit selection maximizes non-overlapping trade evidence',()=>{
  assert.equal(result.forwardHoldout.baseline.trades,3);
  assert.equal(result.forwardHoldout.independentBaseline.trades,2);
  assert.equal(result.forwardHoldout.independentCandidate.trades,2);
+});
+
+
+test('pre-registered volume-only forward cohort can qualify without trend alignment',()=>{
+ const at=Date.parse(DIP_RESEARCH_CUTOFF);
+ const rows=Array.from({length:40},(_,i)=>{
+  const t=trade(i+1,new Date(at+i*13*3600000).toISOString(),{flat:true,lowVolume:i>=31});
+  if(i>=31)t.exit_price=99.5;
+  return t;
+ });
+ const result=evaluateDipContinuation(rows);
+ assert.equal(result.forwardHoldout.baseline.trades,40);
+ assert.equal(result.forwardHoldout.independentBaseline.trades,40);
+ assert.equal(result.forwardHoldout.candidate.trades,0);
+ assert.equal(result.forwardHoldout.volumeRising.trades,31);
+ assert.equal(result.forwardHoldout.independentVolumeRising.trades,31);
+ assert.equal(result.status,'insufficient_forward_sample');
+ assert.equal(result.volumeOnlyStatus,'positive_before_funding_unverified');
+ assert.ok(result.forwardHoldout.independentVolumeRising.meanNetPnlUsdt!>
+   result.forwardHoldout.independentBaseline.meanNetPnlUsdt!);
+ assert.ok(result.forwardHoldout.independentVolumeRising.approximate95MeanCiUsdt![0]>0);
+ assert.equal(result.funding,'not verified; excluded from all PnL');
 });
