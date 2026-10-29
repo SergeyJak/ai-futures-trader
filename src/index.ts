@@ -401,6 +401,10 @@ async function reportStrategyPaperTelemetry(){
  try{
   console.info('AI_FUTURES_V8_PAPER',JSON.stringify(summarizeV8PaperTelemetry(await v8PaperReport(db.v6Pool()))));
  }catch(e){console.error('AI_FUTURES_V8_PAPER_ERROR',e)}
+ try{
+  const result=await dipContinuationResearch(db.v6Pool());
+  console.info('AI_FUTURES_DIP_12H_RESEARCH',JSON.stringify(result));
+ }catch(e){console.error('AI_FUTURES_DIP_12H_RESEARCH_ERROR',e)}
 }
 const strategyTelemetryTimer=setInterval(()=>{if(!closing)void reportStrategyPaperTelemetry()},30*60000);
 setTimeout(()=>{if(!closing)void reportStrategyPaperTelemetry()},45000);
