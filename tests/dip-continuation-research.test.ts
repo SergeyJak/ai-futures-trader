@@ -43,8 +43,10 @@ test('fixed chronological cutoff keeps development separate from true future hol
  assert.equal(result.quality.duplicates,1);
  assert.equal(result.quality.missingHistory,1);
  assert.equal(result.development.baseline.trades,1);
+ assert.equal(result.development.independentBaseline.trades,1);
  assert.equal(result.forwardHoldout.baseline.trades,1);
  assert.equal(result.forwardHoldout.candidate.trades,1);
+ assert.equal(result.forwardHoldout.independentCandidate.trades,1);
  assert.equal(result.status,'insufficient_forward_sample');
  assert.equal(result.funding,'not verified; excluded from all PnL');
  assert.equal(result.development.baseline.maxDrawdownClosedPct,0);
@@ -72,5 +74,30 @@ test('candidate is not an edge when all holdout trades pass and baseline is iden
  const result=evaluateDipContinuation(rows);
  assert.equal(result.forwardHoldout.baseline.trades,31);
  assert.equal(result.forwardHoldout.candidate.trades,31);
+ assert.equal(result.forwardHoldout.independentBaseline.trades,31);
+ assert.equal(result.forwardHoldout.independentCandidate.trades,31);
  assert.equal(result.status,'reject_candidate_no_net_edge');
+});
+
+test('overlapping 12h positions cannot satisfy the independent forward sample threshold',()=>{
+ const rows=Array.from({length:40},(_,i)=>trade(i+1,new Date(Date.parse(DIP_RESEARCH_CUTOFF)+i*3600000).toISOString()));
+ const result=evaluateDipContinuation(rows);
+ assert.equal(result.forwardHoldout.baseline.trades,40);
+ assert.equal(result.forwardHoldout.candidate.trades,40);
+ assert.equal(result.forwardHoldout.independentBaseline.trades,4);
+ assert.equal(result.forwardHoldout.independentCandidate.trades,4);
+ assert.equal(result.status,'insufficient_forward_sample');
+});
+test('earliest-exit selection maximizes non-overlapping trade evidence',()=>{
+ const at=Date.parse(DIP_RESEARCH_CUTOFF);
+ const first=trade(1,new Date(at).toISOString());
+ first.exit_at=new Date(at+24*3600000).toISOString();
+ const second=trade(2,new Date(at+3600000).toISOString());
+ second.exit_at=new Date(at+2*3600000).toISOString();
+ const third=trade(3,new Date(at+3*3600000).toISOString());
+ third.exit_at=new Date(at+4*3600000).toISOString();
+ const result=evaluateDipContinuation([first,second,third]);
+ assert.equal(result.forwardHoldout.baseline.trades,3);
+ assert.equal(result.forwardHoldout.independentBaseline.trades,2);
+ assert.equal(result.forwardHoldout.independentCandidate.trades,2);
 });
