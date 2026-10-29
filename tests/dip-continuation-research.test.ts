@@ -66,3 +66,11 @@ test('read-only research SQL only selects corrected paper trades and pre-entry c
  assert.equal(result.development.candidate.trades,1);
  assert.equal(result.quality.truncated,false);
 });
+
+test('candidate is not an edge when all holdout trades pass and baseline is identical',()=>{
+ const rows=Array.from({length:31},(_,i)=>trade(i+1,new Date(Date.parse(DIP_RESEARCH_CUTOFF)+i*13*3600000).toISOString()));
+ const result=evaluateDipContinuation(rows);
+ assert.equal(result.forwardHoldout.baseline.trades,31);
+ assert.equal(result.forwardHoldout.candidate.trades,31);
+ assert.equal(result.status,'reject_candidate_no_net_edge');
+});
