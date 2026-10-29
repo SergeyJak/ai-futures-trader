@@ -1,4 +1,6 @@
 import {initV8Paper,tickV8Paper,v8PaperReport} from './v8-paper.js';
+import {dipContinuationResearch} from './dip-continuation-research.js';
+import {dipContinuationResearchHtml} from './dip-continuation-research-page.js';
 import {v8PageHtml} from './v8-page.js';
 import {summarizeV8PaperTelemetry} from './v8-paper-telemetry.js';
 import {v8Backtest} from './v8-liquidity-sweep.js';
@@ -76,6 +78,8 @@ const server=http.createServer(async(req,res)=>{
   }catch(e){console.error('V8_RESEARCH_ERROR',e);res.writeHead(503).end(JSON.stringify({error:'V8 research unavailable'}))}
   return;
  }
+ if(req.url==='/research/dip-continuation'){res.setHeader('content-type','text/html; charset=utf-8');res.setHeader('content-security-policy',"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'");res.writeHead(200).end(withUnifiedHeader(dipContinuationResearchHtml));return}
+ if(req.url==='/api/research/dip-continuation'){try{res.writeHead(200).end(JSON.stringify(await dipContinuationResearch(db.v6Pool())))}catch(e){console.error('DIP_CONTINUATION_RESEARCH_ERROR',e);res.writeHead(503).end(JSON.stringify({error:'Research unavailable'}))}return}
  if(req.url==='/research-progress'){res.setHeader('content-type','text/html; charset=utf-8');res.setHeader('content-security-policy',"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'");res.writeHead(200).end(withUnifiedHeader(researchProgressHtml));return}
  if(req.url==='/api/research-progress'){res.setHeader('content-type','application/json');res.writeHead(200).end(JSON.stringify(researchProgress.snapshot()));return}
  if(req.url==='/'){res.setHeader('content-type','text/html; charset=utf-8');res.setHeader('content-security-policy',"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'");res.writeHead(200).end(withUnifiedHeader(overviewHtml));return}
@@ -397,6 +401,10 @@ async function reportStrategyPaperTelemetry(){
  try{
   console.info('AI_FUTURES_V8_PAPER',JSON.stringify(summarizeV8PaperTelemetry(await v8PaperReport(db.v6Pool()))));
  }catch(e){console.error('AI_FUTURES_V8_PAPER_ERROR',e)}
+ try{
+  const result=await dipContinuationResearch(db.v6Pool());
+  console.info('AI_FUTURES_DIP_12H_RESEARCH',JSON.stringify(result));
+ }catch(e){console.error('AI_FUTURES_DIP_12H_RESEARCH_ERROR',e)}
 }
 const strategyTelemetryTimer=setInterval(()=>{if(!closing)void reportStrategyPaperTelemetry()},30*60000);
 setTimeout(()=>{if(!closing)void reportStrategyPaperTelemetry()},45000);
