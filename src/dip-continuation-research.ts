@@ -72,9 +72,13 @@ export function evaluateDipContinuation(rows:ResearchTrade[],totalRows=rows.leng
  });
  const development=group(scored.filter(t=>t.entryAt<cutoff));
  const holdout=group(scored.filter(t=>t.entryAt>=cutoff));
- const status=holdout.baseline.trades<MIN_FORWARD_TRADES||holdout.candidate.trades<MIN_FORWARD_TRADES
+ const candidate=holdout.candidate,baseline=holdout.baseline;
+ const status=baseline.trades<MIN_FORWARD_TRADES||candidate.trades<MIN_FORWARD_TRADES
   ?'insufficient_forward_sample'
-  :holdout.candidate.netPnlUsdt<=0?'reject_candidate'
+  :candidate.netPnlUsdt<=0||(candidate.meanNetPnlUsdt??-Infinity)<=(baseline.meanNetPnlUsdt??Infinity)
+  ?'reject_candidate_no_net_edge'
+  :(candidate.approximate95MeanCiUsdt?.[0]??-Infinity)<=0
+  ?'inconclusive_mean_uncertainty'
   :'positive_before_funding_unverified';
  return {
   mode:'read-only-paper-research',realOrders:false,strategy:'dip_continuation',variant:'12h',
@@ -84,6 +88,7 @@ export function evaluateDipContinuation(rows:ResearchTrade[],totalRows=rows.leng
   confidence:'95% normal approximation of mean per-trade PnL assumes IID; overlapping regimes and small samples invalidate proof',
   quality:{totalPostFixTrades:totalRows,loaded:rows.length,covered:scored.length,missingHistory,duplicates,truncated:totalRows>LIMIT},
   development,forwardHoldout:holdout,status,
+  decisionRule:'At least 30 independent holdout trades in baseline and candidate; positive candidate net, better mean net per executed trade than baseline, approximate mean CI above zero; funding still unverified',
   warning:'Thresholds frozen before 2026-10-30 UTC; pre-cutoff results are exploratory, not forward validation. No live orders or strategy changes.'
  };
 }
