@@ -76,6 +76,7 @@ export function evaluateDipContinuation(rows:ResearchTrade[],totalRows=rows.leng
   candidate:metrics(items.filter(t=>t.candidate)),
   independentBaseline:metrics(nonOverlapping(items)),
   independentCandidate:metrics(nonOverlapping(items.filter(t=>t.candidate))),
+  independentVolumeRising:metrics(nonOverlapping(items.filter(t=>t.volumeRising))),
   rejected:metrics(items.filter(t=>!t.candidate)),
   trendAligned:metrics(items.filter(t=>t.trendAligned)),
   volumeRising:metrics(items.filter(t=>t.volumeRising)),
@@ -84,14 +85,18 @@ export function evaluateDipContinuation(rows:ResearchTrade[],totalRows=rows.leng
  const development=group(scored.filter(t=>t.entryAt<cutoff));
  const holdout=group(scored.filter(t=>t.entryAt>=cutoff));
  // All-trade metrics remain descriptive; only non-overlapping trades can qualify the holdout.
- const candidate=holdout.independentCandidate,baseline=holdout.independentBaseline;
- const status=baseline.trades<MIN_FORWARD_TRADES||candidate.trades<MIN_FORWARD_TRADES
+ const baseline=holdout.independentBaseline;
+ const classify=(candidate:ReturnType<typeof metrics>)=>baseline.trades<MIN_FORWARD_TRADES||candidate.trades<MIN_FORWARD_TRADES
   ?'insufficient_forward_sample'
   :candidate.netPnlUsdt<=0||(candidate.meanNetPnlUsdt??-Infinity)<=(baseline.meanNetPnlUsdt??Infinity)
   ?'reject_candidate_no_net_edge'
   :(candidate.approximate95MeanCiUsdt?.[0]??-Infinity)<=0
   ?'inconclusive_mean_uncertainty'
   :'positive_before_funding_unverified';
+ const status=classify(holdout.independentCandidate);
+ // Volume-only is a separate pre-registered hypothesis. Its threshold is unchanged
+ // from the exploratory analysis and it uses the same untouched forward cutoff.
+ const volumeOnlyStatus=classify(holdout.independentVolumeRising);
  return {
   mode:'read-only-paper-research',realOrders:false,strategy:'dip_continuation',variant:'12h',
   cutoff:DIP_RESEARCH_CUTOFF,rules:DIP_RESEARCH_RULES,feePerSide:FEE,slippagePerSide:SLIP,
@@ -99,8 +104,9 @@ export function evaluateDipContinuation(rows:ResearchTrade[],totalRows=rows.leng
   funding:'not verified; excluded from all PnL',
   confidence:'95% normal approximation assumes IID. Non-overlapping positions reduce dependence but serial market regimes can remain correlated; this is not proof.',
   quality:{totalPostFixTrades:totalRows,loaded:rows.length,covered:scored.length,missingHistory,duplicates,truncated:totalRows>LIMIT},
-  development,forwardHoldout:holdout,status,
+  development,forwardHoldout:holdout,status,volumeOnlyStatus,
   decisionRule:'At least 30 non-overlapping holdout trades in baseline and candidate; positive independent candidate net, better independent mean per trade than baseline, independent approximate mean CI above zero; funding still unverified',
+  volumeOnlyDecisionRule:'Separate volume-only forward hypothesis: 15m/45m volume ratio >= 1.2; require 30 non-overlapping baseline and volume-only trades, positive volume-only net, better mean per trade than baseline and lower approximate 95% mean CI > 0. Funding remains unverified.',
   warning:'Thresholds frozen before 2026-10-30 UTC; pre-cutoff results are exploratory, not forward validation. No live orders or strategy changes.'
  };
 }
