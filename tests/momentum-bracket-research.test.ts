@@ -51,7 +51,7 @@ test('different entry times, duplicate variants, invalid prices and old trades a
  assert.equal(result.quality.duplicates,1);
  assert.equal(result.quality.invalid,1);
  assert.equal(result.quality.unmatchedCandidate,1);
- assert.equal(result.quality.unmatchedControl,1);
+ assert.equal(result.quality.unmatchedControl,2);
  assert.equal(result.status,'insufficient_forward_sample');
 });
 test('loss-making bracket cannot pass even with 30 independent paired entries',()=>{
