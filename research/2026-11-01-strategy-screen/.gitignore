@@ -10,3 +10,12 @@ short-hold-trades.csv
 inversion-trades.csv
 volume-trades.csv
 volume-equity-hourly.csv
+pair-trades.csv
+pair-equity-hourly.csv
+learning-trades.csv
+forecast-predictions.csv
+portfolio-trades.csv
+forward-cache/
+forward-status.json
+forward-results.json
+forward-trades.json

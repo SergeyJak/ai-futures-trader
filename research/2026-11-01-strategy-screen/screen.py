@@ -17,7 +17,7 @@ def ema(x,n):
     for i in range(1,len(x)):out[i]=alpha*x[i]+(1-alpha)*out[i-1]
     return out
 
-def features(hours):
+def features(hours,period_seconds=3600):
     o,h,l,c=hours[:,1],hours[:,2],hours[:,3],hours[:,4]
     fast,slow=ema(c,20),ema(c,100)
     tr=np.maximum(h-l,np.maximum(np.abs(h-np.roll(c,1)),np.abs(l-np.roll(c,1))));tr[0]=h[0]-l[0]
@@ -28,14 +28,14 @@ def features(hours):
         a=atr[i]; slope=slow[i]-slow[i-12]
         if a<=0:continue
         side=1 if c[i]>max(h[i-20:i]) and c[i]>slow[i] and slope>0 else -1 if c[i]<min(l[i-20:i]) and c[i]<slow[i] and slope<0 else 0
-        if side:signals['trend_breakout'][int(hours[i,0])+3600]=(side,float(a),None)
+        if side:signals['trend_breakout'][int(hours[i,0])+period_seconds]=(side,float(a),None)
         side=1 if c[i-1]<=fast[i-1] and c[i]>fast[i] and c[i]>slow[i] and slope>0 else -1 if c[i-1]>=fast[i-1] and c[i]<fast[i] and c[i]<slow[i] and slope<0 else 0
-        if side:signals['trend_pullback'][int(hours[i,0])+3600]=(side,float(a),None)
+        if side:signals['trend_pullback'][int(hours[i,0])+period_seconds]=(side,float(a),None)
         if abs(fast[i]-slow[i])<a and abs(slope)<.5*a:
             mean=float(np.mean(c[i-19:i+1]));std=float(np.std(c[i-19:i+1]))
             z=(c[i]-mean)/std if std>0 else 0
             side=1 if z<=-2 else -1 if z>=2 else 0
-            if side:signals['range_reversion'][int(hours[i,0])+3600]=(side,float(a),mean)
+            if side:signals['range_reversion'][int(hours[i,0])+period_seconds]=(side,float(a),mean)
     return signals,atr
 
 def load_data():
@@ -72,7 +72,7 @@ def protective_exit(p,bar):
     if take_hit:return take,'TAKE'
     return None
 
-def simulate(data,hours,signals,atrs,strategy,scenario,capital=100.):
+def simulate(data,hours,signals,atrs,strategy,scenario,capital=100.,risk_fraction=.0025,symbol_notional_fraction=1/3,total_notional_multiple=1.,liquidate_at_end=True):
     fee,slip=SCENARIOS[scenario];cash=capital;positions={};trades=[];curve=[];skips={};entry_checks=[]
     times=data[SYMBOLS[0]][:,0]
     def skip(reason):skips[reason]=skips.get(reason,0)+1
@@ -102,32 +102,35 @@ def simulate(data,hours,signals,atrs,strategy,scenario,capital=100.):
             take=entry*(1+d*.008) if strategy=='volume_breakout_4h' else entry+d*atr if short_target else entry+d*3*atr if strategy=='trend_pullback' else target if strategy=='range_reversion' else None
             if take is not None and d*(take-entry)<=0:skip('target_wrong_side_after_gap');continue
             eq=equity(i,1);used=sum(p['qty']*data[s][i,1] for s,p in positions.items())
-            available=max(0.,eq-used)
+            available=max(0.,eq*total_notional_multiple-used)
             loss_per_unit=d*(entry-stop*(1-d*slip))+fee*(entry+stop*(1-d*slip))
-            raw=min(eq*.0025/loss_per_unit,eq/3/entry,available/(entry*(1+fee)))
+            raw=min(eq*risk_fraction/loss_per_unit,eq*symbol_notional_fraction/entry,available/(entry*(1+fee)))
             step=STEPS[symbol];qty=math.floor(raw/step+1e-10)*step
             if qty<step-1e-10:skip(symbol+':minimum_order');continue
-            assert qty*loss_per_unit <= eq*.0025+1e-8
-            assert qty*entry <= eq/3+1e-8
-            assert used+qty*entry <= eq+1e-8
+            assert qty*loss_per_unit <= eq*risk_fraction+1e-8
+            assert qty*entry <= eq*symbol_notional_fraction+1e-8
+            assert used+qty*entry <= eq*total_notional_multiple+1e-8
             entry_fee=fee*qty*entry;cash-=entry_fee
-            horizon={'trend_breakout':48,'trend_pullback':24,'range_reversion':12,'pullback_short_target':12,'range_short_target':12,'short_breakout':4,'short_pullback':4,'short_range':4,'volume_breakout_4h':4}[strategy]
+            horizon={'trend_breakout':48,'trend_pullback':24,'range_reversion':12,'pullback_short_target':12,'range_short_target':12,'short_breakout':4,'short_pullback':4,'short_range':4,'volume_breakout_4h':4,'ridge_4h':4,'ridge_24h':24,'ridge_48h':48,'portfolio_trend_1h':48,'portfolio_trend_4h':168}[strategy]
             positions[symbol]=dict(qty=qty,direction=d,entry=entry,entry_reference=ref,entry_fee=entry_fee,entry_at=t,stop=stop,take=take,deadline=t+horizon*3600,extreme=entry)
             entry_checks.append(dict(symbol=symbol,time=iso(t),equity=eq,notional=qty*entry,modeled_stop_loss=qty*loss_per_unit))
         for symbol,p in list(positions.items()):
             decision=protective_exit(p,data[symbol][i])
             if decision:close(symbol,decision[0],t,decision[1]);exited.add(symbol)
         # Hour-close trailing updates affect only the next minute and beyond.
-        if t%3600==3540 and strategy=='trend_breakout':
-            hi=i//60
+        trail_period=14400 if strategy=='portfolio_trend_4h' else 3600
+        if (t+60)%trail_period==0 and strategy in ['trend_breakout','portfolio_trend_1h','portfolio_trend_4h']:
             for symbol,p in positions.items():
+                hi=int((t-hours[symbol][0,0])//trail_period)
                 c=data[symbol][i,4];d=p['direction'];p['extreme']=max(p['extreme'],c) if d==1 else min(p['extreme'],c)
                 candidate=p['extreme']-d*3*atrs[symbol][hi]
                 p['stop']=max(p['stop'],candidate) if d==1 else min(p['stop'],candidate)
         curve.append(equity(i,4))
-    for symbol in list(positions):close(symbol,data[symbol][-1,4],int(times[-1])+60,'END_OF_STUDY')
-    curve[-1]=cash
-    assert abs(cash-capital-sum(t['net'] for t in trades))<1e-7
+    if liquidate_at_end:
+        for symbol in list(positions):close(symbol,data[symbol][-1,4],int(times[-1])+60,'END_OF_STUDY')
+        curve[-1]=cash
+    open_entry_fees=sum(p['entry_fee'] for p in positions.values())
+    assert abs(cash-capital-sum(t['net'] for t in trades)+open_entry_fees)<1e-7
     assert all(abs(t['price_gross']-t['slippage']-t['fees']-t['net'])<1e-8 for t in trades)
     arr=np.array(curve);peaks=np.maximum.accumulate(np.r_[capital,arr]);dd=(peaks[1:]-arr)/peaks[1:]
     wins=sum(max(0,t['net']) for t in trades);loss=-sum(min(0,t['net']) for t in trades)
@@ -137,6 +140,8 @@ def simulate(data,hours,signals,atrs,strategy,scenario,capital=100.):
         idx=np.flatnonzero(np.array([iso(t)[:7]==month for t in times]));end=float(arr[idx[-1]])
         monthly.append(dict(month=month,start_equity=previous,end_equity=end,return_pct=(end/previous-1)*100,pnl=end-previous));previous=end
     summary=dict(strategy=strategy,scenario=scenario,initial=capital,final=cash,net=cash-capital,return_pct=(cash/capital-1)*100,max_drawdown_pct=float(max(dd))*100,trades=len(trades),wins=sum(bool(t['net']>0) for t in trades),profit_factor=wins/loss if loss else None,fees=sum(t['fees'] for t in trades),slippage=sum(t['slippage'] for t in trades),price_gross=sum(t['price_gross'] for t in trades),end_liquidations=sum(t['reason']=='END_OF_STUDY' for t in trades),funding='excluded; unknown',skips=skips,monthly=monthly,symbols={s:dict(trades=sum(t['symbol']==s for t in trades),net=sum(t['net'] for t in trades if t['symbol']==s)) for s in SYMBOLS})
+    if not liquidate_at_end:
+        summary.update(mode='prospective-paper-replay',cash=float(cash),equity=float(arr[-1]),final=float(arr[-1]),net=float(arr[-1]-capital),return_pct=float((arr[-1]/capital-1)*100),open_positions={s:dict(quantity=p['qty'],side='LONG' if p['direction']==1 else 'SHORT',entry=p['entry'],entry_at=iso(p['entry_at']),stop=p['stop'],deadline=iso(p['deadline'])) for s,p in positions.items()},closed_realized_net=sum(t['net'] for t in trades),open_entry_fees=float(open_entry_fees))
     return summary,trades,arr,entry_checks
 
 def engine_checks():
