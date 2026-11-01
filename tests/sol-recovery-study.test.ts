@@ -25,5 +25,5 @@ test('reports scale trade percent by 10 USDT notional, not 100',()=>{
  assert.equal(r.trades,2);assert.ok(Math.abs(r.netPnlUsdt+0.1)<1e-10);assert.ok(r.maxDrawdownPct>0);
 });
 test('chronological holdout stays untouched and reports insufficient evidence',()=>{
- const r=evaluateRecovery(bars());assert.deepEqual(r.results.map(x=>x.bars),[180,60,60]);assert.equal(r.holdoutDecision,'INSUFFICIENT_DATA');assert.equal(r.realOrders,false);
+ const r=evaluateRecovery(bars());assert.deepEqual(r.results.map(x=>x.bars),[300,0,0,0]);assert.equal(r.holdoutDecision,'INSUFFICIENT_DATA');assert.equal(r.realOrders,false);
 });
