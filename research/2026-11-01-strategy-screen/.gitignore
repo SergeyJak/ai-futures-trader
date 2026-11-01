@@ -15,6 +15,9 @@ pair-equity-hourly.csv
 learning-trades.csv
 forecast-predictions.csv
 portfolio-trades.csv
+october-trades.csv
+entry-selection-trades.csv
+october-exposure.json
 forward-cache/
 forward-status.json
 forward-results.json

@@ -69,6 +69,14 @@ def main():
         result,rows,_,_=screen.simulate(data,hs,signals,atrs,key,scenario,risk_fraction=.01,symbol_notional_fraction=1.,total_notional_multiple=3.,liquidate_at_end=False)
         result['monthly']=[m for m in result['monthly'] if m['month']>=START.strftime('%Y-%m')]
         result.update(start=START.isoformat(),as_of=end.isoformat(),status='provisional-paper',scheduled=False,orders=False,liquidation='not independently modeled')
+        full=[]
+        for month in result['monthly']:
+            year,number=map(int,month['month'].split('-'));first=dt.datetime(year,number,1,tzinfo=dt.timezone.utc)
+            following=dt.datetime(year+1,1,1,tzinfo=dt.timezone.utc) if number==12 else dt.datetime(year,number+1,1,tzinfo=dt.timezone.utc)
+            if first>=START and following<=end:full.append(month)
+        mean=float((np.prod([m['end_equity']/m['start_equity'] for m in full])**(1/len(full))-1)*100) if full else None
+        ready=len(full)>=3 and result['trades']>=30
+        result.update(full_calendar_months=len(full),geometric_full_month_return_pct=mean,review_ready=ready,paper_targets_met=bool(ready and all(m['return_pct']>0 for m in full) and mean>=10 and result['max_drawdown_pct']<=15),candidate='not-promoted',unresolved_evidence=['actual funding','margin/liquidation','real execution'])
         results.append(result);trades.extend(rows)
     (ROOT/'forward-results.json').write_text(json.dumps(results,indent=2))
     (ROOT/'forward-trades.json').write_text(json.dumps(trades,indent=2))
