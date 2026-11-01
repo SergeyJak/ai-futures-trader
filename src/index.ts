@@ -1,3 +1,4 @@
+import {runRecoveryStudy} from './sol-recovery-study.js';
 import {initV8Paper,tickV8Paper,v8PaperReport} from './v8-paper.js';
 import {dipContinuationResearch} from './dip-continuation-research.js';
 import {momentumBracketResearch} from './momentum-bracket-research.js';
@@ -53,6 +54,10 @@ const researchTimer=setInterval(()=>{void researchProgress.run().catch(e=>consol
 researchTimer.unref();
 const researchStart=setTimeout(()=>{void researchProgress.run().catch(e=>console.error('RESEARCH_PROGRESS_ERROR',e))},120000);
 researchStart.unref();
+// Read-only historical SOL study; run off the trading tick and log measurable results.
+const solRecoveryJob=()=>{void runRecoveryStudy(db.v6Pool()).then(study=>console.log('AI_FUTURES_SOL_RECOVERY_STUDY '+JSON.stringify(study))).catch(e=>console.error('SOL_RECOVERY_STUDY_ERROR',e))};
+const solRecoveryStart=setTimeout(solRecoveryJob,180000);solRecoveryStart.unref();
+const solRecoveryTimer=setInterval(solRecoveryJob,6*3600000);solRecoveryTimer.unref();
 const server=http.createServer(async(req,res)=>{
  res.setHeader('cache-control','no-store');
  res.setHeader('x-content-type-options','nosniff');
