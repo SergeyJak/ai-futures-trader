@@ -18,8 +18,8 @@ test('candle gap excludes affected opportunity',()=>{
 });
 test('winner/loser mining never reads validation or holdout into discovery',()=>{
  const r=evaluateSolOpportunities(flat());
- assert.equal(r.splits.length,3);assert.equal(r.splits[0].split,'discovery');
- assert.equal(r.splits[1].split,'validation');assert.equal(r.splits[2].split,'holdout');
+ assert.equal(r.splits.length,4);assert.equal(r.splits[0].split,'discovery');
+ assert.equal(r.splits[1].split,'validation');assert.equal(r.splits[2].split,'retrospective');assert.equal(r.splits[3].split,'forwardHoldout');
  assert.equal(r.realOrders,false);
 });
 
@@ -36,4 +36,9 @@ test('candidate holdout is evaluated independently of discovery',()=>{
  assert.equal(r.candidateDecision,'INSUFFICIENT_HOLDOUT');
  assert.equal(r.splits[2].candidate.trades,0);
  assert.ok(r.splits[0].trades>r.splits[2].trades);
+});
+
+test('UTC grid is stable when earlier candles are prepended or trimmed',()=>{
+ const b=flat(600),full=sampleSolOpportunities(b),trimmed=sampleSolOpportunities(b.slice(5));
+ assert.deepEqual(trimmed.map(x=>x.entryAt),full.map(x=>x.entryAt));
 });
