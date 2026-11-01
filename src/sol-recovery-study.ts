@@ -1,3 +1,4 @@
+import {evaluateSolOpportunities} from './sol-entry-opportunity-study.js';
 import type pg from 'pg';
 import {recoveryBacktest,type Bar,type Trade} from './sol-recovery-breakout.js';
 
@@ -32,6 +33,6 @@ export async function runRecoveryStudy(pool:pg.Pool){
   await client.query('SET LOCAL statement_timeout = 120000');
   const r=await client.query('SELECT (EXTRACT(EPOCH FROM start_at)*1000)::bigint::text AS time,open::text,high::text,low::text,close::text,volume::text FROM market_candles WHERE symbol=$1 AND confirmed=true ORDER BY start_at',['SOLUSDT']);
   const bars:Bar[]=r.rows.map(x=>({time:Number(x.time),open:Number(x.open),high:Number(x.high),low:Number(x.low),close:Number(x.close),volume:Number(x.volume)}));
-  return evaluateRecovery(bars);
+  return {...evaluateRecovery(bars),opportunityContrast:evaluateSolOpportunities(bars)};
  }finally{try{await client.query('ROLLBACK')}finally{client.release()}}
 }
