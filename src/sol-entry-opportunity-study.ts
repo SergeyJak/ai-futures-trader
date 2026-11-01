@@ -4,6 +4,9 @@
 import type {Bar} from './sol-recovery-breakout.js';
 export type Opportunity={entryAt:number;exitAt:number;netPct:number;reason:string;drawdown30Pct:number;trend30Pct:number;volumeRatio5:number;realizedVol30Pct:number};
 const FEE=.0006,SLIP=.0003;
+/** Frozen from discovery winner/loser contrast; no validation/holdout tuning. */
+export const SOL_VOLUME_TREND_RULES={minTrend30Pct:.07,minVolumeRatio5:1.35,minDrawdown30Pct:.2,maxDrawdown30Pct:1} as const;
+export function isVolumeTrendCandidate(x:Opportunity){return x.trend30Pct>=SOL_VOLUME_TREND_RULES.minTrend30Pct&&x.volumeRatio5>=SOL_VOLUME_TREND_RULES.minVolumeRatio5&&x.drawdown30Pct>=SOL_VOLUME_TREND_RULES.minDrawdown30Pct&&x.drawdown30Pct<=SOL_VOLUME_TREND_RULES.maxDrawdown30Pct}
 function median(values:number[]){const a=[...values].sort((x,y)=>x-y);return (a[5]+a[6])/2}
 export function sampleSolOpportunities(bars:readonly Bar[]):Opportunity[]{
  const out:Opportunity[]=[];
@@ -33,7 +36,10 @@ export function sampleSolOpportunities(bars:readonly Bar[]):Opportunity[]{
 function summary(rows:readonly Opportunity[]){
  let equity=100,peak=100,dd=0;
  for(const t of rows){equity+=t.netPct*.1;peak=Math.max(peak,equity);dd=Math.max(dd,100*(peak-equity)/peak)}
- return {trades:rows.length,wins:rows.filter(x=>x.netPct>0).length,netPnlUsdt:equity-100,maxDrawdownPct:dd};
+ const n=rows.length,netPnlUsdt=rows.reduce((s,t)=>s+t.netPct*.1,0),mean=n?netPnlUsdt/n:null;
+ const variance=n>1?rows.reduce((s,t)=>s+(t.netPct*.1-(mean??0))**2,0)/(n-1):null;
+ const margin=variance===null?null:1.96*Math.sqrt(variance/n);
+ return {trades:n,wins:rows.filter(x=>x.netPct>0).length,netPnlUsdt,maxDrawdownPct:dd,meanNetPnlUsdt:mean,approx95MeanCiUsdt:margin===null||mean===null?null:[mean-margin,mean+margin]};
 }
 const FEATURES=['drawdown30Pct','trend30Pct','volumeRatio5','realizedVol30Pct'] as const;
 function featureMedian(rows:readonly Opportunity[]){
@@ -42,11 +48,13 @@ function featureMedian(rows:readonly Opportunity[]){
 export function evaluateSolOpportunities(bars:readonly Bar[]){
  const a=Math.floor(bars.length*.6),b=Math.floor(bars.length*.8);
  const splits=[bars.slice(0,a),bars.slice(a,b),bars.slice(b)].map((segment,i)=>{
-  const rows=sampleSolOpportunities(segment),s=summary(rows);
-  if(i!==0)return {split:['discovery','validation','holdout'][i],...s};
+  const rows=sampleSolOpportunities(segment),s=summary(rows),candidate=summary(rows.filter(isVolumeTrendCandidate));
+  if(i!==0)return {split:['discovery','validation','holdout'][i],...s,candidate};
   const winners=rows.filter(x=>x.netPct>0).sort((x,y)=>y.netPct-x.netPct).slice(0,20);
   const losers=rows.filter(x=>x.netPct<0).sort((x,y)=>x.netPct-y.netPct).slice(0,20);
-  return {split:'discovery',...s,top20Winners:winners,bottom20Losers:losers,featureMedians:{winners:featureMedian(winners),losers:featureMedian(losers)},warning:'Retrospective examples only. No candidate threshold is selected from validation or holdout.'};
+  return {split:'discovery',...s,candidate,top20Winners:winners,bottom20Losers:losers,featureMedians:{winners:featureMedian(winners),losers:featureMedian(losers)},warning:'Retrospective examples only. No candidate threshold is selected from validation or holdout.'};
  });
- return {mode:'retrospective-fixed-grid-entry-contrast',symbol:'SOLUSDT',realOrders:false,notionalUsdt:10,feeAndSlippageIncluded:true,fundingIncluded:false,gridMinutes:120,holdMinutes:120,splits};
+ const holdout=splits[2],c=holdout.candidate;
+ const candidateDecision=c.trades<30?'INSUFFICIENT_HOLDOUT':c.netPnlUsdt<=0?'REJECT_NEGATIVE_NET':(c.approx95MeanCiUsdt?.[0]??-Infinity)<=0?'INCONCLUSIVE':'CANDIDATE_BEFORE_FUNDING';
+ return {mode:'retrospective-fixed-grid-entry-contrast',symbol:'SOLUSDT',realOrders:false,notionalUsdt:10,feeAndSlippageIncluded:true,fundingIncluded:false,gridMinutes:120,holdMinutes:120,candidateRules:SOL_VOLUME_TREND_RULES,candidateDecision,splits};
 }
