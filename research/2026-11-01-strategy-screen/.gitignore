@@ -1,0 +1,10 @@
+data/
+.venv/
+__pycache__/
+*.log
+trades.csv
+risk-checks.csv
+equity-hourly.csv
+hit-rate-trades.csv
+short-hold-trades.csv
+inversion-trades.csv
