@@ -1,5 +1,4 @@
 import type pg from 'pg';
-import {runRecoveryStudy} from './sol-recovery-study.js';
 import {evaluateStoredEntryFilters} from './entry-filter-stored.js';
 import {summarizeOos} from './entry-filter-decision.js';
 
@@ -33,8 +32,6 @@ export function createResearchProgress(pool:pg.Pool,now:()=>number=Date.now){
    }
   }catch(e){lastError=true;for(const version of ['v4'] as const)if(!next.some(s=>s.version===version))next.push({version,status:'error',error:e instanceof Error?e.message:'Database unavailable'})}
   finally{if(client){try{await client.query('ROLLBACK')}catch{}client.release()}completed=now();studies=next;running=false}
-  try{const study=await runRecoveryStudy(pool);console.log('AI_FUTURES_SOL_RECOVERY_STUDY '+JSON.stringify(study))}
-  catch(e){console.error('SOL_RECOVERY_STUDY_ERROR',e)}
   return snapshot();
  }
  return {snapshot,run};
