@@ -97,9 +97,9 @@ def simulate(data,hours,signals,atrs,strategy,scenario,capital=100.):
             if symbol in positions or symbol in exited:skip('already_open_or_exited');continue
             d,atr,target=signal;ref=data[symbol][i,1];entry=ref*(1+d*slip)
             short_target=strategy in ['pullback_short_target','range_short_target','short_breakout','short_pullback','short_range']
-            stop=entry-d*(1.5 if short_target else 2)*atr
+            stop=entry*(1-d*.004) if strategy=='volume_breakout_4h' else entry-d*(1.5 if short_target else 2)*atr
             if stop<=0:skip('invalid_stop');continue
-            take=entry+d*atr if short_target else entry+d*3*atr if strategy=='trend_pullback' else target if strategy=='range_reversion' else None
+            take=entry*(1+d*.008) if strategy=='volume_breakout_4h' else entry+d*atr if short_target else entry+d*3*atr if strategy=='trend_pullback' else target if strategy=='range_reversion' else None
             if take is not None and d*(take-entry)<=0:skip('target_wrong_side_after_gap');continue
             eq=equity(i,1);used=sum(p['qty']*data[s][i,1] for s,p in positions.items())
             available=max(0.,eq-used)
@@ -111,7 +111,7 @@ def simulate(data,hours,signals,atrs,strategy,scenario,capital=100.):
             assert qty*entry <= eq/3+1e-8
             assert used+qty*entry <= eq+1e-8
             entry_fee=fee*qty*entry;cash-=entry_fee
-            horizon={'trend_breakout':48,'trend_pullback':24,'range_reversion':12,'pullback_short_target':12,'range_short_target':12,'short_breakout':4,'short_pullback':4,'short_range':4}[strategy]
+            horizon={'trend_breakout':48,'trend_pullback':24,'range_reversion':12,'pullback_short_target':12,'range_short_target':12,'short_breakout':4,'short_pullback':4,'short_range':4,'volume_breakout_4h':4}[strategy]
             positions[symbol]=dict(qty=qty,direction=d,entry=entry,entry_reference=ref,entry_fee=entry_fee,entry_at=t,stop=stop,take=take,deadline=t+horizon*3600,extreme=entry)
             entry_checks.append(dict(symbol=symbol,time=iso(t),equity=eq,notional=qty*entry,modeled_stop_loss=qty*loss_per_unit))
         for symbol,p in list(positions.items()):

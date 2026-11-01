@@ -8,3 +8,5 @@ equity-hourly.csv
 hit-rate-trades.csv
 short-hold-trades.csv
 inversion-trades.csv
+volume-trades.csv
+volume-equity-hourly.csv
