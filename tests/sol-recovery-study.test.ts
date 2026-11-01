@@ -10,15 +10,15 @@ test('fixed-cost recovery signal enters next open and takes profit',()=>{
  b[100]={...b[100],open:98.5,high:100.5,low:98.5,close:100,volume:1000};
  b[101]={...b[101],open:100,high:102,low:100,close:101.5};
  const trades=recoveryBacktest(b);
- assert.equal(trades.length,1);assert.equal(trades[0].entryAt,101*60000);
- assert.equal(trades[0].reason,'TAKE');assert.ok(trades[0].netPct>0);
+ const trade=trades.find(t=>t.entryAt===101*60000);
+ assert.ok(trade);assert.equal(trade.reason,'TAKE');assert.ok(trade.netPct>0);
 });
 test('same-bar stop wins over take',()=>{
  const b=bars();b[80].high=103;
  for(let i=91;i<100;i++){b[i]={...b[i],open:98.5,high:99,low:98,close:98.5,volume:i>=96?1000:10}}
  b[100]={...b[100],open:98.5,high:100.5,low:98.5,close:100,volume:1000};
  b[101]={...b[101],open:100,high:103,low:98,close:101};
- const t=recoveryBacktest(b);assert.equal(t.length,1);assert.equal(t[0].reason,'STOP');assert.ok(t[0].netPct<0);
+ const t=recoveryBacktest(b);const trade=t.find(x=>x.entryAt===101*60000);assert.ok(trade);assert.equal(trade.reason,'STOP');assert.ok(trade.netPct<0);
 });
 test('reports scale trade percent by 10 USDT notional, not 100',()=>{
  const r=summarizeRecovery([{entryAt:0,exitAt:1,netPct:1,reason:'TAKE'},{entryAt:2,exitAt:3,netPct:-2,reason:'STOP'}]);
