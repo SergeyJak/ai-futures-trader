@@ -1,3 +1,4 @@
+import {splitSolHistory,SOL_SPLIT_LABELS,SOL_SPLIT_DATES} from './sol-research-splits.js';
 /** Deterministic retrospective opportunity sampling, NOT a predictive trading strategy.
  * A fixed 120-minute entry grid avoids selecting winners by future outcome.
  */
@@ -10,7 +11,8 @@ export function isVolumeTrendCandidate(x:Opportunity){return x.trend30Pct>=SOL_V
 function median(values:number[]){const a=[...values].sort((x,y)=>x-y);return (a[5]+a[6])/2}
 export function sampleSolOpportunities(bars:readonly Bar[]):Opportunity[]{
  const out:Opportunity[]=[];
- for(let i=120;i+121<bars.length;i+=120){
+ for(let i=65;i+121<bars.length;i++){
+  if(bars[i].time%(120*60000)!==0)continue;
   const window=bars.slice(i-64,i+121);
   if(window.some((b,k)=>![b.time,b.open,b.high,b.low,b.close,b.volume].every(Number.isFinite)||b.low<=0||b.low>b.high||b.open<b.low||b.open>b.high||b.close<b.low||b.close>b.high||b.volume<0||(k>0&&b.time-window[k-1].time!==60000)))continue;
   const last=bars[i],recent30=bars.slice(i-29,i+1);
@@ -46,15 +48,14 @@ function featureMedian(rows:readonly Opportunity[]){
  return Object.fromEntries(FEATURES.map(k=>{const v=rows.map(x=>x[k]).sort((a,b)=>a-b);return [k,v.length?v[Math.floor(v.length/2)]:null]}));
 }
 export function evaluateSolOpportunities(bars:readonly Bar[]){
- const a=Math.floor(bars.length*.6),b=Math.floor(bars.length*.8);
- const splits=[bars.slice(0,a),bars.slice(a,b),bars.slice(b)].map((segment,i)=>{
+ const splits=splitSolHistory(bars).map((segment,i)=>{
   const rows=sampleSolOpportunities(segment),s=summary(rows),candidate=summary(rows.filter(isVolumeTrendCandidate));
-  if(i!==0)return {split:['discovery','validation','holdout'][i],...s,candidate};
+  if(i!==0)return {split:SOL_SPLIT_LABELS[i],...s,candidate};
   const winners=rows.filter(x=>x.netPct>0).sort((x,y)=>y.netPct-x.netPct).slice(0,20);
   const losers=rows.filter(x=>x.netPct<0).sort((x,y)=>x.netPct-y.netPct).slice(0,20);
   return {split:'discovery',...s,candidate,top20Winners:winners,bottom20Losers:losers,featureMedians:{winners:featureMedian(winners),losers:featureMedian(losers)},warning:'Retrospective examples only. No candidate threshold is selected from validation or holdout.'};
  });
- const holdout=splits[2],c=holdout.candidate;
+ const holdout=splits[3],c=holdout.candidate;
  const candidateDecision=c.trades<30?'INSUFFICIENT_HOLDOUT':c.netPnlUsdt<=0?'REJECT_NEGATIVE_NET':(c.approx95MeanCiUsdt?.[0]??-Infinity)<=0?'INCONCLUSIVE':'CANDIDATE_BEFORE_FUNDING';
- return {mode:'retrospective-fixed-grid-entry-contrast',symbol:'SOLUSDT',realOrders:false,notionalUsdt:10,feeAndSlippageIncluded:true,fundingIncluded:false,gridMinutes:120,holdMinutes:120,candidateRules:SOL_VOLUME_TREND_RULES,candidateDecision,splits};
+ return {mode:'retrospective-fixed-grid-entry-contrast',symbol:'SOLUSDT',realOrders:false,notionalUsdt:10,feeAndSlippageIncluded:true,fundingIncluded:false,gridMinutes:120,holdMinutes:120,gridAnchor:'even UTC hours',splitDates:SOL_SPLIT_DATES,retrospectiveAlreadyInspected:true,candidateRules:SOL_VOLUME_TREND_RULES,candidateDecision,splits};
 }
