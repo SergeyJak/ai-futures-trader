@@ -1,5 +1,7 @@
 # AI Futures Trader
 
+Public funding, depth/spread samples and trade aggregates: [collection and deployment guide](docs/RESEARCH_DATA.md).
+
 Private Bybit USDT perpetual market-monitoring and strategy research platform.
 
 ## Phase 1: market data only
@@ -11,3 +13,4 @@ Private Bybit USDT perpetual market-monitoring and strategy research platform.
 - **No trading, credentials, or real-money execution in this phase**
 
 Future phases: backtesting, paper trading, Bybit Demo execution, risk management, and an AI-assisted dashboard. Live trading requires explicit approval and separate controls.
+

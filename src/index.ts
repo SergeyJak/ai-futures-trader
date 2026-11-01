@@ -40,6 +40,8 @@ import http from 'node:http';import {backtest} from './backtest.js';
 import {evaluateCandidate} from './research.js';
 import {auditTrade,auditSummary} from './audit.js';import {researchThirtyMinuteRange} from './range30.js';import {researchThirtyMinuteBounce} from './bounce30.js';
 import {walkForward} from './walkforward.js';import {analyze} from './indicators.js';import {dashboardHtml} from './dashboard.js';import {v3Html} from './v3-page.js';import {analyticsHtml,researchHtml,marketHtml} from './extra-pages.js';import {MINUTE,missingRanges,fetchHistory} from './backfill.js';import {Database} from './database.js';import {MarketStream} from './market.js';
+import {createResearchData,researchDataConfig} from './research-data-runtime.js';
+import {researchDataResponse} from './research-data-api.js';
 const port=Number(process.env.PORT??3000);const url=process.env.DATABASE_URL;
 const endpoint=process.env.BYBIT_PUBLIC_WS??'wss://stream.bybit.com/v5/public/linear';
 const symbols=(process.env.MARKET_SYMBOLS??'BTCUSDT,ETHUSDT,SOLUSDT').split(',').map(s=>s.trim().toUpperCase());
@@ -49,6 +51,8 @@ if(!Number.isInteger(port)||port<1||port>65535)throw new Error('Invalid port');
 installOutboundTelemetry();
 const db=new Database(url);await db.init();await db.initExperiments();await db.initShadow();await db.initV3();await db.initV4();await db.initV5();await initV6(db.v6Pool());await initOkxHistory(db.v6Pool());await initSolPaper(db.v6Pool());await initSolShort(db.v6Pool());await initSol5m(db.v6Pool());await initV8Paper(db.v6Pool());await initStrategyPaper(db.v6Pool());await initV7(db.v6Pool());await initDipOos(db.v6Pool());const stream=new MarketStream(endpoint,symbols,db);stream.start();
 const researchProgress=createResearchProgress(db.v6Pool());
+const researchData=createResearchData(researchDataConfig(process.env,symbols,endpoint),url);
+await researchData.runtime.start();
 // A bounded observational job, never part of the trade execution tick.
 const researchTimer=setInterval(()=>{void researchProgress.run().catch(e=>console.error('RESEARCH_PROGRESS_ERROR',e))},6*3600000);
 researchTimer.unref();
@@ -62,6 +66,11 @@ const server=http.createServer(async(req,res)=>{
  res.setHeader('cache-control','no-store');
  res.setHeader('x-content-type-options','nosniff');
  res.setHeader('referrer-policy','no-referrer');
+ if(req.url==='/api/research-data'||req.url?.startsWith('/api/research-data?')||req.url?.startsWith('/api/research-data/')){
+  const result=await researchDataResponse(req.method??'GET',req.url,researchData.store,researchData.config,researchData.runtime.status);
+  res.setHeader('content-type','application/json; charset=utf-8');if(result.status===405)res.setHeader('allow','GET');
+  res.writeHead(result.status).end(JSON.stringify(result.body));return;
+ }
  if(req.url==='/v8'){res.setHeader('content-type','text/html; charset=utf-8');res.setHeader('content-security-policy',"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'");res.writeHead(200).end(withUnifiedHeader(v8PageHtml));return}
  if(req.url==='/api/v8-paper'){try{res.setHeader('content-type','application/json');res.writeHead(200).end(JSON.stringify(await v8PaperReport(db.v6Pool())))}catch(e){console.error('V8_PAPER_REPORT_ERROR',e);res.writeHead(503).end(JSON.stringify({error:'V8 paper unavailable'}))}return}
  if(req.url==='/api/research/v8'){
@@ -467,6 +476,7 @@ setTimeout(()=>{void runOkx()},60000);
 const v6Timer=setInterval(()=>{if(closing)return;void runV6(db.v6Pool()).then(result=>console.info('V6_DISCOVERY',JSON.stringify(result))).catch(e=>console.error('V6_ERROR',e))},6*3600000);
 setTimeout(()=>{if(closing)return;void runV6(db.v6Pool()).then(result=>console.info('V6_DISCOVERY',JSON.stringify(result))).catch(e=>console.error('V6_ERROR',e))},20000);
 let closing=false;async function stop(){if(closing)return;closing=true;clearInterval(statsTimer);clearInterval(storageTimer);clearInterval(repairTimer);clearInterval(historyTimer);clearInterval(paperTimer);clearInterval(telemetryTimer);clearInterval(strategyTelemetryTimer);clearInterval(bounceResearchTimer);clearInterval(v3Timer);clearInterval(v4Timer);clearInterval(v5Timer);clearInterval(v6Timer);clearInterval(v6BackfillTimer);clearInterval(v6CostTimer);clearInterval(solPaperTimer);clearInterval(solShortTimer);clearInterval(strategyPaperTimer);server.close();
+ const researchStop=researchData.runtime.stop().catch(e=>console.error('RESEARCH_DATA_STOP_ERROR',e instanceof Error?e.message:String(e)));
  // Existing jobs may still be using the pools after timers have stopped.
  // Drain paper-trading ticks before closing the shared database pools.
  const drainDeadline=Date.now()+15000;
@@ -477,5 +487,6 @@ let closing=false;async function stop(){if(closing)return;closing=true;clearInte
   }
   await new Promise(resolve=>setTimeout(resolve,100));
  }
- await stream.stop();await db.close();}
+ await researchStop;await stream.stop();await db.close();}
 for(const sig of ['SIGINT','SIGTERM'] as const)process.on(sig,()=>{void stop().then(()=>process.exit(0))});
+
