@@ -126,7 +126,7 @@ export async function dipContinuationResearch(pool:pg.Pool){
  const baseline=evaluateDipContinuation(trades.rows as ResearchTrade[],Number(count.rows[0]?.n??0));
  // Read-only funding sensitivity is separate from the frozen fee/slippage decision gate.
  // Missing or incomplete funding evidence must never be interpreted as zero funding.
- let fundingSensitivity:unknown;
+ let fundingSensitivity:{status:string};
  try{
   const {dipFundingSensitivity}=await import('./dip-funding-sensitivity.js');
   fundingSensitivity=await dipFundingSensitivity(pool,trades.rows as ResearchTrade[]);
