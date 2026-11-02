@@ -46,3 +46,9 @@ test('duplicate trade entries are counted once',()=>{
  assert.equal(x.eligibleTrades,1);
  assert.equal(x.forwardHoldout?.independentBaseline.trades,1);
 });
+
+test('provider complete flag without any stored settlements is not proof of zero funding',()=>{
+ const x=estimateDipFunding([sample()],[],coverage);
+ assert.equal(x.status,'incomplete_funding_history');
+ assert.equal(x.forwardHoldout,null);
+});
