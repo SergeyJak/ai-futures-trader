@@ -56,10 +56,12 @@ test('read-only research SQL only selects corrected paper trades and pre-entry c
  const pool={query:async(sql:string)=>{
   queries.push(sql);
   if(sql.startsWith('SELECT COUNT'))return {rows:[{n:1}]};
+  if(sql.includes('research_collector_status'))return {rows:[{coverage:{complete:false}}]};
+  if(sql.includes('research_funding_rates'))return {rows:[]};
   return {rows:[trade(1,'2026-10-29T10:00:00.000Z')]};
  }} as unknown as pg.Pool;
  const result=await dipContinuationResearch(pool);
- assert.equal(queries.length,2);
+ assert.equal(queries.length,4);
  assert.ok(queries.every(q=>q.startsWith('SELECT')));
  assert.match(queries[0],/execution_model='next-open-v2'/);
  assert.match(queries[0],/c.confirmed=true/);
@@ -67,6 +69,7 @@ test('read-only research SQL only selects corrected paper trades and pre-entry c
  assert.match(queries[0],/LIMIT 500/);
  assert.equal(result.development.candidate.trades,1);
  assert.equal(result.quality.truncated,false);
+ assert.equal(result.fundingSensitivity.status,'incomplete_funding_history');
 });
 
 test('candidate is not an edge when all holdout trades pass and baseline is identical',()=>{
