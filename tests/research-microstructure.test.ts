@@ -52,7 +52,7 @@ test('late data and bounded dedup overflow are counted and cannot create fake co
  const s=fixture({dedupLimit:2});s.ingest(trade('a'),now+110);s.ingest(trade('b'),now+120);s.ingest(trade('c'),now+130);
  s.ingest(trade('late',now+200),now+40001);
  const rows=s.drainTrades(now+40001);assert.equal(rows[0].buys,2);assert.equal(rows[0].streamContinuous,false);
- const status=s.status(now+40001);assert.equal(status.dedupIds,2);assert.equal(status.droppedTrades,1);assert.equal(status.lateTrades,1);
+ const status=s.status(now+40001);assert.equal(status.dedupIds,0);assert.equal(status.droppedTrades,1);assert.equal(status.lateTrades,1);
 });
 test('disconnect marks buffered trade coverage incomplete and never manufactures empty buckets',()=>{
  const s=fixture();s.ingest(trade('a'),now+110);s.disconnect(now+500);s.connect('c2',now+1000);
@@ -65,12 +65,45 @@ test('a drop before a bucket exists remains visible when capacity later recovers
  s.ingest(trade('recovered',now+19900),now+40001);
  const rows=s.drainTrades(now+50000);assert.equal(rows.length,1);assert.equal(rows[0].buys,1);assert.equal(rows[0].streamContinuous,false);
 });
-test('dedup capacity recovery inside a bucket does not erase a known dropped trade',()=>{
- const s=new MicrostructureState(['BTCUSDT'],{dedupLimit:1});s.connect('c1',now-180000);
- s.ingest(trade('old',now-120000),now-120000);s.drainTrades(now-80000);
- s.ingest(trade('dropped',now),now);assert.equal(s.status(now).droppedTrades,1);
- s.ingest(trade('accepted',now+1),now+1);
- const rows=s.drainTrades(now+40000);assert.equal(rows.length,1);assert.equal(rows[0].buys,1);assert.equal(rows[0].streamContinuous,false);
+test('finalized trade IDs release capacity exactly at the late-data boundary',()=>{
+ const s=fixture({dedupLimit:1});s.ingest(trade('old'),now+110);
+ s.ingest(trade('dropped',now+10100),now+10110);
+ assert.equal(s.status(now+10110).droppedTrades,1);
+ // At +40s the old bucket can never accept another trade, even before a drain.
+ s.ingest(trade('accepted',now+19900),now+40000);
+ const rows=s.drainTrades(now+50000);assert.equal(rows.length,2);
+ assert.equal(rows[1].buys,1);assert.equal(rows[1].streamContinuous,false);
+ assert.equal(s.status(now+50000).droppedTrades,1);
+ assert.equal(s.status(now+50000).dedupIds,0);
+});
+test('out-of-order event buckets expire independently without losing live duplicate protection',()=>{
+ const s=fixture({dedupLimit:2});s.ingest(trade('new',now+20100),now+20110);
+ s.ingest(trade('old',now+100),now+20120);
+ s.ingest(trade('replacement',now+30100),now+40000);
+ s.disconnect(now+40001);s.connect('c2',now+40002);
+ s.ingest(trade('new',now+20100),now+40003);
+ s.ingest(trade('old',now+100),now+40004);
+ const rows=s.drainTrades(now+80000);
+ assert.equal(rows.reduce((n,r)=>n+r.buys,0),3);
+ assert.equal(s.status(now+80000).droppedTrades,0);
+ assert.equal(s.status(now+80000).duplicateTrades,1);
+ assert.equal(s.status(now+80000).lateTrades,1);
+});
+test('sustained traffic does not let finalized IDs starve live buckets',()=>{
+ const s=fixture();let rows:ReturnType<MicrostructureState['drainTrades']>=[];
+ for(let second=0;second<120;second++){
+  const at=now+second*1000+100;
+  const data=Array.from({length:1200},(_,i)=>({i:`${second}-${i}`,T:at,s:'BTCUSDT',S:'Buy',p:'100',v:'2'}));
+  s.ingest({topic:'publicTrade.BTCUSDT',data},at);
+  s.ingest({topic:'publicTrade.BTCUSDT',data:[data[0]]},at+1);
+  if(second%10===0)rows.push(...s.drainTrades(at));
+ }
+ rows.push(...s.drainTrades(now+160000));
+ assert.equal(rows.reduce((n,r)=>n+r.buys,0),144000);
+ assert.equal(rows.every(r=>r.streamContinuous),true);
+ assert.equal(s.status(now+160000).droppedTrades,0);
+ assert.equal(s.status(now+160000).duplicateTrades,120);
+ assert.equal(s.status(now+160000).dedupIds,0);
 });
 test('malformed prices and untrusted symbol/topic pairs are rejected without mutating book',()=>{
  const s=fixture();s.ingest(book(),now);s.ingest(book('delta',11,21,[['NaN','2']]),now+1);assert.deepEqual(s.sample(now+2),[]);
