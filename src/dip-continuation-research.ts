@@ -123,5 +123,15 @@ export async function dipContinuationResearch(pool:pg.Pool){
  const [trades,count]=await Promise.all([
   pool.query(sql),pool.query('SELECT COUNT(*)::int AS n FROM v6_paper_trades WHERE '+where)
  ]);
- return {at:new Date().toISOString(),...evaluateDipContinuation(trades.rows as ResearchTrade[],Number(count.rows[0]?.n??0))};
+ const baseline=evaluateDipContinuation(trades.rows as ResearchTrade[],Number(count.rows[0]?.n??0));
+ // Read-only funding sensitivity is separate from the frozen fee/slippage decision gate.
+ // Missing or incomplete funding evidence must never be interpreted as zero funding.
+ let fundingSensitivity:unknown;
+ try{
+  const {dipFundingSensitivity}=await import('./dip-funding-sensitivity.js');
+  fundingSensitivity=await dipFundingSensitivity(pool,trades.rows as ResearchTrade[]);
+ }catch(e){
+  fundingSensitivity={status:'unavailable',reason:e instanceof Error?e.message:'Funding data unavailable'};
+ }
+ return {at:new Date().toISOString(),...baseline,fundingSensitivity};
 }
