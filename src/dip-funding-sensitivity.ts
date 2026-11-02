@@ -31,7 +31,7 @@ export function estimateDipFunding(rows:ResearchTrade[],funding:FundingRow[],cov
  const valid=[...scores.values()].filter((s):s is NonNullable<typeof s>=>s!==null);
  const rates=funding.map(r=>({at:new Date(r.funding_at).getTime(),rate:Number(r.rate)})).sort((a,b)=>a.at-b.at);
  const invalidRates=rates.some((r,i)=>!Number.isFinite(r.at)||!Number.isFinite(r.rate)||Math.abs(r.rate)>1||(i>0&&r.at===rates[i-1].at));
- const full=coverage?.complete===true&&Number.isFinite(coverage.requestedFrom)&&Number.isFinite(coverage.requestedTo)&&!invalidRates;
+ const full=coverage?.complete===true&&rates.length>0&&Number.isFinite(coverage.requestedFrom)&&Number.isFinite(coverage.requestedTo)&&!invalidRates;
  const evaluated:Observation[]=[];let uncovered=0,boundaryAmbiguous=0;
  for(const s of valid){
   if(!full||s.entryAt<coverage!.requestedFrom!||s.exitAt>coverage!.requestedTo!){uncovered++;continue}
