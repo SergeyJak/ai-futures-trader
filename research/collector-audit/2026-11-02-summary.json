@@ -1,0 +1,218 @@
+{
+  "captured_at": "2026-11-02T16:38:31.646Z",
+  "end": "2026-11-02T16:37:31Z",
+  "drop_counter_at_snapshot": 16332,
+  "fee_assumptions": {
+    "takerRate": 0.0006,
+    "makerRate": 0.0002,
+    "verified": false,
+    "source": "configured assumptions; not account or VIP verification"
+  },
+  "symbols": {
+    "BTCUSDT": {
+      "sample_rows": 7907,
+      "first": "2026-11-01T18:38:50.000Z",
+      "last": "2026-11-02T16:37:30.000Z",
+      "sample_missing_slots": 6,
+      "max_sample_gap_seconds": 70.0,
+      "spread_bps": {
+        "min": 0.012690363382948945,
+        "median": 0.012818417503013388,
+        "mean": 0.012985963386404993,
+        "p95": 0.0128788026129864,
+        "p99": 0.012923604747765655,
+        "max": 0.8870462324632155
+      },
+      "minimum_side_top_notional": {
+        "min": 77.356,
+        "median": 106342.23599999999,
+        "mean": 131918.52444507397,
+        "p95": 340575.07303999993,
+        "p99": 504189.8740799996,
+        "max": 1514506.1030000001
+      },
+      "minimum_side_50_level_notional": {
+        "min": 52901.7086,
+        "median": 1157801.5392999998,
+        "mean": 1175650.58713354,
+        "p95": 1924068.93976,
+        "p99": 2339469.220336,
+        "max": 3639384.2320000003
+      },
+      "top_both_sides_cover_100_fraction": 0.9969647148096623,
+      "top_both_sides_cover_300_fraction": 0.9925382572404199,
+      "trade_buckets": 7882,
+      "incomplete_trade_buckets": 19,
+      "observed_trade_count": 1033854,
+      "funding_rows": 363,
+      "funding_rate_bps": {
+        "min": -0.4668,
+        "median": 0.4234,
+        "mean": 0.4395404958677686,
+        "p95": 1.0,
+        "p99": 1.0,
+        "max": 1.0
+      },
+      "funding_schedule_verified": true,
+      "fee_plus_mean_spread_round_trip_bps": 12.012985963386404
+    },
+    "ETHUSDT": {
+      "sample_rows": 7907,
+      "first": "2026-11-01T18:38:50.000Z",
+      "last": "2026-11-02T16:37:30.000Z",
+      "sample_missing_slots": 6,
+      "max_sample_gap_seconds": 70.0,
+      "spread_bps": {
+        "min": 0.043233241173451904,
+        "median": 0.04374788096098141,
+        "mean": 0.04403097604482863,
+        "p95": 0.044295709295071574,
+        "p99": 0.04435657112170682,
+        "max": 0.5661811300544585
+      },
+      "minimum_side_top_notional": {
+        "min": 22.526500000000002,
+        "median": 23611.4415,
+        "mean": 30861.127855545717,
+        "p95": 84729.50304,
+        "p99": 144926.68270799986,
+        "max": 354557.04899999994
+      },
+      "minimum_side_50_level_notional": {
+        "min": 100901.33510000003,
+        "median": 758446.8572,
+        "mean": 769634.0062177944,
+        "p95": 1152317.17543,
+        "p99": 1422935.1020679993,
+        "max": 2184293.4055000003
+      },
+      "top_both_sides_cover_100_fraction": 0.9815353484254458,
+      "top_both_sides_cover_300_fraction": 0.9705324396104718,
+      "trade_buckets": 7885,
+      "incomplete_trade_buckets": 21,
+      "observed_trade_count": 1120024,
+      "funding_rows": 363,
+      "funding_rate_bps": {
+        "min": -1.4547,
+        "median": 0.3705,
+        "mean": 0.35550853994490356,
+        "p95": 1.0,
+        "p99": 1.0,
+        "max": 1.0
+      },
+      "funding_schedule_verified": true,
+      "fee_plus_mean_spread_round_trip_bps": 12.044030976044827
+    },
+    "SOLUSDT": {
+      "sample_rows": 7907,
+      "first": "2026-11-01T18:38:50.000Z",
+      "last": "2026-11-02T16:37:30.000Z",
+      "sample_missing_slots": 6,
+      "max_sample_gap_seconds": 70.0,
+      "spread_bps": {
+        "min": 1.0431335732545888,
+        "median": 1.060276732226147,
+        "mean": 1.059482632218832,
+        "p95": 1.0670650376145885,
+        "p99": 1.071639071959589,
+        "max": 1.075673640617987
+      },
+      "minimum_side_top_notional": {
+        "min": 18.692,
+        "median": 32680.817,
+        "mean": 34074.219455419254,
+        "p95": 74275.5244,
+        "p99": 101256.11983999984,
+        "max": 201926.34
+      },
+      "minimum_side_50_level_notional": {
+        "min": 4951495.817,
+        "median": 10389744.672999999,
+        "mean": 10269485.748464651,
+        "p95": 11830844.290900001,
+        "p99": 12519241.768339999,
+        "max": 13313438.807000002
+      },
+      "top_both_sides_cover_100_fraction": 0.9949411913494373,
+      "top_both_sides_cover_300_fraction": 0.987479448589857,
+      "trade_buckets": 7785,
+      "incomplete_trade_buckets": 20,
+      "observed_trade_count": 448380,
+      "funding_rows": 363,
+      "funding_rate_bps": {
+        "min": -1.785,
+        "median": 0.2379,
+        "mean": 0.21301845730027547,
+        "p95": 1.0,
+        "p99": 1.0,
+        "max": 1.0
+      },
+      "funding_schedule_verified": true,
+      "fee_plus_mean_spread_round_trip_bps": 13.059482632218831
+    }
+  },
+  "fixed_trade_diagnostics": [
+    {
+      "group": "selected_portfolio",
+      "trades": 22,
+      "missing_estimates": 0,
+      "price_gross": 21.04908992725836,
+      "slippage": 0.39981240402218954,
+      "fees": 0.7996210192082984,
+      "net": 19.849656504027873,
+      "funding_estimate": -0.264684953588,
+      "funding_boundary_min": -0.032774190544000006,
+      "funding_boundary_max": 0.0012903215720000002,
+      "funding_boundary_events": 20,
+      "funding_interior_events": 185,
+      "net_plus_estimated_funding": 19.584971550439874,
+      "net_with_boundary_min": 19.552197359895874,
+      "net_with_boundary_max": 19.586261872011875
+    },
+    {
+      "group": "october_standalone",
+      "trades": 8,
+      "missing_estimates": 0,
+      "price_gross": -1.6018617401085726,
+      "slippage": 0.10960147852201654,
+      "fees": 0.21920324537917835,
+      "net": -1.930666464009768,
+      "funding_estimate": 0.024026921409,
+      "funding_boundary_min": -0.003517803924,
+      "funding_boundary_max": 0.0012903215720000002,
+      "funding_boundary_events": 8,
+      "funding_interior_events": 69,
+      "net_plus_estimated_funding": -1.9066395426007678,
+      "net_with_boundary_min": -1.9101573465247679,
+      "net_with_boundary_max": -1.905349221028768
+    },
+    {
+      "group": "short_breakout",
+      "trades": 153,
+      "missing_estimates": 0,
+      "price_gross": -0.02246672941172484,
+      "slippage": 1.45044487468847,
+      "fees": 2.9008897534212514,
+      "net": -4.373801357521446,
+      "funding_estimate": -0.019173482887,
+      "funding_boundary_min": -0.023188287929000004,
+      "funding_boundary_max": 0.00366549999,
+      "funding_boundary_events": 26,
+      "funding_interior_events": 27,
+      "net_plus_estimated_funding": -4.392974840408446,
+      "net_with_boundary_min": -4.416163128337446,
+      "net_with_boundary_max": -4.389309340418445
+    }
+  ],
+  "peak_accepted_trades_120_seconds": 50000,
+  "peak_accepted_trades_40_seconds": 44121,
+  "limitations": [
+    "Approx. one day of sampled quotes cannot establish a stable strategy or monthly return.",
+    "Fees are configured assumptions, not account-verified rates. Sampled spread is not execution slippage.",
+    "No historical quote costs are replaced by today's spreads.",
+    "Funding is a fixed-trade sensitivity estimate on previous-minute closes, not settlement mark prices or verified cash flows.",
+    "Entry/exit exactly at settlement have unknown ordering; boundary sensitivity is shown separately.",
+    "Positions are not resized or re-simulated after funding; no revised drawdown or monthly performance is claimed.",
+    "Absent trade buckets are unknown (possibly idle or lost); continuous buckets do not prove complete exchange delivery."
+  ]
+}

@@ -20,6 +20,7 @@ function validBook(b:Book){
 export class MicrostructureState{
  private symbols:Set<string>;private books=new Map<string,Book>();private tickers=new Map<string,Ticker>();
  private buckets=new Map<string,Map<number,TradeBucket>>();private ids=new Map<string,number>();
+ private idsByExpiry=new Map<number,Set<string>>();
  // One bounded watermark per configured symbol preserves known loss before a bucket exists.
  private incompleteBefore=new Map<string,number>();
  private connected=false;private connectionId='';private connectedAt=0;
@@ -76,7 +77,7 @@ export class MicrostructureState{
  private trades(symbol:string,data:unknown,at:number):Result{
   if(!this.symbols.has(symbol))return none();
   if(!Array.isArray(data)||data.length>2000){this.counters.invalidMessages++;return none()}
-  for(const [id,time] of this.ids){if(time>=at-120000)break;this.ids.delete(id)}
+  this.expireTradeIds(at);
   let accepted=false;
   for(const item of data){
    if(item===null||typeof item!=='object'){this.counters.invalidMessages++;continue}
@@ -93,11 +94,23 @@ export class MicrostructureState{
    if(!bucket){bucket={symbol,bucketAt,buys:0,sells:0,buyQuantity:0,sellQuantity:0,buyNotional:0,sellNotional:0,firstTradeAt:time,lastTradeAt:time,streamContinuous:this.connectedAt<=bucketAt&&bucketAt>=(this.incompleteBefore.get(symbol)??0)};buckets.set(bucketAt,bucket);this.buckets.set(symbol,buckets)}
    const buy=d.S==='Buy',quantity=buy?bucket.buyQuantity:bucket.sellQuantity,total=buy?bucket.buyNotional:bucket.sellNotional;
    if(!Number.isFinite(quantity+qty)||!Number.isFinite(total+notional)){bucket.streamContinuous=false;this.counters.droppedTrades++;this.incompleteBefore.set(symbol,Math.max(this.incompleteBefore.get(symbol)??0,bucketAt+BUCKET));continue}
-   this.ids.set(id,at);bucket.firstTradeAt=Math.min(bucket.firstTradeAt,time);bucket.lastTradeAt=Math.max(bucket.lastTradeAt,time);
+   const expiry=bucketAt+BUCKET+LATENESS;
+   this.ids.set(id,expiry);
+   const expiryIds=this.idsByExpiry.get(expiry)??new Set<string>();expiryIds.add(id);this.idsByExpiry.set(expiry,expiryIds);
+   bucket.firstTradeAt=Math.min(bucket.firstTradeAt,time);bucket.lastTradeAt=Math.max(bucket.lastTradeAt,time);
    if(buy){bucket.buys++;bucket.buyQuantity+=qty;bucket.buyNotional+=notional}else{bucket.sells++;bucket.sellQuantity+=qty;bucket.sellNotional+=notional}
    accepted=true;
   }
   return {accepted,resync:false};
+ }
+ private expireTradeIds(now:number){
+  // Replays for these buckets are already rejected as late. Retaining their IDs
+  // would consume the bounded cache and discard unrelated live trades.
+  // Exchange event times may arrive out of order, so inspect every expiry group.
+  for(const [expiry,ids] of this.idsByExpiry)if(expiry<=now){
+   for(const id of ids)this.ids.delete(id);
+   this.idsByExpiry.delete(expiry);
+  }
  }
  sample(now:number):MarketSample[]{
   if(!this.connected)return [];const rows:MarketSample[]=[];
@@ -113,6 +126,7 @@ export class MicrostructureState{
   return rows;
  }
  drainTrades(now:number):TradeBucket[]{
+  this.expireTradeIds(now);
   const rows:TradeBucket[]=[];
   for(const buckets of this.buckets.values())for(const [time,bucket] of buckets)if(time+BUCKET+LATENESS<=now){rows.push({...bucket});buckets.delete(time)}
   return rows.sort((a,b)=>a.bucketAt-b.bucketAt||a.symbol.localeCompare(b.symbol));

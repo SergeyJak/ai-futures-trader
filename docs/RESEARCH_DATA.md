@@ -34,6 +34,8 @@ Raw ticks and full book snapshots are not persisted. At three active symbols, th
 
 Memory bounds: <=50 levels per side/symbol, <=12 pending trade buckets/symbol, <=50,000 recent trade IDs globally, one persistence retry batch (expires after 60s), single-flight persistence/funding/retention jobs, <=2 MiB WebSocket frames. Overflows/failures are counted. Shutdown cancels funding requests, terminates the public socket, drains active research queries and records discarded pending data before closing the dedicated pool.
 
+Trade IDs expire at their event bucket's finalization boundary (bucket end + 30 seconds), when replays are already rejected as late. Expiration runs on receipt and on flush, handles out-of-order event buckets, and preserves IDs across reconnects until that boundary. A burst exceeding 50,000 still-live IDs can still cause explicitly marked drops; finalized IDs no longer crowd out current trades. After deploying this fix, check counter **increments** and new incomplete buckets; an old cumulative counter or a process restart alone cannot prove recovery. Historical incomplete rows remain incomplete.
+
 ## Readiness and API
 
 After deployment, open **`/api/research-data`**. It shows current runtime state plus per-symbol table counts/earliest/latest observations and persisted errors. Confirm:
