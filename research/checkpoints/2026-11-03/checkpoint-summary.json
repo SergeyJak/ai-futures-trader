@@ -1,0 +1,548 @@
+{
+  "snapshot_at": "2026-11-03T18:54:31.297Z",
+  "market_window": {
+    "from": "2026-11-02T17:00:00Z",
+    "to_exclusive": "2026-11-03T18:53:31Z"
+  },
+  "collector_current_process": {
+    "enabled": true,
+    "storageReady": true,
+    "stopped": false,
+    "skippedFlushes": 0,
+    "droppedPersistenceRows": 0,
+    "missingSampleObservations": 0,
+    "shutdownDiscardedBuckets": 0,
+    "pendingRows": 0,
+    "lastPersistedAt": 1793732062806,
+    "lastError": null,
+    "lastSocketError": null,
+    "fundingRetryAt": 0,
+    "fundingLastAttempt": 1793731541148,
+    "fundingLastSuccess": 1793731544483,
+    "lastFundingError": null,
+    "fundingCoverage": {
+      "BTCUSDT": {
+        "at": 1793731542174,
+        "requestedFrom": 1783363541148,
+        "requestedTo": 1793731541148,
+        "rows": 360,
+        "pages": 2,
+        "complete": true,
+        "reason": null,
+        "invalidRecords": 0,
+        "duplicateRecords": 0
+      },
+      "ETHUSDT": {
+        "at": 1793731543497,
+        "requestedFrom": 1783363541148,
+        "requestedTo": 1793731541148,
+        "rows": 360,
+        "pages": 2,
+        "complete": true,
+        "reason": null,
+        "invalidRecords": 0,
+        "duplicateRecords": 0
+      },
+      "SOLUSDT": {
+        "at": 1793731544483,
+        "requestedFrom": 1783363541148,
+        "requestedTo": 1793731541148,
+        "rows": 360,
+        "pages": 2,
+        "complete": true,
+        "reason": null,
+        "invalidRecords": 0,
+        "duplicateRecords": 0
+      }
+    },
+    "lastPruneError": null,
+    "bucketSeconds": 10,
+    "latenessSeconds": 30,
+    "retentionDays": 7,
+    "microstructure": {
+      "invalidMessages": 0,
+      "rejectedBooks": 0,
+      "duplicateTrades": 0,
+      "lateTrades": 0,
+      "droppedTrades": 0,
+      "connected": true,
+      "connectionId": "1793688075432-3",
+      "connectedAt": 1793688075432,
+      "dedupIds": 603,
+      "bufferedBuckets": 13,
+      "books": [
+        {
+          "symbol": "BTCUSDT",
+          "ready": true,
+          "lastReceivedAt": 1793732071280,
+          "lastExchangeAt": 1793732071195
+        },
+        {
+          "symbol": "ETHUSDT",
+          "ready": true,
+          "lastReceivedAt": 1793732071278,
+          "lastExchangeAt": 1793732071192
+        },
+        {
+          "symbol": "SOLUSDT",
+          "ready": true,
+          "lastReceivedAt": 1793732071281,
+          "lastExchangeAt": 1793732071195
+        }
+      ]
+    }
+  },
+  "symbols": {
+    "BTCUSDT": {
+      "sample_count": 9315,
+      "quote_gaps": [
+        {
+          "after": "2026-11-02T22:34:30.000Z",
+          "before": "2026-11-02T22:35:50.000Z",
+          "seconds": 80.0,
+          "missing_slots": 7
+        }
+      ],
+      "connections": [
+        {
+          "id": "1793638799680-1",
+          "first_sample": "2026-11-02T17:00:00.000Z"
+        },
+        {
+          "id": "1793658941671-1",
+          "first_sample": "2026-11-02T22:35:50.000Z"
+        },
+        {
+          "id": "1793680907095-2",
+          "first_sample": "2026-11-03T04:41:50.000Z"
+        },
+        {
+          "id": "1793688075432-3",
+          "first_sample": "2026-11-03T06:41:20.000Z"
+        }
+      ],
+      "trade_bucket_count": 9312,
+      "observed_trade_count": 1685961,
+      "incomplete_trade_buckets": [
+        "2026-11-02T22:35:40.000Z",
+        "2026-11-03T04:41:10.000Z",
+        "2026-11-03T04:41:20.000Z",
+        "2026-11-03T04:41:30.000Z",
+        "2026-11-03T04:41:40.000Z",
+        "2026-11-03T06:40:40.000Z",
+        "2026-11-03T06:40:50.000Z",
+        "2026-11-03T06:41:00.000Z",
+        "2026-11-03T06:41:10.000Z"
+      ],
+      "mean_spread_bps": 0.0130269649124814,
+      "spread_bps": {
+        "min": 0.012843095261895608,
+        "median": 0.012989551854722354,
+        "mean": 0.0130269649124814,
+        "p95": 0.013057907249139095,
+        "p99": 0.013073503209907005,
+        "max": 0.15515823554016914
+      },
+      "top_both_sides_cover_100_fraction": 0.9937734836285561,
+      "top_both_sides_cover_300_fraction": 0.9855072463768116,
+      "minimum_side_top_notional": {
+        "min": 76.5802,
+        "median": 105278.65020000002,
+        "mean": 132139.285586613,
+        "p95": 340423.38183999987,
+        "p99": 477082.2385040011,
+        "max": 1416885.5012
+      },
+      "fast_move_definition": "Top 5% absolute adjacent 10s midpoint changes; same connection; descriptive, not an entry rule",
+      "fast_move_threshold_bps": 4.081171768268721,
+      "fast_move_samples": 466,
+      "fast_move_spread_bps": {
+        "min": 0.012843095261895608,
+        "median": 0.012962569286912518,
+        "mean": 0.01296245223887842,
+        "p95": 0.013039930580131667,
+        "p99": 0.013067061508027477,
+        "max": 0.013095784533200207
+      },
+      "fast_move_top_both_sides_cover_100_fraction": 0.9914163090128756,
+      "funding_settlements": [
+        {
+          "symbol": "BTCUSDT",
+          "funding_at": "2026-11-03T00:00:00.000Z",
+          "rate": "0.0001",
+          "fetched_at": "2026-11-03T00:05:41.134Z",
+          "source": "bybit-v5-funding-history"
+        },
+        {
+          "symbol": "BTCUSDT",
+          "funding_at": "2026-11-03T08:00:00.000Z",
+          "rate": "0.0001",
+          "fetched_at": "2026-11-03T08:05:41.139Z",
+          "source": "bybit-v5-funding-history"
+        },
+        {
+          "symbol": "BTCUSDT",
+          "funding_at": "2026-11-03T16:00:00.000Z",
+          "rate": "0.0000747",
+          "fetched_at": "2026-11-03T16:05:41.143Z",
+          "source": "bybit-v5-funding-history"
+        }
+      ],
+      "assumed_fee_plus_mean_spread_roundtrip_bps": 12.013026964912479
+    },
+    "ETHUSDT": {
+      "sample_count": 9315,
+      "quote_gaps": [
+        {
+          "after": "2026-11-02T22:34:30.000Z",
+          "before": "2026-11-02T22:35:50.000Z",
+          "seconds": 80.0,
+          "missing_slots": 7
+        }
+      ],
+      "connections": [
+        {
+          "id": "1793638799680-1",
+          "first_sample": "2026-11-02T17:00:00.000Z"
+        },
+        {
+          "id": "1793658941671-1",
+          "first_sample": "2026-11-02T22:35:50.000Z"
+        },
+        {
+          "id": "1793680907095-2",
+          "first_sample": "2026-11-03T04:41:50.000Z"
+        },
+        {
+          "id": "1793688075432-3",
+          "first_sample": "2026-11-03T06:41:20.000Z"
+        }
+      ],
+      "trade_bucket_count": 9300,
+      "observed_trade_count": 1640661,
+      "incomplete_trade_buckets": [
+        "2026-11-02T22:35:40.000Z",
+        "2026-11-03T04:41:10.000Z",
+        "2026-11-03T04:41:20.000Z",
+        "2026-11-03T04:41:30.000Z",
+        "2026-11-03T04:41:40.000Z",
+        "2026-11-03T06:40:40.000Z",
+        "2026-11-03T06:40:50.000Z",
+        "2026-11-03T06:41:00.000Z",
+        "2026-11-03T06:41:10.000Z"
+      ],
+      "mean_spread_bps": 0.044336460527797446,
+      "spread_bps": {
+        "min": 0.04335451201339775,
+        "median": 0.0442968865942927,
+        "mean": 0.044336460527797446,
+        "p95": 0.04452211079221991,
+        "p99": 0.04460054635766641,
+        "max": 0.9974651375093215
+      },
+      "top_both_sides_cover_100_fraction": 0.9807836822329576,
+      "top_both_sides_cover_300_fraction": 0.9741277509393451,
+      "minimum_side_top_notional": {
+        "min": 22.4727,
+        "median": 23668.6919,
+        "mean": 30743.901608030057,
+        "p95": 86610.28661999996,
+        "p99": 140705.03363400022,
+        "max": 438099.0794
+      },
+      "fast_move_definition": "Top 5% absolute adjacent 10s midpoint changes; same connection; descriptive, not an entry rule",
+      "fast_move_threshold_bps": 5.056843899811092,
+      "fast_move_samples": 466,
+      "fast_move_spread_bps": {
+        "min": 0.04335451201339775,
+        "median": 0.04423369547633359,
+        "mean": 0.046413100404932656,
+        "p95": 0.04453172711238406,
+        "p99": 0.04467554619687297,
+        "max": 0.9974651375093215
+      },
+      "fast_move_top_both_sides_cover_100_fraction": 0.9699570815450643,
+      "funding_settlements": [
+        {
+          "symbol": "ETHUSDT",
+          "funding_at": "2026-11-03T00:00:00.000Z",
+          "rate": "0.0001",
+          "fetched_at": "2026-11-03T00:05:41.134Z",
+          "source": "bybit-v5-funding-history"
+        },
+        {
+          "symbol": "ETHUSDT",
+          "funding_at": "2026-11-03T08:00:00.000Z",
+          "rate": "0.00006666",
+          "fetched_at": "2026-11-03T08:05:41.139Z",
+          "source": "bybit-v5-funding-history"
+        },
+        {
+          "symbol": "ETHUSDT",
+          "funding_at": "2026-11-03T16:00:00.000Z",
+          "rate": "0.00008506",
+          "fetched_at": "2026-11-03T16:05:41.143Z",
+          "source": "bybit-v5-funding-history"
+        }
+      ],
+      "assumed_fee_plus_mean_spread_roundtrip_bps": 12.044336460527795
+    },
+    "SOLUSDT": {
+      "sample_count": 9315,
+      "quote_gaps": [
+        {
+          "after": "2026-11-02T22:34:30.000Z",
+          "before": "2026-11-02T22:35:50.000Z",
+          "seconds": 80.0,
+          "missing_slots": 7
+        }
+      ],
+      "connections": [
+        {
+          "id": "1793638799680-1",
+          "first_sample": "2026-11-02T17:00:00.000Z"
+        },
+        {
+          "id": "1793658941671-1",
+          "first_sample": "2026-11-02T22:35:50.000Z"
+        },
+        {
+          "id": "1793680907095-2",
+          "first_sample": "2026-11-03T04:41:50.000Z"
+        },
+        {
+          "id": "1793688075432-3",
+          "first_sample": "2026-11-03T06:41:20.000Z"
+        }
+      ],
+      "trade_bucket_count": 9179,
+      "observed_trade_count": 475818,
+      "incomplete_trade_buckets": [
+        "2026-11-02T22:35:40.000Z",
+        "2026-11-03T04:41:10.000Z",
+        "2026-11-03T04:41:20.000Z",
+        "2026-11-03T04:41:30.000Z",
+        "2026-11-03T04:41:40.000Z",
+        "2026-11-03T06:40:40.000Z",
+        "2026-11-03T06:40:50.000Z",
+        "2026-11-03T06:41:00.000Z",
+        "2026-11-03T06:41:10.000Z"
+      ],
+      "mean_spread_bps": 1.0825550419008299,
+      "spread_bps": {
+        "min": 1.0650194366052628,
+        "median": 1.0841871306977726,
+        "mean": 1.0825550419008299,
+        "p95": 1.0927170409212592,
+        "p99": 1.0969121921795773,
+        "max": 1.1013822347035525
+      },
+      "top_both_sides_cover_100_fraction": 0.9946323134728932,
+      "top_both_sides_cover_300_fraction": 0.989694041867955,
+      "minimum_side_top_notional": {
+        "min": 9.173,
+        "median": 28683.971,
+        "mean": 30403.613716908214,
+        "p95": 65792.18259999997,
+        "p99": 92437.84634000016,
+        "max": 196112.595
+      },
+      "fast_move_definition": "Top 5% absolute adjacent 10s midpoint changes; same connection; descriptive, not an entry rule",
+      "fast_move_threshold_bps": 6.520321688453512,
+      "fast_move_samples": 466,
+      "fast_move_spread_bps": {
+        "min": 1.0652463382147435,
+        "median": 1.087015598674397,
+        "mean": 1.0843547581310717,
+        "p95": 1.0959504630396313,
+        "p99": 1.099487092296292,
+        "max": 1.1013822347035525
+      },
+      "fast_move_top_both_sides_cover_100_fraction": 0.9892703862660944,
+      "funding_settlements": [
+        {
+          "symbol": "SOLUSDT",
+          "funding_at": "2026-11-03T00:00:00.000Z",
+          "rate": "0.0001",
+          "fetched_at": "2026-11-03T00:05:41.134Z",
+          "source": "bybit-v5-funding-history"
+        },
+        {
+          "symbol": "SOLUSDT",
+          "funding_at": "2026-11-03T08:00:00.000Z",
+          "rate": "0.0001",
+          "fetched_at": "2026-11-03T08:05:41.139Z",
+          "source": "bybit-v5-funding-history"
+        },
+        {
+          "symbol": "SOLUSDT",
+          "funding_at": "2026-11-03T16:00:00.000Z",
+          "rate": "0.00008284",
+          "fetched_at": "2026-11-03T16:05:41.143Z",
+          "source": "bybit-v5-funding-history"
+        }
+      ],
+      "assumed_fee_plus_mean_spread_roundtrip_bps": 13.082555041900829
+    }
+  },
+  "forward": [
+    {
+      "scenario": "baseline",
+      "from": "2026-11-02T00:00:00+00:00",
+      "to_exclusive": "2026-11-03T16:00:00+00:00",
+      "entries": 1,
+      "closed_trades": 0,
+      "open_positions": [
+        {
+          "symbol": "SOLUSDT",
+          "quantity": 0.2,
+          "side": "SHORT",
+          "entry": 91.682487,
+          "entry_at": "2026-11-02T20:00:00Z",
+          "stop": 94.99214227908101,
+          "deadline": "2026-11-09T20:00:00Z",
+          "endpoint_trade_close": 93.71,
+          "modeled_exit_fill": 93.738113,
+          "unrealized_after_exit_costs": -0.42237377356
+        }
+      ],
+      "cash": 99.98899810156,
+      "equity_before_funding": 99.566624328,
+      "closed_realized_net": 0,
+      "max_drawdown_pct_before_funding": 0.5400265852237742,
+      "minutes_flat": 1200,
+      "minutes_total": 2400,
+      "flat_fraction": 0.5,
+      "funding_events": [
+        {
+          "at": "2026-11-03T00:00:00Z",
+          "symbol": "SOLUSDT",
+          "rate": "0.0001",
+          "mark_proxy": "91.95",
+          "sample_observed_at": "2026-11-02T23:59:51.198Z",
+          "estimated_cashflow": 0.001839
+        },
+        {
+          "at": "2026-11-03T08:00:00Z",
+          "symbol": "SOLUSDT",
+          "rate": "0.0001",
+          "mark_proxy": "92.096",
+          "sample_observed_at": "2026-11-03T07:59:51.797Z",
+          "estimated_cashflow": 0.00184192
+        }
+      ],
+      "funding_estimate": 0.00368092,
+      "equity_plus_estimated_funding": 99.570305248,
+      "funding_note": "Separate fixed-position sensitivity using sampled pre-settlement marks; no resizing, no exact exchange cashflow, no revised drawdown. Settlement at exclusive cutoff excluded.",
+      "decision": "insufficient_forward_sample; rules unchanged"
+    },
+    {
+      "scenario": "elevated",
+      "from": "2026-11-02T00:00:00+00:00",
+      "to_exclusive": "2026-11-03T16:00:00+00:00",
+      "entries": 1,
+      "closed_trades": 0,
+      "open_positions": [
+        {
+          "symbol": "SOLUSDT",
+          "quantity": 0.2,
+          "side": "SHORT",
+          "entry": 91.64580299999999,
+          "entry_at": "2026-11-02T20:00:00Z",
+          "stop": 94.955458279081,
+          "deadline": "2026-11-09T20:00:00Z",
+          "endpoint_trade_close": 93.71,
+          "modeled_exit_fill": 93.775597,
+          "unrealized_after_exit_costs": -0.440962895520002
+        }
+      ],
+      "cash": 99.98533667152,
+      "equity_before_funding": 99.544373776,
+      "closed_realized_net": 0,
+      "max_drawdown_pct_before_funding": 0.5404689904706759,
+      "minutes_flat": 1200,
+      "minutes_total": 2400,
+      "flat_fraction": 0.5,
+      "funding_events": [
+        {
+          "at": "2026-11-03T00:00:00Z",
+          "symbol": "SOLUSDT",
+          "rate": "0.0001",
+          "mark_proxy": "91.95",
+          "sample_observed_at": "2026-11-02T23:59:51.198Z",
+          "estimated_cashflow": 0.001839
+        },
+        {
+          "at": "2026-11-03T08:00:00Z",
+          "symbol": "SOLUSDT",
+          "rate": "0.0001",
+          "mark_proxy": "92.096",
+          "sample_observed_at": "2026-11-03T07:59:51.797Z",
+          "estimated_cashflow": 0.00184192
+        }
+      ],
+      "funding_estimate": 0.00368092,
+      "equity_plus_estimated_funding": 99.548054696,
+      "funding_note": "Separate fixed-position sensitivity using sampled pre-settlement marks; no resizing, no exact exchange cashflow, no revised drawdown. Settlement at exclusive cutoff excluded.",
+      "decision": "insufficient_forward_sample; rules unchanged"
+    },
+    {
+      "scenario": "severe",
+      "from": "2026-11-02T00:00:00+00:00",
+      "to_exclusive": "2026-11-03T16:00:00+00:00",
+      "entries": 1,
+      "closed_trades": 0,
+      "open_positions": [
+        {
+          "symbol": "SOLUSDT",
+          "quantity": 0.2,
+          "side": "SHORT",
+          "entry": 91.572435,
+          "entry_at": "2026-11-02T20:00:00Z",
+          "stop": 94.88209027908101,
+          "deadline": "2026-11-09T20:00:00Z",
+          "endpoint_trade_close": 93.71,
+          "modeled_exit_fill": 93.850565,
+          "unrealized_after_exit_costs": -0.474396113
+        }
+      ],
+      "cash": 99.981685513,
+      "equity_before_funding": 99.5072894,
+      "closed_realized_net": 0,
+      "max_drawdown_pct_before_funding": 0.5412069291799385,
+      "minutes_flat": 1200,
+      "minutes_total": 2400,
+      "flat_fraction": 0.5,
+      "funding_events": [
+        {
+          "at": "2026-11-03T00:00:00Z",
+          "symbol": "SOLUSDT",
+          "rate": "0.0001",
+          "mark_proxy": "91.95",
+          "sample_observed_at": "2026-11-02T23:59:51.198Z",
+          "estimated_cashflow": 0.001839
+        },
+        {
+          "at": "2026-11-03T08:00:00Z",
+          "symbol": "SOLUSDT",
+          "rate": "0.0001",
+          "mark_proxy": "92.096",
+          "sample_observed_at": "2026-11-03T07:59:51.797Z",
+          "estimated_cashflow": 0.00184192
+        }
+      ],
+      "funding_estimate": 0.00368092,
+      "equity_plus_estimated_funding": 99.51097032,
+      "funding_note": "Separate fixed-position sensitivity using sampled pre-settlement marks; no resizing, no exact exchange cashflow, no revised drawdown. Settlement at exclusive cutoff excluded.",
+      "decision": "insufficient_forward_sample; rules unchanged"
+    }
+  ],
+  "fee_assumptions": {
+    "takerRate": 0.0006,
+    "makerRate": 0.0002,
+    "verified": false,
+    "source": "configured assumptions; not account or VIP verification"
+  },
+  "peak_accepted_120_seconds": 53819,
+  "peak_accepted_40_seconds": 24437
+}

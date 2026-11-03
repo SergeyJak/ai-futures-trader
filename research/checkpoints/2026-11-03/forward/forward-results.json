@@ -1,0 +1,218 @@
+[
+  {
+    "strategy": "portfolio_trend_4h",
+    "scenario": "baseline",
+    "initial": 100.0,
+    "final": 99.566624328,
+    "net": -0.4333756719999968,
+    "return_pct": -0.4333756719999915,
+    "max_drawdown_pct": 0.5400265852237742,
+    "trades": 0,
+    "wins": 0,
+    "profit_factor": null,
+    "fees": 0,
+    "slippage": 0,
+    "price_gross": 0,
+    "end_liquidations": 0,
+    "funding": "excluded; unknown",
+    "skips": {},
+    "monthly": [
+      {
+        "month": "2026-11",
+        "start_equity": 100.0,
+        "end_equity": 99.566624328,
+        "return_pct": -0.4333756719999915,
+        "pnl": -0.4333756719999968
+      }
+    ],
+    "symbols": {
+      "BTCUSDT": {
+        "trades": 0,
+        "net": 0
+      },
+      "ETHUSDT": {
+        "trades": 0,
+        "net": 0
+      },
+      "SOLUSDT": {
+        "trades": 0,
+        "net": 0
+      }
+    },
+    "mode": "prospective-paper-replay",
+    "cash": 99.98899810156,
+    "equity": 99.566624328,
+    "open_positions": {
+      "SOLUSDT": {
+        "quantity": 0.2,
+        "side": "SHORT",
+        "entry": 91.682487,
+        "entry_at": "2026-11-02T20:00:00Z",
+        "stop": 94.99214227908101,
+        "deadline": "2026-11-09T20:00:00Z"
+      }
+    },
+    "closed_realized_net": 0,
+    "open_entry_fees": 0.011001898439999998,
+    "start": "2026-11-02T00:00:00+00:00",
+    "as_of": "2026-11-03T16:00:00+00:00",
+    "status": "provisional-paper",
+    "scheduled": false,
+    "orders": false,
+    "liquidation": "not independently modeled",
+    "full_calendar_months": 0,
+    "geometric_full_month_return_pct": null,
+    "review_ready": false,
+    "paper_targets_met": false,
+    "candidate": "not-promoted",
+    "unresolved_evidence": [
+      "actual funding",
+      "margin/liquidation",
+      "real execution"
+    ]
+  },
+  {
+    "strategy": "portfolio_trend_4h",
+    "scenario": "elevated",
+    "initial": 100.0,
+    "final": 99.544373776,
+    "net": -0.4556262239999995,
+    "return_pct": -0.4556262239999942,
+    "max_drawdown_pct": 0.5404689904706759,
+    "trades": 0,
+    "wins": 0,
+    "profit_factor": null,
+    "fees": 0,
+    "slippage": 0,
+    "price_gross": 0,
+    "end_liquidations": 0,
+    "funding": "excluded; unknown",
+    "skips": {},
+    "monthly": [
+      {
+        "month": "2026-11",
+        "start_equity": 100.0,
+        "end_equity": 99.544373776,
+        "return_pct": -0.4556262239999942,
+        "pnl": -0.4556262239999995
+      }
+    ],
+    "symbols": {
+      "BTCUSDT": {
+        "trades": 0,
+        "net": 0
+      },
+      "ETHUSDT": {
+        "trades": 0,
+        "net": 0
+      },
+      "SOLUSDT": {
+        "trades": 0,
+        "net": 0
+      }
+    },
+    "mode": "prospective-paper-replay",
+    "cash": 99.98533667152,
+    "equity": 99.544373776,
+    "open_positions": {
+      "SOLUSDT": {
+        "quantity": 0.2,
+        "side": "SHORT",
+        "entry": 91.64580299999999,
+        "entry_at": "2026-11-02T20:00:00Z",
+        "stop": 94.955458279081,
+        "deadline": "2026-11-09T20:00:00Z"
+      }
+    },
+    "closed_realized_net": 0,
+    "open_entry_fees": 0.01466332848,
+    "start": "2026-11-02T00:00:00+00:00",
+    "as_of": "2026-11-03T16:00:00+00:00",
+    "status": "provisional-paper",
+    "scheduled": false,
+    "orders": false,
+    "liquidation": "not independently modeled",
+    "full_calendar_months": 0,
+    "geometric_full_month_return_pct": null,
+    "review_ready": false,
+    "paper_targets_met": false,
+    "candidate": "not-promoted",
+    "unresolved_evidence": [
+      "actual funding",
+      "margin/liquidation",
+      "real execution"
+    ]
+  },
+  {
+    "strategy": "portfolio_trend_4h",
+    "scenario": "severe",
+    "initial": 100.0,
+    "final": 99.5072894,
+    "net": -0.4927105999999952,
+    "return_pct": -0.49271059999999034,
+    "max_drawdown_pct": 0.5412069291799385,
+    "trades": 0,
+    "wins": 0,
+    "profit_factor": null,
+    "fees": 0,
+    "slippage": 0,
+    "price_gross": 0,
+    "end_liquidations": 0,
+    "funding": "excluded; unknown",
+    "skips": {},
+    "monthly": [
+      {
+        "month": "2026-11",
+        "start_equity": 100.0,
+        "end_equity": 99.5072894,
+        "return_pct": -0.49271059999999034,
+        "pnl": -0.4927105999999952
+      }
+    ],
+    "symbols": {
+      "BTCUSDT": {
+        "trades": 0,
+        "net": 0
+      },
+      "ETHUSDT": {
+        "trades": 0,
+        "net": 0
+      },
+      "SOLUSDT": {
+        "trades": 0,
+        "net": 0
+      }
+    },
+    "mode": "prospective-paper-replay",
+    "cash": 99.981685513,
+    "equity": 99.5072894,
+    "open_positions": {
+      "SOLUSDT": {
+        "quantity": 0.2,
+        "side": "SHORT",
+        "entry": 91.572435,
+        "entry_at": "2026-11-02T20:00:00Z",
+        "stop": 94.88209027908101,
+        "deadline": "2026-11-09T20:00:00Z"
+      }
+    },
+    "closed_realized_net": 0,
+    "open_entry_fees": 0.018314487,
+    "start": "2026-11-02T00:00:00+00:00",
+    "as_of": "2026-11-03T16:00:00+00:00",
+    "status": "provisional-paper",
+    "scheduled": false,
+    "orders": false,
+    "liquidation": "not independently modeled",
+    "full_calendar_months": 0,
+    "geometric_full_month_return_pct": null,
+    "review_ready": false,
+    "paper_targets_met": false,
+    "candidate": "not-promoted",
+    "unresolved_evidence": [
+      "actual funding",
+      "margin/liquidation",
+      "real execution"
+    ]
+  }
+]
