@@ -110,3 +110,23 @@ test('malformed prices and untrusted symbol/topic pairs are rejected without mut
  s.ingest({...book(),data:{...book().data,s:'ETHUSDT'}},now+3);assert.deepEqual(s.sample(now+4),[]);
  assert.equal(s.status(now+4).invalidMessages>0,true);
 });
+
+test('observed-size burst fits default bound and exposes lifetime peak',()=>{
+ const s=fixture();
+ for(let batch=0;batch<40;batch++)s.ingest({topic:'publicTrade.BTCUSDT',data:Array.from({length:2000},(_,i)=>({i:`burst-${batch}-${i}`,T:now+100,s:'BTCUSDT',S:'Buy',p:'100',v:'1'}))},now+101);
+ assert.equal(s.status(now+102).droppedTrades,0);
+ assert.equal(s.status(now+102).peakDedupIds,80000);
+ assert.equal(s.drainTrades(now+40000)[0].buys,80000);
+ assert.equal(s.status(now+40000).peakDedupIds,80000);
+});
+test('loss reasons partition total and quiet symbols remain explicitly unobserved',()=>{
+ const s=fixture({dedupLimit:1});
+ assert.equal(s.status(now).tradeObservations[0].lastReceivedAt,null);
+ s.ingest(trade('a'),now+110);s.ingest(trade('b'),now+120);
+ assert.equal(s.status(now+121).dedupCapacityDrops,1);
+ assert.equal(s.status(now+121).bucketCapacityDrops,0);
+ assert.equal(s.status(now+121).tradeObservations[0].lastReceivedAt,now+120);
+ const b=fixture({maxBucketsPerSymbol:1});b.ingest(trade('a'),now+110);b.ingest(trade('b',now+10100),now+10110);
+ assert.equal(b.status(now+10111).bucketCapacityDrops,1);
+ assert.equal(b.status(now+10111).dedupCapacityDrops,0);
+});

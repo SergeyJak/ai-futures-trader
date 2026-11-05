@@ -32,9 +32,9 @@ The orderbook requires a snapshot, resets on reconnect/server restart and reject
 
 Raw ticks and full book snapshots are not persisted. At three active symbols, the maximum regular quote sampling is about 25,920 rows/day; trade buckets are of similar order when active. At seven days this is about 181,440 rows per short-data table, plus indexes/row overhead. Exact disk usage depends on traffic and PostgreSQL. Hourly retention deletes at most 5,000 expired rows per table per run; catch-up is bounded. Funding rates retain 730 days and are much smaller.
 
-Memory bounds: <=50 levels per side/symbol, <=12 pending trade buckets/symbol, <=50,000 recent trade IDs globally, one persistence retry batch (expires after 60s), single-flight persistence/funding/retention jobs, <=2 MiB WebSocket frames. Overflows/failures are counted. Shutdown cancels funding requests, terminates the public socket, drains active research queries and records discarded pending data before closing the dedicated pool.
+Memory bounds: <=50 levels per side/symbol, <=12 pending trade buckets/symbol, <=100,000 recent trade IDs globally, one persistence retry batch (expires after 60s), single-flight persistence/funding/retention jobs, <=2 MiB WebSocket frames. Overflows/failures are counted. Shutdown cancels funding requests, terminates the public socket, drains active research queries and records discarded pending data before closing the dedicated pool.
 
-Trade IDs expire at their event bucket's finalization boundary (bucket end + 30 seconds), when replays are already rejected as late. Expiration runs on receipt and on flush, handles out-of-order event buckets, and preserves IDs across reconnects until that boundary. A burst exceeding 50,000 still-live IDs can still cause explicitly marked drops; finalized IDs no longer crowd out current trades. After deploying this fix, check counter **increments** and new incomplete buckets; an old cumulative counter or a process restart alone cannot prove recovery. Historical incomplete rows remain incomplete.
+Trade IDs expire at their event bucket's finalization boundary (bucket end + 30 seconds), when replays are already rejected as late. Expiration runs on receipt and on flush, handles out-of-order event buckets, and preserves IDs across reconnects until that boundary. A burst exceeding 100,000 still-live IDs can still cause explicitly marked drops; finalized IDs no longer crowd out current trades. After deploying this fix, check counter **increments** and new incomplete buckets; an old cumulative counter or a process restart alone cannot prove recovery. Historical incomplete rows remain incomplete.
 
 ## Readiness and API
 
@@ -74,3 +74,9 @@ This PR supplies observations for later research. It does not activate a new str
 ## Verification
 
 `npm run check` builds TypeScript and runs the existing and new tests. New tests cover book resets/deltas/staleness, per-field ticker timestamps, duplicates/out-of-order/late trades, buffer limits, funding pagination/provider errors, idempotent parameterized persistence, range/method limits, retry/backpressure and shutdown. The PostgreSQL integration test runs when `TEST_DATABASE_URL` is set (already provided by GitHub Actions).
+
+## Burst diagnostics (Nov 5)
+
+The bounded default cache now holds 100,000 live trade IDs. `peakDedupIds` records the process lifetime high-water mark; `dedupLimit` reports capacity. `dedupCapacityDrops`, `bucketCapacityDrops` and `numericOverflowDrops` partition `droppedTrades` (dedup takes precedence if both limits apply). All reset on restart. More capacity uses more bounded memory and does not guarantee lossless collection.
+
+`tradeObservations` reports the last received structurally valid trade-array message per symbol, including empty arrays; it is not proof of a complete exchange feed. Historical timestamps remain visible across reconnects. Missing buckets remain unknown, never manufactured zero-volume intervals. Historical loss is not repaired.
