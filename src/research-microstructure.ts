@@ -24,10 +24,11 @@ export class MicrostructureState{
  // One bounded watermark per configured symbol preserves known loss before a bucket exists.
  private incompleteBefore=new Map<string,number>();
  private connected=false;private connectionId='';private connectedAt=0;
+ private peakDedupIds=0;private tradeReceived=new Map<string,number>();
  private dedupLimit:number;private bucketLimit:number;
- private counters={invalidMessages:0,rejectedBooks:0,duplicateTrades:0,lateTrades:0,droppedTrades:0};
+ private counters={invalidMessages:0,rejectedBooks:0,duplicateTrades:0,lateTrades:0,droppedTrades:0,dedupCapacityDrops:0,bucketCapacityDrops:0,numericOverflowDrops:0};
  constructor(symbols:string[],options:{dedupLimit?:number;maxBucketsPerSymbol?:number}={}){
-  this.symbols=new Set(symbols);this.dedupLimit=options.dedupLimit??50000;this.bucketLimit=options.maxBucketsPerSymbol??12;
+  this.symbols=new Set(symbols);this.dedupLimit=options.dedupLimit??100000;this.bucketLimit=options.maxBucketsPerSymbol??12;
   if(!symbols.length||symbols.length>10||symbols.some(s=>!/^[A-Z0-9]{2,30}$/.test(s)))throw new Error('Invalid research symbols');
   if(!Number.isInteger(this.dedupLimit)||this.dedupLimit<1||this.dedupLimit>1000000||!Number.isInteger(this.bucketLimit)||this.bucketLimit<1||this.bucketLimit>60)throw new Error('Invalid research buffer bound');
  }
@@ -77,6 +78,7 @@ export class MicrostructureState{
  private trades(symbol:string,data:unknown,at:number):Result{
   if(!this.symbols.has(symbol))return none();
   if(!Array.isArray(data)||data.length>2000){this.counters.invalidMessages++;return none()}
+  this.tradeReceived.set(symbol,at);
   this.expireTradeIds(at);
   let accepted=false;
   for(const item of data){
@@ -89,13 +91,13 @@ export class MicrostructureState{
    const buckets=this.buckets.get(symbol)??new Map<number,TradeBucket>();
    let bucket=buckets.get(bucketAt);
    if(this.ids.size>=this.dedupLimit||(!bucket&&buckets.size>=this.bucketLimit)){
-    this.counters.droppedTrades++;this.incompleteBefore.set(symbol,Math.max(this.incompleteBefore.get(symbol)??0,bucketAt+BUCKET));if(bucket)bucket.streamContinuous=false;continue;
+    this.counters.droppedTrades++;if(this.ids.size>=this.dedupLimit)this.counters.dedupCapacityDrops++;else this.counters.bucketCapacityDrops++;this.incompleteBefore.set(symbol,Math.max(this.incompleteBefore.get(symbol)??0,bucketAt+BUCKET));if(bucket)bucket.streamContinuous=false;continue;
    }
    if(!bucket){bucket={symbol,bucketAt,buys:0,sells:0,buyQuantity:0,sellQuantity:0,buyNotional:0,sellNotional:0,firstTradeAt:time,lastTradeAt:time,streamContinuous:this.connectedAt<=bucketAt&&bucketAt>=(this.incompleteBefore.get(symbol)??0)};buckets.set(bucketAt,bucket);this.buckets.set(symbol,buckets)}
    const buy=d.S==='Buy',quantity=buy?bucket.buyQuantity:bucket.sellQuantity,total=buy?bucket.buyNotional:bucket.sellNotional;
-   if(!Number.isFinite(quantity+qty)||!Number.isFinite(total+notional)){bucket.streamContinuous=false;this.counters.droppedTrades++;this.incompleteBefore.set(symbol,Math.max(this.incompleteBefore.get(symbol)??0,bucketAt+BUCKET));continue}
+   if(!Number.isFinite(quantity+qty)||!Number.isFinite(total+notional)){bucket.streamContinuous=false;this.counters.droppedTrades++;this.counters.numericOverflowDrops++;this.incompleteBefore.set(symbol,Math.max(this.incompleteBefore.get(symbol)??0,bucketAt+BUCKET));continue}
    const expiry=bucketAt+BUCKET+LATENESS;
-   this.ids.set(id,expiry);
+   this.ids.set(id,expiry);this.peakDedupIds=Math.max(this.peakDedupIds,this.ids.size);
    const expiryIds=this.idsByExpiry.get(expiry)??new Set<string>();expiryIds.add(id);this.idsByExpiry.set(expiry,expiryIds);
    bucket.firstTradeAt=Math.min(bucket.firstTradeAt,time);bucket.lastTradeAt=Math.max(bucket.lastTradeAt,time);
    if(buy){bucket.buys++;bucket.buyQuantity+=qty;bucket.buyNotional+=notional}else{bucket.sells++;bucket.sellQuantity+=qty;bucket.sellNotional+=notional}
@@ -132,6 +134,7 @@ export class MicrostructureState{
   return rows.sort((a,b)=>a.bucketAt-b.bucketAt||a.symbol.localeCompare(b.symbol));
  }
  status(now:number){return {...this.counters,connected:this.connected,connectionId:this.connectionId,connectedAt:this.connected?this.connectedAt:null,
-  dedupIds:this.ids.size,bufferedBuckets:[...this.buckets.values()].reduce((n,b)=>n+b.size,0),
+  dedupIds:this.ids.size,dedupLimit:this.dedupLimit,peakDedupIds:this.peakDedupIds,
+  tradeObservations:[...this.symbols].map(symbol=>({symbol,lastReceivedAt:this.tradeReceived.get(symbol)??null})),bufferedBuckets:[...this.buckets.values()].reduce((n,b)=>n+b.size,0),
   books:[...this.symbols].map(symbol=>{const b=this.books.get(symbol);return {symbol,ready:!!b&&this.connected&&now-b.receivedAt<=FRESH&&now-b.exchangeAt<=FRESH,lastReceivedAt:b?.receivedAt??null,lastExchangeAt:b?.exchangeAt??null}})};}
 }
