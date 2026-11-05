@@ -1,3 +1,5 @@
+import {relativeStrengthHtml} from './relative-strength-page.js';
+import {loadRelativeStrengthReport} from './relative-strength-report.js';
 import {runRecoveryStudy} from './sol-recovery-study.js';
 import {initV8Paper,tickV8Paper,v8PaperReport} from './v8-paper.js';
 import {dipContinuationResearch} from './dip-continuation-research.js';
@@ -70,6 +72,12 @@ const server=http.createServer(async(req,res)=>{
   const result=await researchDataResponse(req.method??'GET',req.url,researchData.store,researchData.config,researchData.runtime.status);
   res.setHeader('content-type','application/json; charset=utf-8');if(result.status===405)res.setHeader('allow','GET');
   res.writeHead(result.status).end(JSON.stringify(result.body));return;
+ }
+ if(req.url==='/relative-strength'||req.url==='/api/relative-strength'){
+  if(req.method!=='GET'){res.setHeader('allow','GET');res.writeHead(405).end();return}
+  if(req.url==='/relative-strength'){res.setHeader('content-type','text/html; charset=utf-8');res.setHeader('content-security-policy',"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; form-action 'none'");res.writeHead(200).end(withUnifiedHeader(relativeStrengthHtml));return}
+  res.setHeader('content-type','application/json; charset=utf-8');
+  try{const report=await loadRelativeStrengthReport();res.writeHead(200).end(JSON.stringify(report))}catch(e){console.error('RELATIVE_STRENGTH_REPORT_ERROR',e);res.writeHead(503).end(JSON.stringify({error:'Checkpoint unavailable or invalid'}))}return;
  }
  if(req.url==='/v8'){res.setHeader('content-type','text/html; charset=utf-8');res.setHeader('content-security-policy',"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'");res.writeHead(200).end(withUnifiedHeader(v8PageHtml));return}
  if(req.url==='/api/v8-paper'){try{res.setHeader('content-type','application/json');res.writeHead(200).end(JSON.stringify(await v8PaperReport(db.v6Pool())))}catch(e){console.error('V8_PAPER_REPORT_ERROR',e);res.writeHead(503).end(JSON.stringify({error:'V8 paper unavailable'}))}return}
