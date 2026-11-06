@@ -18,3 +18,7 @@ test('future, malformed and inconsistent reports fail closed',()=>{
  const x=fixture();x.scenarios[0].final=NaN;assert.throws(()=>relativeStrengthReport(x,now));
  const y=fixture();y.scenarios[0].final=101;assert.throws(()=>relativeStrengthReport(y,now));
 });
+test('flat account reports rejected basket instead of hiding the reason',()=>{
+ const f=fixture();(f.scenarios[0] as any).decisions=[{at:Date.parse(f.start),wanted:{BTCUSDT:-1},entered:[],rejected:'minimum_or_maximum_order:BTCUSDT'}];
+ const r=relativeStrengthReport(f,now);assert.equal(r.forward.scenarios[0].lastDecision?.rejected,'minimum_or_maximum_order:BTCUSDT');
+});

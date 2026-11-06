@@ -1,3 +1,6 @@
+import {createRelativeStrengthJob} from './relative-strength-job.js';
+import {RelativeStrengthStore} from './relative-strength-store.js';
+import {runRelativeStrengthWorker} from './relative-strength-worker.js';
 import {uiResponse} from './ui-routes.js';
 import {loadRelativeStrengthReport} from './relative-strength-report.js';
 import {runRecoveryStudy} from './sol-recovery-study.js';
@@ -42,6 +45,8 @@ if(!endpoint.startsWith('wss://'))throw new Error('Secure WebSocket required');
 if(!Number.isInteger(port)||port<1||port>65535)throw new Error('Invalid port');
 installOutboundTelemetry();
 const db=new Database(url);await db.init();await db.initExperiments();await db.initShadow();await db.initV3();await db.initV4();await db.initV5();await initV6(db.v6Pool());await initOkxHistory(db.v6Pool());await initSolPaper(db.v6Pool());await initSolShort(db.v6Pool());await initSol5m(db.v6Pool());await initV8Paper(db.v6Pool());await initStrategyPaper(db.v6Pool());await initV7(db.v6Pool());await initDipOos(db.v6Pool());const stream=new MarketStream(endpoint,symbols,db);stream.start();
+const relativeStrengthJob=createRelativeStrengthJob(new RelativeStrengthStore(db.v6Pool()),{worker:runRelativeStrengthWorker,enabled:process.env.RELATIVE_STRENGTH_ENABLED!=='false'&&!process.env.RELATIVE_STRENGTH_CHECKPOINT_FILE});
+relativeStrengthJob.start();
 const researchProgress=createResearchProgress(db.v6Pool());
 const researchData=createResearchData(researchDataConfig(process.env,symbols,endpoint),url);
 await researchData.runtime.start();
@@ -68,7 +73,7 @@ const server=http.createServer(async(req,res)=>{
  if(req.url==='/api/relative-strength'){
   if(req.method!=='GET'){res.setHeader('allow','GET');res.writeHead(405).end();return}
   res.setHeader('content-type','application/json; charset=utf-8');
-  try{const report=await loadRelativeStrengthReport();res.writeHead(200).end(JSON.stringify(report))}catch(e){console.error('RELATIVE_STRENGTH_REPORT_ERROR',e);res.writeHead(503).end(JSON.stringify({error:'Checkpoint unavailable or invalid'}))}return;
+  try{const report=process.env.RELATIVE_STRENGTH_CHECKPOINT_FILE?await loadRelativeStrengthReport():await relativeStrengthJob.report();res.writeHead(200).end(JSON.stringify(report))}catch(e){console.error('RELATIVE_STRENGTH_REPORT_ERROR',e);res.writeHead(503).end(JSON.stringify({error:'Checkpoint unavailable or invalid'}))}return;
  }
  if(req.url==='/api/v8-paper'){try{res.setHeader('content-type','application/json');res.writeHead(200).end(JSON.stringify(await v8PaperReport(db.v6Pool())))}catch(e){console.error('V8_PAPER_REPORT_ERROR',e);res.writeHead(503).end(JSON.stringify({error:'V8 paper unavailable'}))}return}
  if(req.url==='/api/research/v8'){
@@ -458,6 +463,7 @@ setTimeout(()=>{void runOkx()},60000);
 const v6Timer=setInterval(()=>{if(closing)return;void runV6(db.v6Pool()).then(result=>console.info('V6_DISCOVERY',JSON.stringify(result))).catch(e=>console.error('V6_ERROR',e))},6*3600000);
 setTimeout(()=>{if(closing)return;void runV6(db.v6Pool()).then(result=>console.info('V6_DISCOVERY',JSON.stringify(result))).catch(e=>console.error('V6_ERROR',e))},20000);
 let closing=false;async function stop(){if(closing)return;closing=true;clearInterval(statsTimer);clearInterval(storageTimer);clearInterval(repairTimer);clearInterval(historyTimer);clearInterval(paperTimer);clearInterval(telemetryTimer);clearInterval(strategyTelemetryTimer);clearInterval(bounceResearchTimer);clearInterval(v3Timer);clearInterval(v4Timer);clearInterval(v5Timer);clearInterval(v6Timer);clearInterval(v6BackfillTimer);clearInterval(v6CostTimer);clearInterval(solPaperTimer);clearInterval(solShortTimer);clearInterval(strategyPaperTimer);server.close();
+ const forwardStop=relativeStrengthJob.stop();
  const researchStop=researchData.runtime.stop().catch(e=>console.error('RESEARCH_DATA_STOP_ERROR',e instanceof Error?e.message:String(e)));
  // Existing jobs may still be using the pools after timers have stopped.
  // Drain paper-trading ticks before closing the shared database pools.
@@ -469,6 +475,6 @@ let closing=false;async function stop(){if(closing)return;closing=true;clearInte
   }
   await new Promise(resolve=>setTimeout(resolve,100));
  }
- await researchStop;await stream.stop();await db.close();}
+ await forwardStop;await researchStop;await stream.stop();await db.close();}
 for(const sig of ['SIGINT','SIGTERM'] as const)process.on(sig,()=>{void stop().then(()=>process.exit(0))});
 

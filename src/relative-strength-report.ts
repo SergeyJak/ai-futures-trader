@@ -15,7 +15,9 @@ function scenario(value:unknown,start:number,asOf:number){
  const equity=number(s.final);if(Math.abs(equity-curve.at(-1)!.equity)>1e-7)throw new Error('Equity does not match curve');
  const dd=number(s.dd_hourly_pct);if(dd<0)throw new Error('Invalid drawdown');
  const events=array(s.events).map(v=>{const e=object(v);if(!['open','close','funding'].includes(e.kind)||!symbols.has(e.symbol))throw new Error('Invalid event');const at=number(e.at);if(at<start||at>asOf)throw new Error('Event outside report');return e.kind==='funding'?{at,kind:e.kind as string,symbol:e.symbol as string,quantity:null,price:null,cost:null,amount:number(e.amount)}:{at,kind:e.kind as string,symbol:e.symbol as string,quantity:number(e.quantity),price:number(e.price),cost:number(e.cost),amount:null}});
- return {name,equity,cash:number(s.cash),net:equity-100,drawdown:dd,funding:number(s.funding),costs:number(s.costs),closedLegs:events.filter(e=>e.kind==='close').length,positions:curve.at(-1)!.positions,curve:curve.map(({at,equity})=>({at,equity})),events};
+ const decisions=array(s.decisions??[]).map(v=>{const d=object(v),at=number(d.at);if(at<start||at>asOf)throw new Error('Invalid decision timestamp');const rejected=d.rejected==null?null:String(d.rejected);if(rejected&&!/^minimum_or_maximum_order:(BTC|ETH|SOL|BNB|XRP|DOGE|ADA|LINK)USDT$/.test(rejected))throw new Error('Unknown rejection');return {at,rejected}});
+ const lastDecision=decisions.at(-1)??null;
+ return {name,equity,lastDecision,cash:number(s.cash),net:equity-100,drawdown:dd,funding:number(s.funding),costs:number(s.costs),closedLegs:events.filter(e=>e.kind==='close').length,positions:curve.at(-1)!.positions,curve:curve.map(({at,equity})=>({at,equity})),events};
 }
 export function relativeStrengthReport(raw:unknown|null,now=Date.now()){
  const start=Date.parse(FORWARD_START);let asOf:string|null=null;let scenarios:ReturnType<typeof scenario>[]=[];

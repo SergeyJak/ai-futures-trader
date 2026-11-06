@@ -34,3 +34,4 @@ jobs:
       - run: npm install
       - run: npm run check
       - run: python3 -m unittest discover -s research/collector-audit -p 'test_*.py'
+      - run: python3 -m unittest discover -s research/relative-strength-forward -p 'test_*.py'
