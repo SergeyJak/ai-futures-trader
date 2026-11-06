@@ -14,7 +14,8 @@ RUN --mount=type=secret,id=proxy_ca \
     if [ -f /run/secrets/proxy_ca ]; then export SSL_CERT_FILE=/run/secrets/proxy_ca; fi; apk add --no-cache python3
 RUN --mount=type=secret,id=proxy_ca \
     if [ -f /run/secrets/proxy_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/proxy_ca; fi; npm install --omit=dev
-COPY --from=build /app/dist ./dist
-COPY research/relative-strength-forward ./research/relative-strength-forward
+COPY --from=build --chown=node:node /app/dist ./dist
+COPY --chown=node:node research/relative-strength-forward ./research/relative-strength-forward
+RUN chmod a+r package*.json
 USER node
 CMD ["node","dist/index.js"]
