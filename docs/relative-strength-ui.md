@@ -1,6 +1,11 @@
 # Relative-strength paper test UI
 
-Open `/relative-strength` from the main navigation. The read-only JSON endpoint is
+Open `/` (or `/relative-strength`). The navigation contains only the current
+paper test and `/data-status` for collector coverage. Retired strategy screens,
+old finance summaries, market overlays and research progress screens redirect
+to `/`, including bookmarked query strings. Their stored evidence, research APIs
+and background jobs remain unchanged; this is a UI cleanup, not strategy shutdown.
+ The read-only JSON endpoint is
 `GET /api/relative-strength`. Historical selection results and forward results
 are separate tabs; the default tab never substitutes historical profit for a
 missing forward report. Both baseline and stress cost scenarios are available.
