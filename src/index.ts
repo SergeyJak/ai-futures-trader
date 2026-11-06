@@ -1,45 +1,37 @@
+import {uiResponse} from './ui-routes.js';
+import {loadRelativeStrengthReport} from './relative-strength-report.js';
 import {runRecoveryStudy} from './sol-recovery-study.js';
 import {initV8Paper,tickV8Paper,v8PaperReport} from './v8-paper.js';
 import {dipContinuationResearch} from './dip-continuation-research.js';
 import {momentumBracketResearch} from './momentum-bracket-research.js';
-import {dipContinuationResearchHtml} from './dip-continuation-research-page.js';
-import {v8PageHtml} from './v8-page.js';
 import {summarizeV8PaperTelemetry} from './v8-paper-telemetry.js';
 import {v8Backtest} from './v8-liquidity-sweep.js';
 import {initSol5m,tickSol5m,sol5mReport} from './sol-5m-paper.js';
-import {sol5mHtml} from './sol-5m-page.js';
 import {solPaperDiagnostics} from './sol-paper-diagnostics.js';
-import {initSolShort,tickSolShort,solShortReport,solShortHtml,solShortTradeCandles,solShortActiveTradeCandles} from './sol-short-paper.js';
+import {initSolShort,tickSolShort,solShortReport,solShortTradeCandles,solShortActiveTradeCandles} from './sol-short-paper.js';
 import {createResearchProgress} from './research-progress.js';
-import {researchProgressHtml} from './research-progress-page.js';
 import {discoverOkxTraderCodes} from './okx-discovery.js';
 import {initOkxHistory,collectOkxHistory} from './okx-history.js';
-import {dipOosHtml} from './dip-oos-page.js';
 import {initDipOos,tickDipOos,dipOosReport,dipOosChart} from './dip-oos.js';
 import {EXPERIMENT_KEYS,initStrategyPaper,tickStrategyPaper,strategyPaperReport,strategyPaperChart} from './strategy-paper.js';
 import {summarizeStrategyPaperTelemetry} from './strategy-paper-telemetry.js';
 import {initV7,tickV7,v7Report} from './v7.js';
-import {v7Html} from './v7-page.js';
 import {v7HistoricalReport} from './v7-backtest.js';
-import {isStrategyKey,strategyPageHtml,strategyPageReport,strategyTradeChart} from './strategy-pages.js';
+import {isStrategyKey,strategyPageReport,strategyTradeChart} from './strategy-pages.js';
 import {auditSolSignals} from './sol-signal-audit.js';
 import {installOutboundTelemetry,outboundSnapshot} from './outbound-telemetry.js';
-import {financePageHtml} from './finance-page.js';
 import {backfillV6EntryCandles} from './v6-selective-backfill.js';
 import {createV6ResearchJobs} from './v6-research-jobs.js';
 import {configuredV6FrozenSplit,createV6CostResearchScheduler} from './v6-cost-research-scheduler.js';
 import {summarizeFinance} from './finance-summary.js';
-import {initSolPaper,tickSolPaper,solPaperReport,solPaperHtml,solTradeCandles,solActiveTradeCandles} from './sol-dip-paper.js';
-import {overviewHtml} from './overview-page.js';
-import {initV6,runV6,v6Report,v6Html} from './v6.js';
-import {withUnifiedHeader} from './unified-header.js';
-import {v4Html} from './v4-page.js';
+import {initSolPaper,tickSolPaper,solPaperReport,solTradeCandles,solActiveTradeCandles} from './sol-dip-paper.js';
+import {initV6,runV6,v6Report} from './v6.js';
 import {researchExitV4} from './v4-exits.js';
 import 'dotenv/config';
 import http from 'node:http';import {backtest} from './backtest.js';
 import {evaluateCandidate} from './research.js';
 import {auditTrade,auditSummary} from './audit.js';import {researchThirtyMinuteRange} from './range30.js';import {researchThirtyMinuteBounce} from './bounce30.js';
-import {walkForward} from './walkforward.js';import {analyze} from './indicators.js';import {dashboardHtml} from './dashboard.js';import {v3Html} from './v3-page.js';import {analyticsHtml,researchHtml,marketHtml} from './extra-pages.js';import {MINUTE,missingRanges,fetchHistory} from './backfill.js';import {Database} from './database.js';import {MarketStream} from './market.js';
+import {walkForward} from './walkforward.js';import {analyze} from './indicators.js';import {MINUTE,missingRanges,fetchHistory} from './backfill.js';import {Database} from './database.js';import {MarketStream} from './market.js';
 import {createResearchData,researchDataConfig} from './research-data-runtime.js';
 import {researchDataResponse} from './research-data-api.js';
 const port=Number(process.env.PORT??3000);const url=process.env.DATABASE_URL;
@@ -66,12 +58,18 @@ const server=http.createServer(async(req,res)=>{
  res.setHeader('cache-control','no-store');
  res.setHeader('x-content-type-options','nosniff');
  res.setHeader('referrer-policy','no-referrer');
+ const ui=uiResponse(req.method??'GET',req.url??'/');
+ if(ui){res.writeHead(ui.status,ui.headers).end(ui.body);return;}
  if(req.url==='/api/research-data'||req.url?.startsWith('/api/research-data?')||req.url?.startsWith('/api/research-data/')){
   const result=await researchDataResponse(req.method??'GET',req.url,researchData.store,researchData.config,researchData.runtime.status);
   res.setHeader('content-type','application/json; charset=utf-8');if(result.status===405)res.setHeader('allow','GET');
   res.writeHead(result.status).end(JSON.stringify(result.body));return;
  }
- if(req.url==='/v8'){res.setHeader('content-type','text/html; charset=utf-8');res.setHeader('content-security-policy',"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'");res.writeHead(200).end(withUnifiedHeader(v8PageHtml));return}
+ if(req.url==='/api/relative-strength'){
+  if(req.method!=='GET'){res.setHeader('allow','GET');res.writeHead(405).end();return}
+  res.setHeader('content-type','application/json; charset=utf-8');
+  try{const report=await loadRelativeStrengthReport();res.writeHead(200).end(JSON.stringify(report))}catch(e){console.error('RELATIVE_STRENGTH_REPORT_ERROR',e);res.writeHead(503).end(JSON.stringify({error:'Checkpoint unavailable or invalid'}))}return;
+ }
  if(req.url==='/api/v8-paper'){try{res.setHeader('content-type','application/json');res.writeHead(200).end(JSON.stringify(await v8PaperReport(db.v6Pool())))}catch(e){console.error('V8_PAPER_REPORT_ERROR',e);res.writeHead(503).end(JSON.stringify({error:'V8 paper unavailable'}))}return}
  if(req.url==='/api/research/v8'){
   try {
@@ -93,16 +91,9 @@ const server=http.createServer(async(req,res)=>{
   }catch(e){console.error('V8_RESEARCH_ERROR',e);res.writeHead(503).end(JSON.stringify({error:'V8 research unavailable'}))}
   return;
  }
- if(req.url==='/research/dip-continuation'){res.setHeader('content-type','text/html; charset=utf-8');res.setHeader('content-security-policy',"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'");res.writeHead(200).end(withUnifiedHeader(dipContinuationResearchHtml));return}
  if(req.url==='/api/research/dip-continuation'){try{res.writeHead(200).end(JSON.stringify(await dipContinuationResearch(db.v6Pool())))}catch(e){console.error('DIP_CONTINUATION_RESEARCH_ERROR',e);res.writeHead(503).end(JSON.stringify({error:'Research unavailable'}))}return}
  if(req.url==='/api/research/momentum-bracket'){try{res.setHeader('content-type','application/json');res.writeHead(200).end(JSON.stringify(await momentumBracketResearch(db.v6Pool())))}catch(e){console.error('MOMENTUM_BRACKET_RESEARCH_ERROR',e);res.writeHead(503).end(JSON.stringify({error:'Research unavailable'}))}return}
- if(req.url==='/research-progress'){res.setHeader('content-type','text/html; charset=utf-8');res.setHeader('content-security-policy',"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'");res.writeHead(200).end(withUnifiedHeader(researchProgressHtml));return}
  if(req.url==='/api/research-progress'){res.setHeader('content-type','application/json');res.writeHead(200).end(JSON.stringify(researchProgress.snapshot()));return}
- if(req.url==='/'){res.setHeader('content-type','text/html; charset=utf-8');res.setHeader('content-security-policy',"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'");res.writeHead(200).end(withUnifiedHeader(overviewHtml));return}
- if(req.url==='/dashboard'){res.setHeader('content-type','text/html; charset=utf-8');res.setHeader('content-security-policy',"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'");res.writeHead(200).end(withUnifiedHeader(dashboardHtml));return}
- if(req.url==='/exit-research'){res.setHeader('content-type','text/html; charset=utf-8');res.setHeader('content-security-policy',"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'");res.writeHead(200).end(withUnifiedHeader(v4Html));return}
- if(req.url==='/experiments'){res.setHeader('content-type','text/html; charset=utf-8');res.setHeader('content-security-policy',"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'");res.writeHead(200).end(withUnifiedHeader(v3Html));return}
- if(req.url==='/analytics'||req.url==='/research'||req.url==='/market'){res.setHeader('content-type','text/html; charset=utf-8');res.setHeader('content-security-policy',"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'");res.writeHead(200).end(withUnifiedHeader(req.url==='/analytics'?analyticsHtml:req.url==='/research'?researchHtml:marketHtml));return}
  res.setHeader('content-type','application/json');
  if(req.url==='/api/provider-requests'){res.writeHead(200).end(JSON.stringify({at:new Date().toISOString(),scope:'process-local; since startup; rolling 240 buckets',requests:outboundSnapshot()}));return}
  if(req.url==='/api/overview'){
@@ -129,30 +120,21 @@ const server=http.createServer(async(req,res)=>{
   }catch(e){console.error('V4 exit research error',e);res.writeHead(503).end(JSON.stringify({error:'v4 exit study unavailable'}))}
   return;
  }
- if(req.url?.startsWith('/strategy/')){const key=req.url.slice('/strategy/'.length);if(isStrategyKey(key)){res.setHeader('content-type','text/html; charset=utf-8');res.setHeader('content-security-policy',"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'");res.writeHead(200).end(withUnifiedHeader(strategyPageHtml(key)));return}}
  if(req.url?.startsWith('/api/strategy-paper/')){const u=new URL(req.url,'http://localhost'),parts=u.pathname.split('/'),key=parts[3];if(isStrategyKey(key)&&parts.length===4){try{res.writeHead(200).end(JSON.stringify(await strategyPaperReport(db.v6Pool(),key)))}catch(e){console.error('STRATEGY_PAPER_REPORT_ERROR',e);res.writeHead(503).end(JSON.stringify({error:'Paper report unavailable'}))}return}if(isStrategyKey(key)&&parts[4]==='chart'&&parts.length===5){try{const result=await strategyPaperChart(db.v6Pool(),key,u.searchParams.get('variant')??'',u.searchParams.get('id')??'');res.writeHead(result?200:404).end(JSON.stringify(result??{error:'Trade not found'}))}catch(e){console.error('STRATEGY_PAPER_CHART_ERROR',e);res.writeHead(503).end(JSON.stringify({error:'Chart unavailable'}))}return}}
  if(req.url?.startsWith('/api/strategy/')){const u=new URL(req.url,'http://localhost');const parts=u.pathname.split('/');const key=parts[3];if(isStrategyKey(key)&&parts.length===4){try{res.writeHead(200).end(JSON.stringify(await strategyPageReport(db.v6Pool(),key)))}catch(e){console.error('STRATEGY_REPORT_ERROR',e);res.writeHead(503).end(JSON.stringify({error:'Strategy report unavailable'}))}return}if(isStrategyKey(key)&&parts[4]==='trade'&&parts.length===5){const id=u.searchParams.get('id')??'';if(id.length>250){res.writeHead(400).end(JSON.stringify({error:'Invalid ID'}));return}try{const result=await strategyTradeChart(db.v6Pool(),key,id);res.writeHead(result?200:404).end(JSON.stringify(result??{error:'Trade not found'}))}catch(e){console.error('STRATEGY_CHART_ERROR',e);res.writeHead(503).end(JSON.stringify({error:'Trade chart unavailable'}))}return}}
  if(req.url?.startsWith('/api/sol-dip/active?')){const variant=new URL(req.url,'http://localhost').searchParams.get('variant')??'';try{const result=await solActiveTradeCandles(db.v6Pool(),variant);res.writeHead(result?200:404).end(JSON.stringify(result??{error:'Active position not found'}))}catch(e){console.error('SOL_ACTIVE_CHART_ERROR',e);res.writeHead(503).end(JSON.stringify({error:'Active chart unavailable'}))}return}
- if(req.url==='/sol-short'){res.setHeader('content-type','text/html; charset=utf-8');res.setHeader('content-security-policy',"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'");res.writeHead(200).end(withUnifiedHeader(solShortHtml));return}
  if(req.url==='/api/sol-short'){try{res.setHeader('content-type','application/json');res.writeHead(200).end(JSON.stringify(await solShortReport(db.v6Pool())))}catch(e){console.error('SOL_SHORT_REPORT_ERROR',e);res.writeHead(503).end(JSON.stringify({error:'SOL SHORT unavailable'}))}return}
  if(req.url?.startsWith('/api/sol-short/trade?')){const id=Number(new URL(req.url,'http://localhost').searchParams.get('id'));if(!Number.isSafeInteger(id)||id<=0){res.writeHead(400).end('Invalid ID');return}try{const result=await solShortTradeCandles(db.v6Pool(),id);res.setHeader('content-type','application/json');res.writeHead(result?200:404).end(JSON.stringify(result??{error:'Not found'}))}catch(e){console.error('SOL_SHORT_CHART_ERROR',e);res.writeHead(503).end(JSON.stringify({error:'Chart unavailable'}))}return}
  if(req.url?.startsWith('/api/sol-short/active?')){const variant=new URL(req.url,'http://localhost').searchParams.get('variant')??'';try{const result=await solShortActiveTradeCandles(db.v6Pool(),variant);res.setHeader('content-type','application/json');res.writeHead(result?200:404).end(JSON.stringify(result??{error:'Not found'}))}catch(e){console.error('SOL_SHORT_ACTIVE_ERROR',e);res.writeHead(503).end(JSON.stringify({error:'Chart unavailable'}))}return}
- if(req.url==='/sol-5m'){res.setHeader('content-type','text/html; charset=utf-8');res.setHeader('content-security-policy',"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'");res.writeHead(200).end(withUnifiedHeader(sol5mHtml));return}
  if(req.url==='/api/sol-5m'){try{res.setHeader('content-type','application/json');res.writeHead(200).end(JSON.stringify(await sol5mReport(db.v6Pool())))}catch(e){console.error('SOL_5M_REPORT_ERROR',e);res.writeHead(503).end(JSON.stringify({error:'SOL 5m unavailable'}))}return}
- if(req.url==='/sol-dip'){res.setHeader('content-type','text/html; charset=utf-8');res.setHeader('content-security-policy',"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'");res.writeHead(200).end(withUnifiedHeader(solPaperHtml));return}
  if(req.url==='/api/sol-dip/audit'){try{res.setHeader('content-type','application/json');res.writeHead(200).end(JSON.stringify(await auditSolSignals(db.v6Pool())))}catch(e){console.error('SOL_DIP_AUDIT_ERROR',e);res.writeHead(503).end(JSON.stringify({error:'SOL signal audit unavailable'}))}return}
  if(req.url?.startsWith('/api/sol-dip/trade?')){const id=Number(new URL(req.url,'http://localhost').searchParams.get('id'));if(!Number.isSafeInteger(id)||id<=0){res.writeHead(400).end('Invalid trade ID');return}try{const result=await solTradeCandles(db.v6Pool(),id);res.setHeader('content-type','application/json');res.writeHead(result?200:404).end(JSON.stringify(result??{error:'Trade not found'}))}catch(e){console.error('SOL_TRADE_CHART_ERROR',e);res.writeHead(503).end(JSON.stringify({error:'Trade chart unavailable'}))}return}
  if(req.url==='/api/sol-dip'){try{res.writeHead(200).end(JSON.stringify(await solPaperReport(db.v6Pool())))}catch(e){console.error('SOL_DIP_REPORT_ERROR',e);res.writeHead(503).end(JSON.stringify({error:'SOL paper data unavailable'}))}return}
  if(req.url==='/api/dip-oos'){try{res.writeHead(200).end(JSON.stringify(await dipOosReport(db.v6Pool())))}catch(e){console.error('DIP_OOS_REPORT_ERROR',e);res.writeHead(503).end(JSON.stringify({error:'Dip OOS unavailable'}))}return}
  if(req.url?.startsWith('/api/dip-oos/chart?')){const u=new URL(req.url,'http://localhost');try{const result=await dipOosChart(db.v6Pool(),u.searchParams.get('variant')??'',u.searchParams.get('id')??'');res.writeHead(result?200:404).end(JSON.stringify(result??{error:'Trade not found'}))}catch(e){console.error('DIP_OOS_CHART_ERROR',e);res.writeHead(503).end(JSON.stringify({error:'Chart unavailable'}))}return}
- if(req.url==='/dip-oos'){res.setHeader('content-type','text/html; charset=utf-8');res.setHeader('content-security-policy',"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'");res.writeHead(200).end(withUnifiedHeader(dipOosHtml));return}
  if(req.url==='/api/v7/historical'){try{res.writeHead(200).end(JSON.stringify(await v7HistoricalReport(db.v6Pool())))}catch(e){console.error('V7_HISTORICAL_ERROR',e);res.writeHead(503).end(JSON.stringify({error:'Historical report unavailable'}))}return}
- if(req.url==='/v7'){res.setHeader('content-type','text/html; charset=utf-8');res.setHeader('content-security-policy',"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'");res.writeHead(200).end(withUnifiedHeader(v7Html));return}
  if(req.url==='/api/v7'){try{res.writeHead(200).end(JSON.stringify(await v7Report(db.v6Pool())))}catch(e){console.error('V7_REPORT_ERROR',e);res.writeHead(503).end(JSON.stringify({error:'V7 report unavailable'}))}return}
- if(req.url==='/v6'){res.setHeader('content-type','text/html; charset=utf-8');res.setHeader('content-security-policy',"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'");res.writeHead(200).end(withUnifiedHeader(v6Html));return}
  if(req.url==='/api/v6'){try{res.writeHead(200).end(JSON.stringify(await v6Report(db.v6Pool())))}catch(e){console.error('V6 report error',e);res.writeHead(503).end(JSON.stringify({error:'v6 unavailable'}))}return}
- if(req.url==='/v5'){res.setHeader('content-type','text/html; charset=utf-8');res.setHeader('content-security-policy',"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'");res.writeHead(200).end(withUnifiedHeader(`<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>AI Futures v5</title><style>body{margin:0;background:#f6f8fc;color:#172338;font:15px system-ui}main{max-width:1100px;margin:25px auto;padding:16px}.card{background:white;padding:20px;border-radius:16px;border:1px solid #e4eaf5}.scroll{overflow:auto}table{border-collapse:collapse;width:100%;white-space:nowrap}td,th{padding:10px;text-align:left;border-bottom:1px solid #e4eaf5}th{color:#687992}</style></head><body><main><h1>v5 · Независимые сигналы</h1><p>LONG: откат от максимума. SHORT: отскок от минимума. Выход по стопу/тейку до тайм-аута. 15, 30 и 60 минут. Только виртуальные счета.</p><section class="card"><p id="status">Загрузка…</p><div class="scroll"><table><thead><tr><th>Инструмент</th><th>Сторона</th><th>Мин</th><th>Просадка</th><th>Сделки</th><th>Победы</th><th>Чистый P&L</th><th>Комиссии</th><th>Баланс</th></tr></thead><tbody id="rows"></tbody></table></div></section></main><script>async function load(){try{const r=await fetch('/api/v5',{cache:'no-store'});if(!r.ok)throw Error('HTTP '+r.status);const d=await r.json(),root=document.getElementById('rows');root.replaceChildren();for(const a of d.accounts){const tr=document.createElement('tr');for(const x of [a.symbol,a.side,a.hold,(100*a.dip).toFixed(1)+'%',a.trades,a.wins,Number(a.realized_pnl).toFixed(3),Number(a.fees).toFixed(3),Number(a.balance).toFixed(3)]){const td=document.createElement('td');td.textContent=String(x);tr.append(td)}root.append(tr)}document.getElementById('status').textContent=d.configs+' конфигураций · '+d.accounts.reduce((n,a)=>n+a.trades,0)+' сделок · '+new Date(d.at).toLocaleString('ru-RU')}catch(e){document.getElementById('status').textContent=String(e)}}load();setInterval(load,20000)</script></body></html>`));return}
- if(req.url==='/finance'){res.setHeader('content-type','text/html; charset=utf-8');res.setHeader('content-security-policy',"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'");res.writeHead(200).end(withUnifiedHeader(financePageHtml));return}
  if(req.url==='/api/finance'){try{const [v1v2,v4,v5,sol]=await Promise.all([db.telemetrySnapshot(),db.v4Report(),db.v5Report(),solPaperReport(db.v6Pool())]);const versions:Record<string,any>={v1:v1v2.v1,v2:v1v2.v2,v4:v4.accounts,v5:v5.accounts,sol:sol.variants.map((v:any)=>({...v,trades:v.trades.length}))};res.writeHead(200).end(JSON.stringify({at:new Date().toISOString(),mode:'paper-only',realOrders:false,note:'Cash balance only; open positions not marked to market. Funding not independently verified. SOL trade count limited to latest 60 trades.',versions:Object.fromEntries(Object.entries(versions).map(([name,accounts])=>[name,summarizeFinance(accounts)]))}))}catch(e){console.error('FINANCE_SUMMARY_ERROR',e);res.writeHead(503).end(JSON.stringify({error:'Financial summary unavailable'}))}return}
  if(req.url==='/api/v5'){try{res.writeHead(200).end(JSON.stringify(await db.v5Report()))}catch(e){console.error('V5 report error',e);res.writeHead(503).end(JSON.stringify({error:'v5 unavailable'}))}return}
  if(req.url==='/api/v4'){

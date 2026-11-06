@@ -1,17 +1,13 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {unifiedHeader} from '../src/unified-header.js';
-import {overviewHtml} from '../src/overview-page.js';
-test('focused menu prioritizes progress and preserves legacy pages only in archive',()=>{
- assert.match(unifiedHeader,/<a href="\/research-progress">Прогресс исследований<\/a>/);
- assert.match(unifiedHeader,/<summary>Архив и диагностика/);
- assert.match(unifiedHeader,/<a href="\/dashboard">V1 \/ V2 · Архив<\/a>/);
- assert.equal((unifiedHeader.match(/<nav /g)||[]).length,1);
- assert.equal((unifiedHeader.match(/<\/nav>/g)||[]).length,1);
+import {uiResponse} from '../src/ui-routes.js';
+test('menu contains only current test and collector coverage',()=>{
+ assert.deepEqual([...unifiedHeader.matchAll(/<nav[^>]*>(.*?)<\/nav>/gs)].length,1);
+ assert.doesNotMatch(unifiedHeader,/Архив|V[1-8]|research-progress|finance|strategy\//);
+ assert.match(unifiedHeader,/Состояние данных/);
 });
-test('overview links to progress without duplicate legacy navigation',()=>{
- assert.match(overviewHtml,/Прогресс/);
- assert.doesNotMatch(overviewHtml,/Подробные разделы и диагностика/);
- assert.match(overviewHtml,/api\/finance/);
- assert.match(overviewHtml,/all\.sort/);
- assert.match(overviewHtml,/Минимум закрытых сделок/);
+test('home no longer loads old rankings and finance summaries',()=>{
+ const home=uiResponse('GET','/')!.body;
+ assert.match(home,/api\/relative-strength/);
+ assert.doesNotMatch(home,/api\/finance|api\/overview|api\/v[1-8]/);
 });
