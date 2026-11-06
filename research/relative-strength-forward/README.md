@@ -26,8 +26,9 @@ python3 research/relative-strength-forward/replay.py \
 ```
 
 Before start, replay writes `waiting-for-forward-data`; it never reports fictitious
-returns. It rejects future/non-hour boundaries. No orders, secrets, network
-requests, or automatic forward schedule are present.
+returns. It rejects future/non-hour boundaries. The offline replay command makes no network requests or orders. The application
+now provides an automatic public-data worker; see
+[automation](../../docs/relative-strength-automation.md).
 
 ## Snapshot contract
 
@@ -39,9 +40,10 @@ Oct8 UTC and extends through the last fully closed day. Hourly candles cover
 Nov6 01UTC through the report boundary inclusive; the boundary candle is used
 only for its open, never its subsequent prices. Funding events cover all held
 8h settlements. Preserve raw responses and record SHA256 before invoking replay.
-Public connected Binance tools supplied this research; direct REST returned451
-from the working environment, so unattended download/scheduling is NOT ready.
-The CI workflow tests code only and is not a trading/research scheduler.
+Public connected Binance tools supplied the original research; direct REST
+returned451 from the working environment. Production REST availability must be
+verified from the deployed worker. The CI workflow tests code only, while the
+application schedules the new worker and persists reports in PostgreSQL.
 
 ## Evidence and limits
 
