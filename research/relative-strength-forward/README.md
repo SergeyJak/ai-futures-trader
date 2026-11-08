@@ -1,3 +1,7 @@
+> Active automatic variant:1000USDT starting2026-11-09 01UTC. The original
+> 100USDT test remains archived. See [capital variant](../../docs/relative-strength-automation.md#capital-variant-activated-november8).
+> The historical findings and offline command defaults below refer to100USDT.
+
 # Frozen relative-strength reversal: paper research only
 
 Candidate: on Binance USDT perpetuals, rank previous28 complete daily close
