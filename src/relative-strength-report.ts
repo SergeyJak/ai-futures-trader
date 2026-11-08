@@ -1,6 +1,7 @@
 import {readFile,stat} from 'node:fs/promises';
 import {relativeStrengthHistory} from './relative-strength-history.js';
-export const FORWARD_START='2026-11-06T01:00:00Z';
+export const FORWARD_START='2026-11-09T01:00:00Z';
+export const INITIAL_CAPITAL=1000;
 const symbols=new Set(['BTCUSDT','ETHUSDT','SOLUSDT','BNBUSDT','XRPUSDT','DOGEUSDT','ADAUSDT','LINKUSDT']);
 const object=(x:unknown):Record<string,any>=>{if(!x||typeof x!=='object'||Array.isArray(x))throw new Error('Invalid report object');return x as Record<string,any>};
 const number=(x:unknown)=>{if(typeof x!=='number'||!Number.isFinite(x))throw new Error('Invalid report number');return x};
@@ -17,16 +18,16 @@ function scenario(value:unknown,start:number,asOf:number){
  const events=array(s.events).map(v=>{const e=object(v);if(!['open','close','funding'].includes(e.kind)||!symbols.has(e.symbol))throw new Error('Invalid event');const at=number(e.at);if(at<start||at>asOf)throw new Error('Event outside report');return e.kind==='funding'?{at,kind:e.kind as string,symbol:e.symbol as string,quantity:null,price:null,cost:null,amount:number(e.amount)}:{at,kind:e.kind as string,symbol:e.symbol as string,quantity:number(e.quantity),price:number(e.price),cost:number(e.cost),amount:null}});
  const decisions=array(s.decisions??[]).map(v=>{const d=object(v),at=number(d.at);if(at<start||at>asOf)throw new Error('Invalid decision timestamp');const rejected=d.rejected==null?null:String(d.rejected);if(rejected&&!/^minimum_or_maximum_order:(BTC|ETH|SOL|BNB|XRP|DOGE|ADA|LINK)USDT$/.test(rejected))throw new Error('Unknown rejection');return {at,rejected}});
  const lastDecision=decisions.at(-1)??null;
- return {name,equity,lastDecision,cash:number(s.cash),net:equity-100,drawdown:dd,funding:number(s.funding),costs:number(s.costs),closedLegs:events.filter(e=>e.kind==='close').length,positions:curve.at(-1)!.positions,curve:curve.map(({at,equity})=>({at,equity})),events};
+ return {name,equity,lastDecision,cash:number(s.cash),net:equity-INITIAL_CAPITAL,drawdown:dd,funding:number(s.funding),costs:number(s.costs),closedLegs:events.filter(e=>e.kind==='close').length,positions:curve.at(-1)!.positions,curve:curve.map(({at,equity})=>({at,equity})),events};
 }
 export function relativeStrengthReport(raw:unknown|null,now=Date.now()){
  const start=Date.parse(FORWARD_START);let asOf:string|null=null;let scenarios:ReturnType<typeof scenario>[]=[];
- if(raw!==null){const r=object(raw);if(date(r.start)!==start||r.orders!==false||r.scheduled!==false)throw new Error('Unexpected checkpoint identity');const end=date(r.as_of);if(end>now||end%3600000)throw new Error('Invalid checkpoint boundary');asOf=r.as_of;
+ if(raw!==null){const r=object(raw);if(date(r.start)!==start||r.initial_capital!==INITIAL_CAPITAL||r.orders!==false||r.scheduled!==false)throw new Error('Unexpected checkpoint identity');const end=date(r.as_of);if(end>now||end%3600000)throw new Error('Invalid checkpoint boundary');asOf=r.as_of;
   if(r.status==='provisional-paper'){if(end<=start)throw new Error('No forward interval');scenarios=array(r.scenarios).map(s=>scenario(s,start,end));if(!scenarios.length||new Set(scenarios.map(s=>s.name)).size!==scenarios.length)throw new Error('Missing or duplicate scenario')}
   else if(r.status!=='waiting-for-forward-data'||end>start)throw new Error('Unknown checkpoint state');
  }
  const status=scenarios.length?(now-Date.parse(asOf!)>36*3600000?'stale':'ready'):now<start?'not-started':'awaiting-report';
- return {at:new Date(now).toISOString(),forward:{status,start:FORWARD_START,asOf,scheduled:false,realOrders:false,scenarios},history:relativeStrengthHistory};
+ return {at:new Date(now).toISOString(),forward:{status,start:FORWARD_START,initialCapital:INITIAL_CAPITAL,asOf,scheduled:false,realOrders:false,scenarios},history:relativeStrengthHistory};
 }
 export async function loadRelativeStrengthReport(path=process.env.RELATIVE_STRENGTH_CHECKPOINT_FILE,now=Date.now()){
  if(!path)return relativeStrengthReport(null,now);

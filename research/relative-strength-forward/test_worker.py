@@ -1,7 +1,7 @@
 import unittest
 from worker import candle_rows, funding_rows, make_checkpoint, packet_bytes
 from engine import HOUR, DAY, SYMBOLS
-from replay import START
+from worker import START
 
 class WorkerChecks(unittest.TestCase):
  def test_candles_page_and_replace_incomplete_boundary(self):

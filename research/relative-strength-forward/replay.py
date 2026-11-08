@@ -9,7 +9,7 @@ def timestamp(value):
     if time.tzinfo is None:raise ValueError('Explicit timezone required')
     return int(time.timestamp()*1000)
 
-def load_packet(path,expected_sha,end):
+def load_packet(path,expected_sha,end,start=START):
     content=path.read_bytes()
     if hashlib.sha256(content).hexdigest()!=expected_sha:raise ValueError('Snapshot SHA256 mismatch')
     packet=json.loads(content)
@@ -23,7 +23,7 @@ def load_packet(path,expected_sha,end):
             values=list(map(float,row[1:5]))+[float(row[7])]
             if not all(math.isfinite(v) for v in values) or min(values[:4])<=0 or values[4]<0:raise ValueError('Invalid daily values')
             if row[0]%DAY or row[6]!=row[0]+DAY-1:raise ValueError('Invalid daily boundary')
-        if rows[0][0]>START//DAY*DAY-29*DAY:raise ValueError('Warmup begins too late')
+        if rows[0][0]>start//DAY*DAY-29*DAY:raise ValueError('Warmup begins too late')
         hourly[s]={}
         for row in packet['hourly'][s]:
             t=row[0]
@@ -47,14 +47,15 @@ def load_packet(path,expected_sha,end):
     return daily,hourly,funding,rules
 
 def main():
-    p=argparse.ArgumentParser();p.add_argument('--snapshot',type=pathlib.Path);p.add_argument('--sha256');p.add_argument('--as-of',required=True);p.add_argument('--output',type=pathlib.Path,required=True);a=p.parse_args()
-    end=timestamp(a.as_of)
+    p=argparse.ArgumentParser();p.add_argument('--start',default='2026-11-06T01:00:00Z');p.add_argument('--capital',type=float,default=100.);p.add_argument('--snapshot',type=pathlib.Path);p.add_argument('--sha256');p.add_argument('--as-of',required=True);p.add_argument('--output',type=pathlib.Path,required=True);a=p.parse_args()
+    end=timestamp(a.as_of);start=timestamp(a.start)
+    if start%DAY!=HOUR or not math.isfinite(a.capital) or a.capital<=0:raise ValueError('Invalid start or capital')
     if end>int(dt.datetime.now(UTC).timestamp()*1000) or end%HOUR:raise ValueError('Only elapsed full-hour boundaries are allowed')
-    if end<=START:
-        result={'status':'waiting-for-forward-data','start':'2026-11-06T01:00:00Z','as_of':a.as_of,'orders':False,'scheduled':False}
+    if end<=start:
+        result={'status':'waiting-for-forward-data','start':a.start,'initial_capital':a.capital,'as_of':a.as_of,'orders':False,'scheduled':False}
     else:
         if not a.snapshot or not a.sha256:raise ValueError('Provide snapshot and SHA256')
-        args=load_packet(a.snapshot,a.sha256,end)
-        result={'status':'provisional-paper','start':'2026-11-06T01:00:00Z','as_of':a.as_of,'orders':False,'scheduled':False,'snapshot_sha256':a.sha256,'scenarios':[replay(*args,START,end,fee,slip,False) for fee,slip in [(.0006,.0003),(.0008,.0007)]]}
+        args=load_packet(a.snapshot,a.sha256,end,start=start)
+        result={'status':'provisional-paper','start':a.start,'initial_capital':a.capital,'as_of':a.as_of,'orders':False,'scheduled':False,'snapshot_sha256':a.sha256,'scenarios':[replay(*args,start,end,fee,slip,False,initial_capital=a.capital) for fee,slip in [(.0006,.0003),(.0008,.0007)]]}
     a.output.write_text(json.dumps(result,indent=2,allow_nan=False)+'\n');print(json.dumps({k:v for k,v in result.items() if k!='scenarios'}))
 if __name__=='__main__':main()

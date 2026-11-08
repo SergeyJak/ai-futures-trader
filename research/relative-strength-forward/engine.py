@@ -18,12 +18,13 @@ def select_basket(daily, day):
 def execution_cost(delta,price,fee,slip):
     return abs(delta)*price*(fee+slip+fee*slip)
 
-def replay(daily,hourly,funding,rules,start,end,fee=.0006,slip=.0003,liquidate_at_end=True):
+def replay(daily,hourly,funding,rules,start,end,fee=.0006,slip=.0003,liquidate_at_end=True,initial_capital=100.):
+    if not math.isfinite(initial_capital) or initial_capital<=0:raise ValueError('Invalid initial capital')
     if set(daily)!=set(SYMBOLS):raise ValueError('Unexpected symbol universe')
     times=list(range(start,end+HOUR,HOUR))
     for s in SYMBOLS:
         if not all(t in hourly[s] for t in times):raise ValueError('Missing hourly candle: '+s)
-    cash=100.;positions={};peak=100.;dd=0.;bound=0.;gross_peak=0.;events=[];curve=[];decisions=[];fundtotal=0.;costtotal=0.
+    cash=float(initial_capital);positions={};peak=float(initial_capital);dd=0.;bound=0.;gross_peak=0.;events=[];curve=[];decisions=[];fundtotal=0.;costtotal=0.
     for t in times:
         opens={s:float(hourly[s][t][1]) for s in SYMBOLS}
         # Settlements occur before any execution in this hour. Rebalances at01UTC
@@ -65,10 +66,10 @@ def replay(daily,hourly,funding,rules,start,end,fee=.0006,slip=.0003,liquidate_a
         if t!=end:bound=max(bound,1-worst/peak)
         curve.append(dict(at=t,equity=equity,gross_multiple=gross/equity if equity>0 else None,positions={s:q for s,(q,e) in positions.items()}))
     if liquidate_at_end:assert not positions
-    months={};prev=100.
+    months={};prev=float(initial_capital)
     for p in curve:
         # Hour-close return assigned to its starting UTC date.
         month=dt.datetime.fromtimestamp(p['at']/1000,dt.timezone.utc).strftime('%Y-%m')
         months[month]=months.get(month,1)*p['equity']/prev;prev=p['equity']
-    return dict(fee=fee,slip=slip,final=equity,cash=cash,net=equity-100,dd_hourly_pct=100*dd,simultaneous_hour_extremes_bound_pct=100*bound,peak_gross_multiple=gross_peak,funding=fundtotal,costs=costtotal,monthly={m:100*(v-1) for m,v in months.items()},events=events,curve=curve,decisions=decisions)
+    return dict(fee=fee,slip=slip,final=equity,cash=cash,net=equity-initial_capital,initial_capital=initial_capital,dd_hourly_pct=100*dd,simultaneous_hour_extremes_bound_pct=100*bound,peak_gross_multiple=gross_peak,funding=fundtotal,costs=costtotal,monthly={m:100*(v-1) for m,v in months.items()},events=events,curve=curve,decisions=decisions)
 

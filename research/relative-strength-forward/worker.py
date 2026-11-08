@@ -2,7 +2,9 @@
 import argparse, datetime as dt, hashlib, json, pathlib, sys, tempfile, time
 import urllib.request, urllib.parse, urllib.error
 from engine import HOUR, DAY, SYMBOLS, replay
-from replay import START, load_packet
+from replay import load_packet
+START=int(dt.datetime(2026,11,9,1,tzinfo=dt.timezone.utc).timestamp()*1000)
+INITIAL_CAPITAL=1000.
 
 BASE='https://fapi.binance.com'
 MAX_DAYS=180
@@ -57,11 +59,11 @@ def make_checkpoint(packet,end,now=None):
     sha=hashlib.sha256(content).hexdigest()
     with tempfile.TemporaryDirectory() as folder:
         path=pathlib.Path(folder)/'packet.json';path.write_bytes(content)
-        args=load_packet(path,sha,end)
+        args=load_packet(path,sha,end,start=START)
     stamp=lambda t:dt.datetime.fromtimestamp(t/1000,dt.timezone.utc).isoformat().replace('+00:00','Z')
     return dict(status='provisional-paper',start=stamp(START),as_of=stamp(end),orders=False,scheduled=False,
-                source='binance-usds-public',calculation='hourly-paper-replay',snapshot_sha256=sha,
-                scenarios=[replay(*args,START,end,fee,slip,False) for fee,slip in [(.0006,.0003),(.0008,.0007)]])
+                initial_capital=INITIAL_CAPITAL,source='binance-usds-public',calculation='hourly-paper-replay',snapshot_sha256=sha,
+                scenarios=[replay(*args,START,end,fee,slip,False,initial_capital=INITIAL_CAPITAL) for fee,slip in [(.0006,.0003),(.0008,.0007)]])
 
 def collect(previous,end,get=public_get):
     if end<=START or end>START+MAX_DAYS*DAY or end%HOUR:raise ValueError('Invalid study boundary')

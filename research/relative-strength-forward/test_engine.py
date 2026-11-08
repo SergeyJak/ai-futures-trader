@@ -59,3 +59,14 @@ class FundingChecks(ReplayChecks):
   self.assertAlmostEqual(r['final'],100+r['funding']-r['costs'])
   args[2]['BTCUSDT']={}
   with self.assertRaises(ValueError):replay(*args)
+
+class CapitalChecks(ReplayChecks):
+ def test_larger_paper_capital_admits_btc_without_leverage(self):
+  args=self.inputs();args[3]['BTCUSDT']['MIN_NOTIONAL']['notional']='50'
+  small=replay(*args,liquidate_at_end=False)
+  large=replay(*args,liquidate_at_end=False,initial_capital=1000)
+  self.assertEqual(small['final'],100)
+  self.assertEqual(len(large['curve'][-1]['positions']),4)
+  self.assertLess(large['final'],1000)
+  self.assertAlmostEqual(large['net'],large['final']-1000)
+  self.assertLessEqual(sum(abs(q)*100 for q in large['curve'][0]['positions'].values()),1000)

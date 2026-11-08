@@ -3,8 +3,7 @@
 The existing application runs the frozen replay on startup and hourly, five
 minutes after the UTC boundary. On failure it retries after ten minutes. This
 uses public Binance USDⓈ-M data only; it never calls order/account APIs. Existing
-Bybit collectors remain separate. Selection/risk/fees and the Nov6 01UTC start
-are unchanged. Recovered historical hours are paper reconstructions, not timely
+Bybit collectors remain separate. Selection/risk/fees are unchanged. The active capital variant starts Nov9 01UTC with1000USDT. Recovered historical hours are paper reconstructions, not timely
 exchange fills; the UI labels this explicitly.
 
 Deployment needs the included Dockerfile (Python3 + Node22 + frozen engine).
@@ -14,7 +13,7 @@ Default is enabled. `RELATIVE_STRENGTH_ENABLED=false` disables the worker.
 `RELATIVE_STRENGTH_CHECKPOINT_FILE` explicitly selects manual file mode and
 disables automation; remove it to use automatic database reports.
 
-One row in `relative_strength_forward` stores the raw source packet, both cost
+One row in `relative_strength_forward_1000` stores the raw source packet, both cost
 scenarios and run status. A session advisory lock prevents replica overlap;
 record replacement is atomic. A failed fetch/replay retains the last successful
 packet and report. Restart recomputes only when a new boundary is due; it never
@@ -45,3 +44,17 @@ Railway SUCCESS and `/api/relative-strength`: `forward.scheduled=true`, an idle
 job, non-null lastSuccess/asOf, and both scenarios. On error inspect the explicit
 job message and `RELATIVE_STRENGTH_JOB_ERROR` logs. A successful offline run or
 CI is not a successful production fetch.
+
+## Capital variant activated November8
+
+The new run starts2026-11-09 01UTC with1000USDT and the same <=1x entry budget.
+Approximately250USDT per leg remains subject to exchange rounding/minimums.
+The old100USDT row in `relative_strength_forward` is left untouched as evidence;
+it is not a deposit, profit, or seed balance for the new run. Historical UI
+selection figures still describe the original100USDT experiment.
+The first completed-hour report can appear at02:05UTC November9; the01UTC
+endpoint excludes execution until that hour is complete. Deployment after this
+time catches up by paper replay, not exchange orders.
+Offline export/replay for this variant requires:
+`replay.py --start 2026-11-09T01:00:00Z --capital 1000` plus the existing snapshot,
+SHA256, as-of and output arguments. Warmup must start no later thanOctober11.
