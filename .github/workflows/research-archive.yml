@@ -6,9 +6,9 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: ['.github/workflows/research-archive.yml', 'research/collector-archive/**', 'research/collector-audit/download.py']
+    paths: ['.github/workflows/research-archive.yml', 'research/collector-archive/**', 'research/collector-audit/download.py', 'research/dip-regime-forward/**']
   pull_request:
-    paths: ['.github/workflows/research-archive.yml', 'research/collector-archive/**', 'research/collector-audit/download.py']
+    paths: ['.github/workflows/research-archive.yml', 'research/collector-archive/**', 'research/collector-audit/download.py', 'research/dip-regime-forward/**']
 permissions:
   contents: read
   actions: read
@@ -69,3 +69,17 @@ jobs:
               }
             }
             core.setFailed('No successful research archive in 36 hours. Run archive manually before 7-day source retention expires.');
+
+  dip-regime:
+    if: github.event.schedule != '17 15 * * *'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m unittest discover -s research/dip-regime-forward -p 'test_*.py'
+      - run: python3 research/dip-regime-forward/study.py --output dip-regime-report.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dip-regime-report
+          path: dip-regime-report.json
+          retention-days: 90
