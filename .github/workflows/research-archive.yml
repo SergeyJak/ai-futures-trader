@@ -72,6 +72,8 @@ jobs:
 
   dip-regime:
     if: github.event.schedule != '17 15 * * *'
+    # A research-data blocker must not invalidate a successful archive/freshness run.
+    continue-on-error: ${{ github.event_name == 'schedule' }}
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:

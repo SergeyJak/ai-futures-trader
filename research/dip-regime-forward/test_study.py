@@ -59,6 +59,18 @@ class StudyTest(unittest.TestCase):
         self.assertAlmostEqual(result["filters"]["short_only"]["paired_delta"],.2)
         self.assertEqual(result["filters"]["short_only"]["decision"],"insufficient_forward_data")
 
+    def test_primary_checkpoint_does_not_move_with_later_outcomes(self):
+        row,candles,a,b=fixture("SHORT",start="2026-11-11T00:00:00Z")
+        x=score(row,candles,{})
+        rows=[dict(x,id=str(i),a=a+(i//2)*DAY+(i%2)*13*3600,
+                   b=a+(i//2)*DAY+(i%2)*13*3600+12*3600) for i in range(40)]
+        checkpoint=primary_checkpoint(rows,PRIMARY,a+22*DAY,True)
+        self.assertEqual(checkpoint["status"],"fixed_checkpoint")
+        self.assertEqual(checkpoint["candidate"]["trades"],40)
+        extra=dict(x,id="later",a=a+21*DAY,b=a+21*DAY+12*3600,after=99)
+        self.assertEqual(primary_checkpoint(rows+[extra],PRIMARY,a+23*DAY,True),checkpoint)
+        self.assertEqual(primary_checkpoint(rows,PRIMARY,a+20*DAY,True)["status"],"collecting")
+
     def test_paired_skips_and_bootstrap(self):
         row,candles,a,b=fixture()
         x=score(row,candles,{})

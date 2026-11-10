@@ -297,15 +297,36 @@ def group(rows, eligible=True, primary=PRIMARY):
         result["filters"][name] = m
     return result
 
-def split(rows, quality, primary=PRIMARY):
+def primary_checkpoint(rows, primary, as_of, eligible):
+    """One outcome-independent checkpoint; later trades never move its boundary."""
+    if primary is None:
+        return None
+    accepted = [r for r in rows if r[primary]]
+    days = set()
+    end = None
+    for i, row in enumerate(accepted, 1):
+        days.add(row["a"]//DAY)
+        if i >= 30 and len(days) >= 20:
+            end = (row["a"]//DAY+1)*DAY
+            break
+    if end is None or as_of < end+12*3600:
+        return dict(status="collecting", end=iso(end) if end else None)
+    checkpoint = [r for r in rows if r["a"] < end]
+    result = group(checkpoint, eligible, primary)
+    return dict(status="fixed_checkpoint", end=iso(end), baseline=result["baseline"],
+                candidate=result["filters"][primary])
+
+def split(rows, quality, primary=PRIMARY, as_of=0):
     old, new = ts(ORIGINAL_CUTOFF), ts(FORWARD_CUTOFF)
     development = [r for r in rows if r["b"] <= old]
     prior = [r for r in rows if r["a"] >= old and r["b"] <= new]
     forward = [r for r in rows if r["a"] >= new]
     quality["purged_cross_boundary"] = len(rows)-len(development)-len(prior)-len(forward)
     clean_quality = not any(quality[k] for k in ("duplicates", "overlaps", "missing_history", "invalid"))
+    prospective = group(forward, False, primary)
+    prospective["primary_checkpoint"] = primary_checkpoint(forward, primary, as_of, clean_quality)
     return dict(development=group(development, False, None), prior_holdout_descriptive=group(prior, False, None),
-                prospective=group(forward, clean_quality, primary))
+                prospective=prospective)
 
 def main(output):
     raw = {key: load_trades(key) for key in STRATEGIES}
@@ -327,7 +348,7 @@ def main(output):
     for key, (rows, total, truncated) in raw.items():
         scored, quality = clean(rows, candles, rates)
         quality.update(post_fix_total=total, historical_truncated=truncated, prospective_complete=True)
-        phases = split(scored, quality, PRIMARY if key == "dip_continuation" else None)
+        phases = split(scored, quality, PRIMARY if key == "dip_continuation" else None, ts(status["at"]))
         report["strategies"][key] = dict(quality=quality, **phases,
             trade_evidence=[{k:v for k,v in row.items() if k!="mtm"} for row in scored])
         print("QUALITY", key, json.dumps(quality, separators=(",", ":")))
@@ -335,7 +356,8 @@ def main(output):
             # Full report is retained as artifact; concise logs remain inspectable.
             summary = dict(baseline=result["baseline"], sides=result["sides"],
                            regimes=result["regimes"] if key == "dip_continuation" else {},
-                           filters=result["filters"] if key == "dip_continuation" else {})
+                           filters=result["filters"] if key == "dip_continuation" else {},
+                           primary_checkpoint=result.get("primary_checkpoint"))
             print("RESULT", key, phase, json.dumps(summary, separators=(",", ":")))
     print("FUNDING", funding_status)
     Path(output).write_text(json.dumps(report, indent=2, allow_nan=False)+"\n")
