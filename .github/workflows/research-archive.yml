@@ -6,9 +6,9 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: ['.github/workflows/research-archive.yml', 'research/collector-archive/**', 'research/collector-audit/download.py', 'research/dip-regime-forward/**']
+    paths: ['.github/workflows/research-archive.yml', 'research/collector-archive/**', 'research/collector-audit/download.py', 'research/collector-audit/test_http_retry.py', 'research/collector_http.py', 'research/dip-regime-forward/**']
   pull_request:
-    paths: ['.github/workflows/research-archive.yml', 'research/collector-archive/**', 'research/collector-audit/download.py', 'research/dip-regime-forward/**']
+    paths: ['.github/workflows/research-archive.yml', 'research/collector-archive/**', 'research/collector-audit/download.py', 'research/collector-audit/test_http_retry.py', 'research/collector_http.py', 'research/dip-regime-forward/**']
 permissions:
   contents: read
   actions: read
@@ -23,6 +23,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: python3 -m unittest discover -s research/collector-archive
+      - run: python3 -m unittest discover -s research/collector-audit -p 'test_http_retry.py'
       - run: python3 research/collector-audit/download.py --output snapshot
       - run: python3 research/collector-archive/verify.py snapshot
       - name: Package and checksum

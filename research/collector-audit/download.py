@@ -1,12 +1,15 @@
 """Snapshot read-only research endpoints in capped windows; never treat absent rows as zeros."""
-import argparse, concurrent.futures, datetime as dt, hashlib, json, pathlib, urllib.parse, urllib.request
+import argparse, concurrent.futures, datetime as dt, hashlib, json, pathlib, sys, urllib.parse
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
+from collector_http import read_bytes
 
 ROOT=pathlib.Path(__file__).resolve().parent
 BASE='https://market-collector-production-b906.up.railway.app'
 def date(s): return dt.datetime.fromisoformat(s.replace('Z','+00:00'))
 def iso(t): return t.isoformat().replace('+00:00','Z')
 def get(path):
-    with urllib.request.urlopen(BASE+path,timeout=45) as response: return response.read()
+    return read_bytes(BASE+path)
 def download(job):
     resource,symbol,start,end=job
     query=urllib.parse.urlencode(dict(symbol=symbol,**{'from':iso(start),'to':iso(end)}))
