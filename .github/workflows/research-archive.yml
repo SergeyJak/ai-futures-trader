@@ -85,3 +85,9 @@ jobs:
           name: dip-regime-report
           path: dip-regime-report.json
           retention-days: 90
+      - run: python3 research/dip-regime-forward/replay.py --output dip-independent-replay.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dip-independent-replay
+          path: dip-independent-replay.json
+          retention-days: 90
