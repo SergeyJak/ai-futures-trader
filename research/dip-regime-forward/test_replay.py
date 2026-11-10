@@ -1,0 +1,102 @@
+import unittest
+from replay import *
+
+def bars_fixture(start, end):
+    return {t:(100.,100.1,99.9,100.,100.) for t in range(start-60*MINUTE,end,MINUTE)}
+
+def set_bar(bars,t,o,h,l,c):
+    bars[t]=(o,h,l,c,100.)
+
+class ReplayTest(unittest.TestCase):
+    def test_exact_signal_and_next_open(self):
+        a=FORWARD
+        bars=bars_fixture(a,a+3*MINUTE)
+        set_bar(bars,a-MINUTE,100,101,99.9,100.8)
+        set_bar(bars,a,101,101.1,98,100)
+        self.assertEqual(signal(bars,a-MINUTE),"SHORT")
+        rows,_=simulate(bars,a,a+3*MINUTE,a+3*MINUTE,"short_only")
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0]["entry_at"],iso(a))
+        self.assertAlmostEqual(rows[0]["entry_price"],101*(1-SLIP))
+        self.assertEqual(rows[0]["reason"],"TAKE")
+        self.assertEqual(rows[0]["exit_at"],iso(a+MINUTE))
+        self.assertGreater(rows[0]["fee"],0)
+        self.assertGreater(rows[0]["slippage"],0)
+
+    def test_stop_first_and_gap(self):
+        a=FORWARD
+        p=open_position("SHORT",a,(100,100,100,100,1))
+        stop=p["entry"]*(1+STOP)
+        self.assertEqual(exit_decision(p,a,(100,103,97,100,1)),(stop,"BOTH_STOP_FIRST"))
+        self.assertEqual(exit_decision(p,a+MINUTE,(103,104,102,103,1)),(103,"STOP"))
+        p=open_position("LONG",a,(100,100,100,100,1))
+        self.assertEqual(exit_decision(p,a+MINUTE,(97,98,96,97,1)),(97,"STOP"))
+
+    def test_time_exit_and_no_same_bar_reentry(self):
+        a=FORWARD
+        end=a+HOLD+2*MINUTE
+        bars=bars_fixture(a,end)
+        set_bar(bars,a-MINUTE,100,101,99.9,100.8)
+        set_bar(bars,a+HOLD-MINUTE,100,100.9,99.9,100.8)
+        rows,mark=simulate(bars,a,end,end,"short_only")
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0]["reason"],"TIME")
+        self.assertEqual(rows[0]["exit_at"],iso(a+HOLD))
+        self.assertIsNone(mark)
+
+    def test_independent_short_frees_capacity(self):
+        a=FORWARD
+        end=a+8*MINUTE
+        bars=bars_fixture(a,end)
+        set_bar(bars,a-MINUTE,100,100,99.3,99.4) # LONG
+        set_bar(bars,a,100,100.1,99.8,100)
+        set_bar(bars,a+MINUTE,100,100.9,99.9,100.8) # SHORT
+        set_bar(bars,a+2*MINUTE,100.7,100.8,98,100.1) # SHORT take; LONG stop
+        base,_=simulate(bars,a,end,end,"baseline")
+        short,_=simulate(bars,a,end,end,"short_only")
+        self.assertEqual(base[0]["side"],"LONG")
+        self.assertEqual(short[0]["side"],"SHORT")
+        self.assertEqual(short[0]["entry_at"],iso(a+2*MINUTE))
+        self.assertNotEqual(base[0]["entry_at"],short[0]["entry_at"])
+
+    def test_prefix_and_open_mark_not_closed(self):
+        a=FORWARD
+        bars=bars_fixture(a,a+HOLD+MINUTE)
+        set_bar(bars,a-MINUTE,100,101,99.9,100.8)
+        early,mark=simulate(bars,a,a+5*MINUTE,a+5*MINUTE,"short_only")
+        self.assertEqual(early,[])
+        self.assertEqual(mark["reason"],"OPEN_MARK")
+        late,_=simulate(bars,a,a+5*MINUTE,a+HOLD+MINUTE,"short_only")
+        self.assertEqual(late[0]["entry_at"],mark["entry_at"])
+        self.assertEqual(late[0]["entry_price"],mark["entry_price"])
+        self.assertEqual(late[0]["exit_at"],iso(a+HOLD))
+
+    def test_missing_bar_fails_closed(self):
+        a=FORWARD
+        bars=bars_fixture(a,a+3*MINUTE)
+        del bars[a+MINUTE]
+        with self.assertRaisesRegex(ValueError,"missing confirmed candle"):
+            simulate(bars,a,a+3*MINUTE,a+3*MINUTE,"baseline")
+
+    def test_paired_calendar_days_not_trade_matching(self):
+        a=FORWARD
+        short=[dict(a=a+DAY,after=.3,before=.2)]
+        base=[dict(a=a,after=-.1,before=-.2),dict(a=a+2*DAY,after=.2,before=.1)]
+        pair=compare(short,base,a,a+4*DAY,True)
+        self.assertAlmostEqual(pair["delta"],.2)
+        self.assertEqual(pair["calendar_days"],4)
+        self.assertEqual(pair["daily_delta"][-1]["delta"],0)
+        self.assertEqual(pair["ci95_daily_delta_2d"],compare(short,base,a,a+4*DAY,True)["ci95_daily_delta_2d"])
+
+    def test_no_future_or_missing_funding_edge(self):
+        a=FORWARD
+        bars=bars_fixture(a,a+3*MINUTE)
+        set_bar(bars,a-MINUTE,100,101,99.9,100.8)
+        set_bar(bars,a,101,101.1,98,100)
+        p=phase(bars,None,a,a+3*MINUTE,a+3*MINUTE,final=True)
+        self.assertEqual(p["decision"],"blocked_incomplete_cost_or_exit_evidence")
+        self.assertIsNone(p["modes"]["short_only"]["net_after_funding"])
+        self.assertEqual(phase(bars,{},a,a,a)["status"],"waiting_for_new_data")
+
+if __name__=="__main__":
+    unittest.main()
