@@ -88,6 +88,50 @@ class ReplayTest(unittest.TestCase):
         self.assertEqual(pair["daily_delta"][-1]["delta"],0)
         self.assertEqual(pair["ci95_daily_delta_2d"],compare(short,base,a,a+4*DAY,True)["ci95_daily_delta_2d"])
 
+    def test_short_up_uses_only_prior_closes_and_frees_capacity(self):
+        a=FORWARD
+        end=a+5*MINUTE
+        bars=bars_fixture(a,end)
+        set_bar(bars,a-60*MINUTE,101,101.1,100.9,101)
+        set_bar(bars,a-MINUTE,100,101,99.9,100.8)
+        set_bar(bars,a,100.8,101,100.7,100.9)
+        set_bar(bars,a+MINUTE,100.9,101,98,100)
+        self.assertEqual(signal(bars,a-MINUTE),"SHORT")
+        self.assertFalse(accepts(SECONDARY_MODE,"SHORT",bars,a-MINUTE))
+        self.assertTrue(accepts(SECONDARY_MODE,"SHORT",bars,a))
+        self.assertFalse(accepts(SECONDARY_MODE,"LONG",bars,a))
+        short,_=simulate(bars,a,end,end,"short_only")
+        filtered,_=simulate(bars,a,end,end,SECONDARY_MODE)
+        self.assertEqual(short[0]["entry_at"],iso(a))
+        self.assertEqual(filtered[0]["entry_at"],iso(a+MINUTE))
+        self.assertEqual(filtered[0]["reason"],"TAKE")
+        # Changing the future entry candle cannot change the entry predicate.
+        set_bar(bars,a+MINUTE,90,120,80,110)
+        self.assertTrue(accepts(SECONDARY_MODE,"SHORT",bars,a))
+
+    def test_secondary_fixed_decision_and_cost_gate(self):
+        a=FORWARD
+        end=a+30*DAY
+        def cohort(pnl):
+            return [dict(a=a+i*DAY,after=pnl,before=pnl) for i in range(30)]
+        rows={SECONDARY_MODE:cohort(.1),"short_only":cohort(.02),"baseline":cohort(-.05)}
+        result={k:dict(open_position=None,trades=30,active_days=30,
+                       net_after_funding=3.,stress_net=2.) for k in rows}
+        report=secondary_report(rows,result,a,end,True,True)
+        self.assertEqual(report["decision"],"positive_secondary_replay_evidence_not_execution_proof")
+        self.assertAlmostEqual(report["comparisons"]["short_only"]["delta"],2.4)
+        self.assertGreater(report["comparisons"]["cash"]["ci97_5_daily_delta_7d"][0],0)
+        self.assertEqual(secondary_report(rows,result,a,end,True,False)["decision"],
+                         "descriptive_or_collecting")
+        self.assertEqual(secondary_report(rows,result,a,end,False,True)["decision"],
+                         "blocked_incomplete_cost_or_exit_evidence")
+        result[SECONDARY_MODE]["stress_net"]=-.01
+        self.assertEqual(secondary_report(rows,result,a,end,True,True)["decision"],
+                         "reject_no_net_edge")
+        result[SECONDARY_MODE]["active_days"]=19
+        self.assertEqual(secondary_report(rows,result,a,end,True,True)["decision"],
+                         "insufficient_fixed_window_data")
+
     def test_no_future_or_missing_funding_edge(self):
         a=FORWARD
         bars=bars_fixture(a,a+3*MINUTE)
