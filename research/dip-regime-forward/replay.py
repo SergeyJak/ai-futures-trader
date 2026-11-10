@@ -3,6 +3,7 @@ import argparse
 import json
 import math
 import random
+import statistics
 from pathlib import Path
 
 from study import (MINUTE, DAY, CAPITAL, NOTIONAL, FEE, SLIP, STRESS,
@@ -16,8 +17,11 @@ HOLD = 12 * 3600
 STOP, TAKE = .01, .02
 MODES = ("baseline", "short_only", "long_only")
 SECONDARY_MODE = "short_up"
-ALL_MODES = MODES + (SECONDARY_MODE,)
+FILTER_MODES = ("volume_rising", "moderate_volatility")
+ALL_MODES = MODES + (SECONDARY_MODE,) + FILTER_MODES
 TREND_UP_MIN = .003
+VOLUME_RATIO_MIN = 1.2
+REALIZED_VOL_MAX = .012
 
 def load_bars(start, end):
     """Exclusive end; every minute must be present and valid."""
@@ -64,6 +68,16 @@ def accepts(mode, side, bars, t):
     if mode == SECONDARY_MODE:
         # Same 60 confirmed closes and up-regime threshold as study.score.
         return side == "SHORT" and bars[t][3]/bars[t-59*MINUTE][3]-1 >= TREND_UP_MIN
+    if mode in FILTER_MODES:
+        # Same frozen 60 confirmed bars as study.score; never the fill candle.
+        prior = [bars[k] for k in range(t-59*MINUTE, t+MINUTE, MINUTE)]
+        if mode == "volume_rising":
+            earlier = statistics.mean(b[4] for b in prior[:45])
+            recent = statistics.mean(b[4] for b in prior[45:])
+            return earlier > 0 and recent / earlier >= VOLUME_RATIO_MIN
+        closes = [b[3] for b in prior]
+        realized = math.sqrt(sum(math.log(y/x)**2 for x,y in zip(closes,closes[1:])))
+        return realized <= REALIZED_VOL_MAX
     return side.lower()+"_only" == mode
 
 def open_position(side, t, bar):
@@ -239,7 +253,14 @@ def phase(bars, rates, start, entry_end, end, final=False):
     return dict(status="fixed_checkpoint" if final else "descriptive_or_collecting",
                 start=iso(start),entry_end=iso(entry_end),observed_through=iso(end),
                 modes=result,short_vs_baseline=pair,decision=decision,
-                secondary=secondary_report(rows,result,start,entry_end,rates is not None,final))
+                secondary=secondary_report(rows,result,start,entry_end,rates is not None,final),
+                exploratory_filters={
+                    mode: dict(status="exploratory_only_no_promotion",
+                               rule=("15m/45m mean volume >= 1.2" if mode=="volume_rising"
+                                     else "60-close realized volatility <= 0.012"),
+                               vs_baseline=compare(rows[mode],rows["baseline"],start,entry_end,rates is not None),
+                               vs_cash=compare(rows[mode],[],start,entry_end,rates is not None))
+                    for mode in FILTER_MODES})
 
 def audit_recorded(bars, start, end):
     """Check the frozen rules against corrected production-paper fills, not legacy."""
@@ -279,7 +300,11 @@ def compact(p):
                 secondary_decision=p.get("secondary",{}).get("decision"),
                 secondary_comparisons={k:{f:v[f] for f in ("delta","ci97_5_daily_delta_2d",
                        "ci97_5_daily_delta_7d")} for k,v in
-                       p.get("secondary",{}).get("comparisons",{}).items()})
+                       p.get("secondary",{}).get("comparisons",{}).items()},
+                exploratory_filters={mode:{control:{f:pair[f] for f in
+                    ("delta","ci95_daily_delta_2d","ci95_daily_delta_7d")}
+                    for control,pair in report.items() if control in ("vs_baseline","vs_cash")}
+                    for mode,report in p.get("exploratory_filters",{}).items()})
 
 def main(output):
     status = get("/api/research-data")

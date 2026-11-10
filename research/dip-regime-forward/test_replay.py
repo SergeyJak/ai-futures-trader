@@ -109,6 +109,54 @@ class ReplayTest(unittest.TestCase):
         set_bar(bars,a+MINUTE,90,120,80,110)
         self.assertTrue(accepts(SECONDARY_MODE,"SHORT",bars,a))
 
+    def test_volume_filter_independent_capacity_and_causality(self):
+        a=FORWARD
+        end=a+5*MINUTE
+        bars=bars_fixture(a,end)
+        set_bar(bars,a-MINUTE,100,101,99.9,100.8)
+        bars[a]=(100.8,100.9,100.7,100.8,500.)
+        bars[a+MINUTE]=(100.8,101.1,100.7,101.,500.)
+        set_bar(bars,a+2*MINUTE,101,101.2,98,100)
+        self.assertFalse(accepts("volume_rising","SHORT",bars,a-MINUTE))
+        self.assertTrue(accepts("volume_rising","SHORT",bars,a+MINUTE))
+        base,_=simulate(bars,a,end,end,"baseline")
+        filtered,_=simulate(bars,a,end,end,"volume_rising")
+        self.assertEqual(base[0]["entry_at"],iso(a))
+        self.assertEqual(filtered[0]["entry_at"],iso(a+2*MINUTE))
+        self.assertEqual(filtered[0]["reason"],"TAKE")
+        bars[a+2*MINUTE]=(101,101.2,98,100,0.)
+        self.assertTrue(accepts("volume_rising","SHORT",bars,a+MINUTE))
+        # Zero prior volume cannot be interpreted as a rising-volume signal.
+        for t in range(a-60*MINUTE,a-15*MINUTE,MINUTE):
+            bars[t]=(*bars[t][:4],0.)
+        self.assertFalse(accepts("volume_rising","SHORT",bars,a-MINUTE))
+
+    def test_volatility_filter_uses_only_confirmed_history(self):
+        a=FORWARD
+        bars=bars_fixture(a,a+3*MINUTE)
+        set_bar(bars,a-MINUTE,100,101,99.9,100.8)
+        self.assertTrue(accepts("moderate_volatility","SHORT",bars,a-MINUTE))
+        self.assertTrue(accepts("moderate_volatility","LONG",bars,a-MINUTE))
+        set_bar(bars,a,100,150,50,140)
+        self.assertTrue(accepts("moderate_volatility","SHORT",bars,a-MINUTE))
+        set_bar(bars,a-30*MINUTE,100,102,99.9,102)
+        self.assertFalse(accepts("moderate_volatility","SHORT",bars,a-MINUTE))
+
+    def test_filter_report_keeps_exploratory_status_and_missing_costs(self):
+        a=FORWARD
+        end=a+3*MINUTE
+        bars=bars_fixture(a,end)
+        set_bar(bars,a-MINUTE,100,101,99.9,100.8)
+        set_bar(bars,a,101,101.1,98,100)
+        p=phase(bars,None,a,end,end,final=True)
+        for mode in FILTER_MODES:
+            self.assertIsNone(p["modes"][mode]["net_after_funding"])
+            report=p["exploratory_filters"][mode]
+            self.assertEqual(report["status"],"exploratory_only_no_promotion")
+            self.assertEqual(report["vs_cash"]["basis"],"before funding")
+            self.assertEqual(report["vs_baseline"]["calendar_days"],1)
+        self.assertEqual(p["decision"],"blocked_incomplete_cost_or_exit_evidence")
+
     def test_secondary_fixed_decision_and_cost_gate(self):
         a=FORWARD
         end=a+30*DAY
