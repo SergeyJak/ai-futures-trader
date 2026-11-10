@@ -5,10 +5,12 @@ import json
 import math
 import random
 import statistics
-import time
+import sys
 import urllib.parse
-import urllib.request
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from collector_http import read_bytes
 
 BASE = "https://market-collector-production-b906.up.railway.app"
 MINUTE = 60
@@ -42,14 +44,7 @@ def number(value):
 
 def get(path, params=None):
     url = BASE + path + ("?" + urllib.parse.urlencode(params) if params else "")
-    for attempt in range(3):
-        try:
-            with urllib.request.urlopen(url, timeout=45) as response:
-                return json.load(response)
-        except (OSError, ValueError):
-            if attempt == 2:
-                raise
-            time.sleep(2 ** attempt)
+    return json.loads(read_bytes(url))
 
 def load_trades(key):
     report = get("/api/strategy-paper/" + key)
