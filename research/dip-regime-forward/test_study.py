@@ -49,6 +49,16 @@ class StudyTest(unittest.TestCase):
         self.assertEqual(q["purged_cross_boundary"],1)
         self.assertEqual(phases["prospective"]["baseline"]["trades"],0)
 
+    def test_short_only_is_primary_and_uses_same_opportunities(self):
+        row,candles,a,b=fixture("SHORT")
+        x=score(row,candles,{})
+        self.assertTrue(x["short_only"])
+        y=dict(x,id="2",a=a+DAY,b=b+DAY,side="LONG",short_only=False,after=-.2)
+        result=group([x,y])
+        self.assertEqual(result["filters"]["short_only"]["trades"],1)
+        self.assertAlmostEqual(result["filters"]["short_only"]["paired_delta"],.2)
+        self.assertEqual(result["filters"]["short_only"]["decision"],"insufficient_forward_data")
+
     def test_paired_skips_and_bootstrap(self):
         row,candles,a,b=fixture()
         x=score(row,candles,{})
@@ -57,7 +67,8 @@ class StudyTest(unittest.TestCase):
         result=group([x,y])
         self.assertAlmostEqual(result["filters"]["trend_aligned"]["paired_delta"],.1)
         self.assertEqual(result["filters"]["trend_aligned"]["trades"],1)
-        self.assertEqual(result["filters"]["trend_aligned"]["decision"],"insufficient_forward_data")
+        self.assertEqual(result["filters"]["trend_aligned"]["decision"],"descriptive_or_secondary")
+        self.assertEqual(result["filters"]["short_only"]["decision"],"insufficient_forward_data")
         self.assertIsNotNone(block_ci([x,y],[-.1,.2]))
         self.assertEqual(block_ci([x,y],[-.1,.2]),block_ci([x,y],[-.1,.2]))
 

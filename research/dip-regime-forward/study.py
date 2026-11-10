@@ -22,7 +22,8 @@ ORIGINAL_CUTOFF = "2026-10-30T00:00:00Z"
 # New hypotheses are frozen before this future boundary. Earlier OOS is now descriptive.
 FORWARD_CUTOFF = "2026-11-11T00:00:00Z"
 STRATEGIES = ("dip_continuation", "dip_reversal", "momentum_continuation")
-FILTERS = ("trend_aligned", "moderate_volatility", "volume_rising", "combined")
+FILTERS = ("short_only", "trend_aligned", "moderate_volatility", "volume_rising", "combined")
+PRIMARY = "short_only"
 MAX_FUNDING_GAP = 8 * 3600
 
 def ts(value):
@@ -56,9 +57,17 @@ def load_trades(key):
         raise ValueError("not a paper-only report")
     variant = next(v for v in report["variants"] if v["id"] == "12h")
     rows = [t for t in variant["trades"] if t.get("execution_model") == "next-open-v2"]
-    if len(rows) != int(variant["postFixClosedTrades"]):
-        raise ValueError(key + ": corrected trade history truncated; no partial inference")
-    return rows
+    total = int(variant["postFixClosedTrades"])
+    truncated = len(rows) != total
+    if truncated:
+        # Latest 150 rows are safe for the prospective period only while an
+        # earlier entry remains in the returned history. Never silently truncate it.
+        if len(rows) != 150 or total < len(rows) or min(ts(t["entry_at"]) for t in rows) >= ts(FORWARD_CUTOFF):
+            raise ValueError(key + ": prospective trade history may be truncated")
+        ordered = sorted(rows, key=lambda t: int(t["id"]))
+        if any(ts(a["entry_at"]) > ts(b["entry_at"]) for a,b in zip(ordered,ordered[1:])):
+            raise ValueError(key + ": nonchronological trade IDs in truncated history")
+    return rows, total, truncated
 
 def load_candles(start, end):
     candles = {}
@@ -136,18 +145,22 @@ def score(row, candles, rates):
     strict_funding = 0.0
     boundary_funding = 0.0
     events = []
+    settlement_details = []
     if rates is not None:
         for t, rate in sorted(rates.items()):
             if a <= t <= b:
                 mark_proxy = candles[t-MINUTE][0]
                 amount = -direction * quantity * mark_proxy * rate
-                if a < t < b:
-                    strict_funding += amount
-                    events.append((t, amount))
+                boundary = t == a or t == b
+                applied = min(0.0, amount) if boundary else amount
+                settlement_details.append(dict(at=iso(t), rate=rate, mark_proxy=mark_proxy,
+                                               modeled_amount=applied, boundary=boundary))
+                if not boundary:
+                    strict_funding += applied
                 else:
                     # Unknown ordering at the exact open/close: use adverse bound.
-                    boundary_funding += min(0.0, amount)
-                    events.append((t, min(0.0, amount)))
+                    boundary_funding += applied
+                events.append((t, applied))
     after = before + strict_funding + boundary_funding if rates is not None else None
     stress = after - STRESS * quantity * (entry+exit_price) if after is not None else None
     # Minute-close mark-to-market, excluding the final exit bar (stop/take can
@@ -158,12 +171,13 @@ def score(row, candles, rates):
         accrued = sum(amount for at, amount in events if at <= t+MINUTE)
         mtm.append(pnl(mark) + accrued)
     return dict(id=str(row["id"]), a=a, b=b, side=side, regime=regime,
+                entry_price=entry, exit_price=exit_price, short_only=side=="SHORT",
                 volatility="moderate" if moderate else "high",
                 trend_aligned=trend, moderate_volatility=moderate, volume_rising=rising,
                 combined=trend and moderate and rising, before=before, after=after,
                 funding=strict_funding+boundary_funding if rates is not None else None,
                 boundary_funding=boundary_funding, stress=stress, mtm=mtm,
-                funding_events=len(events))
+                funding_events=len(events), settlement_details=settlement_details)
 
 def clean(rows, candles, rates):
     out = []
@@ -254,7 +268,7 @@ def metrics(rows):
                 funding_events=sum(r["funding_events"] for r in rows),
                 adverse_boundary_funding=sum(r["boundary_funding"] for r in rows))
 
-def group(rows, eligible=True):
+def group(rows, eligible=True, primary=PRIMARY):
     baseline = metrics(rows)
     result = dict(baseline=baseline, sides={}, regimes={}, volatility={}, filters={})
     for side in ("LONG", "SHORT"):
@@ -271,8 +285,8 @@ def group(rows, eligible=True):
         # contribute zero. Not a counterfactual replay of newly freed capacity.
         delta = [0.0 if r[name] else -(r["after"] if funded else r["before"]) for r in rows]
         ci = block_ci(rows, delta)
-        decision = "insufficient_forward_data"
-        if eligible and funded and baseline["trades"] >= 30 and m["trades"] >= 30 and m["active_days"] >= 20:
+        decision = "descriptive_or_secondary" if name != primary else "insufficient_forward_data"
+        if name == primary and eligible and funded and baseline["trades"] >= 30 and m["trades"] >= 30 and m["active_days"] >= 20:
             if m["net_after_funding"] <= 0 or sum(delta) <= 0 or m["stress_net"] <= 0:
                 decision = "reject_no_net_edge"
             elif ci and ci[0] > 0 and m["ci95_mean_per_trade"] and m["ci95_mean_per_trade"][0] > 0:
@@ -283,19 +297,19 @@ def group(rows, eligible=True):
         result["filters"][name] = m
     return result
 
-def split(rows, quality):
+def split(rows, quality, primary=PRIMARY):
     old, new = ts(ORIGINAL_CUTOFF), ts(FORWARD_CUTOFF)
     development = [r for r in rows if r["b"] <= old]
     prior = [r for r in rows if r["a"] >= old and r["b"] <= new]
     forward = [r for r in rows if r["a"] >= new]
     quality["purged_cross_boundary"] = len(rows)-len(development)-len(prior)-len(forward)
     clean_quality = not any(quality[k] for k in ("duplicates", "overlaps", "missing_history", "invalid"))
-    return dict(development=group(development, False), prior_holdout_descriptive=group(prior, False),
-                prospective=group(forward, clean_quality))
+    return dict(development=group(development, False, None), prior_holdout_descriptive=group(prior, False, None),
+                prospective=group(forward, clean_quality, primary))
 
 def main(output):
     raw = {key: load_trades(key) for key in STRATEGIES}
-    all_rows = [r for rows in raw.values() for r in rows]
+    all_rows = [r for rows, _, _ in raw.values() for r in rows]
     if not all_rows:
         raise ValueError("no corrected paper trades")
     start = min(ts(r["entry_at"]) for r in all_rows)
@@ -309,15 +323,18 @@ def main(output):
                   real_orders=False, original_cutoff=ORIGINAL_CUTOFF, prospective_cutoff=FORWARD_CUTOFF,
                   capital=CAPITAL, fixed_notional=NOTIONAL, fee_per_side=FEE, embedded_slippage_per_side=SLIP,
                   extra_stress_per_side=STRESS, funding_status=funding_status,
-                  funding_verified_cashflow=False, strategies={})
-    for key, rows in raw.items():
+                  funding_verified_cashflow=False, primary_hypothesis="dip_continuation/12h/short_only", strategies={})
+    for key, (rows, total, truncated) in raw.items():
         scored, quality = clean(rows, candles, rates)
-        phases = split(scored, quality)
-        report["strategies"][key] = dict(quality=quality, **phases)
+        quality.update(post_fix_total=total, historical_truncated=truncated, prospective_complete=True)
+        phases = split(scored, quality, PRIMARY if key == "dip_continuation" else None)
+        report["strategies"][key] = dict(quality=quality, **phases,
+            trade_evidence=[{k:v for k,v in row.items() if k!="mtm"} for row in scored])
         print("QUALITY", key, json.dumps(quality, separators=(",", ":")))
         for phase, result in phases.items():
             # Full report is retained as artifact; concise logs remain inspectable.
             summary = dict(baseline=result["baseline"], sides=result["sides"],
+                           regimes=result["regimes"] if key == "dip_continuation" else {},
                            filters=result["filters"] if key == "dip_continuation" else {})
             print("RESULT", key, phase, json.dumps(summary, separators=(",", ":")))
     print("FUNDING", funding_status)
