@@ -8,7 +8,7 @@ from pathlib import Path
 
 from study import (MINUTE, DAY, CAPITAL, NOTIONAL, FEE, SLIP, STRESS,
                    ORIGINAL_CUTOFF, FORWARD_CUTOFF, ts, iso, number, get,
-                   load_funding, score, metrics)
+                   load_funding, load_trades, score, metrics)
 
 START = ts(ORIGINAL_CUTOFF)
 FORWARD = ts(FORWARD_CUTOFF)
@@ -264,12 +264,9 @@ def phase(bars, rates, start, entry_end, end, final=False):
 
 def audit_recorded(bars, start, end):
     """Check the frozen rules against corrected production-paper fills, not legacy."""
-    report = get("/api/strategy-paper/dip_continuation")
-    if report.get("realOrders") is not False or report.get("mode") != "forward-paper":
-        raise ValueError("unexpected non-paper source")
-    variant = next(v for v in report["variants"] if v["id"]=="12h")
-    rows = [r for r in variant["trades"] if r.get("execution_model")=="next-open-v2"
-            and start <= ts(r["entry_at"]) < ts(r["exit_at"]) <= end]
+    history, _, _ = load_trades("dip_continuation")
+    rows = [r for r in history
+            if start <= ts(r["entry_at"]) < ts(r["exit_at"]) <= end]
     matched, mismatches = 0, []
     for r in rows:
         a,b = ts(r["entry_at"]),ts(r["exit_at"])

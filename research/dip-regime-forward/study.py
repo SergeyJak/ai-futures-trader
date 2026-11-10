@@ -7,6 +7,7 @@ import random
 import statistics
 import sys
 import urllib.parse
+import urllib.error
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -47,22 +48,37 @@ def get(path, params=None):
     return json.loads(read_bytes(url))
 
 def load_trades(key):
-    report = get("/api/strategy-paper/" + key)
-    if report.get("realOrders") is not False or report.get("mode") != "forward-paper":
-        raise ValueError("not a paper-only report")
-    variant = next(v for v in report["variants"] if v["id"] == "12h")
-    rows = [t for t in variant["trades"] if t.get("execution_model") == "next-open-v2"]
-    total = int(variant["postFixClosedTrades"])
-    truncated = len(rows) != total
-    if truncated:
-        # Latest 150 rows are safe for the prospective period only while an
-        # earlier entry remains in the returned history. Never silently truncate it.
-        if len(rows) != 150 or total < len(rows) or min(ts(t["entry_at"]) for t in rows) >= ts(FORWARD_CUTOFF):
-            raise ValueError(key + ": prospective trade history may be truncated")
-        ordered = sorted(rows, key=lambda t: int(t["id"]))
-        if any(ts(a["entry_at"]) > ts(b["entry_at"]) for a,b in zip(ordered,ordered[1:])):
-            raise ValueError(key + ": nonchronological trade IDs in truncated history")
-    return rows, total, truncated
+    # The UI report retains only 150 recent rows per variant. Research needs
+    # every corrected 12h fill, including the fixed checkpoint after it passes.
+    try:
+        report = get("/api/strategy-paper/" + key + "/research-history")
+    except urllib.error.HTTPError as error:
+        if error.code != 404:
+            raise
+        # PR checks can run before the new endpoint is deployed. Fall back only
+        # when the old report demonstrably contains the entire corrected history.
+        report = get("/api/strategy-paper/" + key)
+        if report.get("realOrders") is not False or report.get("mode") != "forward-paper":
+            raise ValueError("not a paper-only report")
+        variant = next(v for v in report["variants"] if v["id"] == "12h")
+        rows = [t for t in variant["trades"] if t.get("execution_model") == "next-open-v2"]
+        total = int(variant["postFixClosedTrades"])
+        source = "legacy-report-complete"
+    else:
+        if (report.get("realOrders") is not False or report.get("mode") != "forward-paper-research-history"
+                or report.get("strategy") != key or report.get("variant") != "12h"
+                or report.get("executionModel") != "next-open-v2"):
+            raise ValueError("unexpected paper research history")
+        if report.get("possiblyTruncated") is not False:
+            raise ValueError(key + ": corrected research history truncated")
+        rows, total = report["trades"], report["total"]
+        source = "research-history"
+    if (type(total) is not int or total < 0 or not isinstance(rows, list)
+            or len(rows) != total or any(t.get("variant") != "12h"
+            or t.get("execution_model") != "next-open-v2" for t in rows)):
+        raise ValueError(key + ": incomplete or invalid corrected research history")
+    print("PAPER_HISTORY", key, source, len(rows), total)
+    return rows, total, False
 
 def load_candles(start, end):
     candles = {}
@@ -330,8 +346,8 @@ def main(output):
         raise ValueError("no corrected paper trades")
     start = min(ts(r["entry_at"]) for r in all_rows)
     end = max(ts(r["exit_at"]) for r in all_rows)
-    if end-start > 45*DAY:
-        raise ValueError("study exceeds bounded 45-day data window")
+    if end-start > 90*DAY:
+        raise ValueError("study exceeds bounded 90-day data window; retain checkpoint and extend explicitly")
     status = get("/api/research-data")
     candles = load_candles(start-60*MINUTE, end-MINUTE)
     rates, funding_status = load_funding(start, end, status)
