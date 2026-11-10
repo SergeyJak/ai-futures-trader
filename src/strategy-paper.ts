@@ -124,6 +124,20 @@ export async function strategyPaperReport(pool:pg.Pool,key:StrategyKey){
    trades:recent,evidence:forwardEvidence(recent.slice().reverse(),100)};
  })};
 }
+// Research evidence must not inherit the UI's rolling 150-trade limit.
+// One SQL statement supplies a consistent count and rows; the hard cap is explicit.
+export const STRATEGY_RESEARCH_HISTORY_LIMIT=1000;
+export async function strategyPaperResearchHistory(pool:pg.Pool,key:StrategyKey){
+ const result=await pool.query(`SELECT id,variant,side,entry_at,exit_at,entry_price,exit_price,net_pnl,reason,execution_model,
+  (COUNT(*) OVER())::int AS total_count
+  FROM v6_paper_trades WHERE strategy=$1 AND variant='12h' AND execution_model='next-open-v2'
+  ORDER BY id ASC LIMIT $2`,[key,STRATEGY_RESEARCH_HISTORY_LIMIT+1]);
+ const total=Number(result.rows[0]?.total_count??0);
+ const trades=result.rows.slice(0,STRATEGY_RESEARCH_HISTORY_LIMIT).map(({total_count,...trade})=>trade);
+ return {mode:'forward-paper-research-history',realOrders:false,strategy:key,variant:'12h',
+  executionModel:STRATEGY_EXECUTION_MODEL,total,limit:STRATEGY_RESEARCH_HISTORY_LIMIT,
+  possiblyTruncated:total>STRATEGY_RESEARCH_HISTORY_LIMIT,trades};
+}
 export async function strategyPaperChart(pool:pg.Pool,key:StrategyKey,variant:string,id:string){
  if(!EXIT_MODES.some(v=>v.id===variant))return null;
  let trade:Record<string,unknown>;

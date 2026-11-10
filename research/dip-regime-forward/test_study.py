@@ -1,4 +1,6 @@
 import unittest
+from unittest.mock import patch
+from urllib.error import HTTPError
 from study import *
 
 def fixture(side="LONG", start="2026-11-01T00:00:00Z", hours=12):
@@ -11,6 +13,36 @@ def fixture(side="LONG", start="2026-11-01T00:00:00Z", hours=12):
     return row, candles, a, b
 
 class StudyTest(unittest.TestCase):
+    def test_research_history_preserves_more_than_ui_limit(self):
+        row, _, _, _ = fixture()
+        rows = [dict(row, id=i, variant="12h") for i in range(180)]
+        report = dict(mode="forward-paper-research-history", realOrders=False,
+                      strategy="dip_continuation", variant="12h", executionModel="next-open-v2",
+                      total=180, possiblyTruncated=False, trades=rows)
+        with patch("study.get", return_value=report) as get_mock:
+            loaded, total, truncated = load_trades("dip_continuation")
+        self.assertEqual((len(loaded), total, truncated), (180, 180, False))
+        get_mock.assert_called_once_with("/api/strategy-paper/dip_continuation/research-history")
+        for bad in (dict(report, total=181), dict(report, possiblyTruncated=True),
+                    dict(report, trades=rows[:-1]+[dict(rows[-1], execution_model="legacy-close-v1")])):
+            with patch("study.get", return_value=bad), self.assertRaises(ValueError):
+                load_trades("dip_continuation")
+
+    def test_old_report_fallback_only_when_complete(self):
+        row, _, _, _ = fixture()
+        rows = [dict(row, id=i, variant="12h") for i in range(150)]
+        old = dict(mode="forward-paper", realOrders=False, variants=[
+            dict(id="12h", trades=rows, postFixClosedTrades=150)])
+        missing = HTTPError("http://test", 404, "not deployed", {}, None)
+        with patch("study.get", side_effect=[missing, old]):
+            self.assertEqual(load_trades("dip_continuation"), (rows, 150, False))
+        old["variants"][0]["postFixClosedTrades"] = 151
+        with patch("study.get", side_effect=[missing, old]), self.assertRaisesRegex(ValueError, "incomplete"):
+            load_trades("dip_continuation")
+        unavailable = HTTPError("http://test", 503, "unavailable", {}, None)
+        with patch("study.get", side_effect=unavailable), self.assertRaises(HTTPError):
+            load_trades("dip_continuation")
+
     def test_cost_and_funding_direction(self):
         row, candles, a, b = fixture()
         rates = {a+8*3600:.001}
