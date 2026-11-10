@@ -15,6 +15,9 @@ CHECKPOINT = FORWARD + 30 * DAY
 HOLD = 12 * 3600
 STOP, TAKE = .01, .02
 MODES = ("baseline", "short_only", "long_only")
+SECONDARY_MODE = "short_up"
+ALL_MODES = MODES + (SECONDARY_MODE,)
+TREND_UP_MIN = .003
 
 def load_bars(start, end):
     """Exclusive end; every minute must be present and valid."""
@@ -54,6 +57,15 @@ def signal(bars, t):
         return "SHORT"
     return None
 
+def accepts(mode, side, bars, t):
+    """Only confirmed closes through signal minute t; entry is t+MINUTE."""
+    if mode == "baseline":
+        return True
+    if mode == SECONDARY_MODE:
+        # Same 60 confirmed closes and up-regime threshold as study.score.
+        return side == "SHORT" and bars[t][3]/bars[t-59*MINUTE][3]-1 >= TREND_UP_MIN
+    return side.lower()+"_only" == mode
+
 def open_position(side, t, bar):
     direction = 1 if side == "LONG" else -1
     return dict(side=side, a=t, entry=bar[0]*(1+direction*SLIP),
@@ -88,7 +100,7 @@ def close_position(p, b, reference, reason):
 
 def simulate(bars, start, entry_end, end, mode):
     """Independent flat accounts. No re-entry signal on an occupied/exit bar."""
-    if mode not in MODES or not start <= entry_end <= end:
+    if mode not in ALL_MODES or not start <= entry_end <= end:
         raise ValueError("invalid replay boundaries")
     if any(t % MINUTE for t in (start,entry_end,end)):
         raise ValueError("unaligned replay boundaries")
@@ -108,7 +120,7 @@ def simulate(bars, start, entry_end, end, mode):
                 position = None
         elif not occupied and start <= t+MINUTE < entry_end:
             side = signal(bars,t)
-            if side and (mode == "baseline" or side.lower()+"_only" == mode):
+            if side and accepts(mode,side,bars,t):
                 pending = side
     # Do not force-liquidate a trade at the report boundary. Mark it separately.
     mark = (close_position(position,end,bars[end-MINUTE][3],"OPEN_MARK")
@@ -124,7 +136,7 @@ def scored(raw, candles, rates):
 def evidence(row):
     return {k:v for k,v in row.items() if k != "mtm"}
 
-def daily_ci(values, block):
+def daily_ci(values, block, alpha=.05):
     """Circular calendar-day block bootstrap, including zero-trade days."""
     n = len(values)
     if n < max(2,block):
@@ -138,7 +150,7 @@ def daily_ci(values, block):
             total += sum(values[(j+i)%n] for i in range(min(block,n-k)))
         draws.append(total/n)
     draws.sort()
-    return [draws[int(.025*(len(draws)-1))],draws[int(.975*(len(draws)-1))]]
+    return [draws[int((alpha/2)*(len(draws)-1))],draws[int((1-alpha/2)*(len(draws)-1))]]
 
 def compare(candidate, baseline, start, entry_end, funded):
     days = list(range(start//DAY,(entry_end+DAY-1)//DAY))
@@ -153,12 +165,44 @@ def compare(candidate, baseline, start, entry_end, funded):
                 ci95_daily_delta_2d=daily_ci(values,2), ci95_daily_delta_7d=daily_ci(values,7),
                 daily_delta=[dict(day=iso(d*DAY),delta=v) for d,v in daily.items()])
 
+def secondary_report(rows, result, start, entry_end, funded, final):
+    """Pre-registered secondary; compare independent accounts on identical days."""
+    candidate = rows[SECONDARY_MODE]
+    comparisons = {}
+    for name, control in (("cash", []), ("short_only", rows["short_only"]),
+                          ("baseline", rows["baseline"])):
+        pair = compare(candidate,control,start,entry_end,funded)
+        values = [r["delta"] for r in pair["daily_delta"]]
+        # Conservative two-hypothesis family adjustment (primary + secondary).
+        # All three comparisons must pass; 7-day blocks are a sensitivity gate.
+        pair["ci97_5_daily_delta_2d"] = daily_ci(values,2,.025)
+        pair["ci97_5_daily_delta_7d"] = daily_ci(values,7,.025)
+        comparisons[name] = pair
+    m = result[SECONDARY_MODE]
+    decision = "descriptive_or_collecting"
+    if final:
+        if not funded or any(result[k]["open_position"] for k in
+                             ("baseline","short_only",SECONDARY_MODE)):
+            decision = "blocked_incomplete_cost_or_exit_evidence"
+        elif m["trades"] < 30 or m["active_days"] < 20:
+            decision = "insufficient_fixed_window_data"
+        elif m["net_after_funding"] <= 0 or m["stress_net"] <= 0 or any(
+                p["delta"] <= 0 for p in comparisons.values()):
+            decision = "reject_no_net_edge"
+        elif all(p[k] and p[k][0] > 0 for p in comparisons.values()
+                 for k in ("ci97_5_daily_delta_2d","ci97_5_daily_delta_7d")):
+            decision = "positive_secondary_replay_evidence_not_execution_proof"
+        else:
+            decision = "inconclusive_uncertainty"
+    return dict(mode=SECONDARY_MODE, rule="SHORT and 60-close return >= 0.003",
+                comparisons=comparisons, decision=decision)
+
 def phase(bars, rates, start, entry_end, end, final=False):
     if entry_end <= start:
         return dict(status="waiting_for_new_data",start=iso(start),entry_end=iso(entry_end),modes={})
     candles = {t:(b[3],b[4]) for t,b in bars.items()}
     rows, result = {}, {}
-    for mode in MODES:
+    for mode in ALL_MODES:
         raw, mark = simulate(bars,start,entry_end,end,mode)
         rows[mode] = [scored(r,candles,rates) for r in raw]
         open_row = scored(mark,candles,rates) if mark else None
@@ -181,7 +225,7 @@ def phase(bars, rates, start, entry_end, end, final=False):
     short = result["short_only"]
     decision = "descriptive_or_collecting"
     if final:
-        if rates is None or any(m["open_position"] for m in result.values()):
+        if rates is None or any(result[k]["open_position"] for k in MODES):
             decision = "blocked_incomplete_cost_or_exit_evidence"
         elif short["trades"] < 30 or short["active_days"] < 20:
             decision = "insufficient_fixed_window_data"
@@ -194,7 +238,8 @@ def phase(bars, rates, start, entry_end, end, final=False):
             decision = "inconclusive_uncertainty"
     return dict(status="fixed_checkpoint" if final else "descriptive_or_collecting",
                 start=iso(start),entry_end=iso(entry_end),observed_through=iso(end),
-                modes=result,short_vs_baseline=pair,decision=decision)
+                modes=result,short_vs_baseline=pair,decision=decision,
+                secondary=secondary_report(rows,result,start,entry_end,rates is not None,final))
 
 def audit_recorded(bars, start, end):
     """Check the frozen rules against corrected production-paper fills, not legacy."""
@@ -230,7 +275,11 @@ def compact(p):
                        "stress_net","marked_max_drawdown_pct","ci95_mean_per_trade","fees","slippage")}
                        for k,v in p["modes"].items()},
                 paired_delta=p.get("short_vs_baseline",{}).get("delta"),
-                paired_ci=p.get("short_vs_baseline",{}).get("ci95_daily_delta_2d"))
+                paired_ci=p.get("short_vs_baseline",{}).get("ci95_daily_delta_2d"),
+                secondary_decision=p.get("secondary",{}).get("decision"),
+                secondary_comparisons={k:{f:v[f] for f in ("delta","ci97_5_daily_delta_2d",
+                       "ci97_5_daily_delta_7d")} for k,v in
+                       p.get("secondary",{}).get("comparisons",{}).items()})
 
 def main(output):
     status = get("/api/research-data")
