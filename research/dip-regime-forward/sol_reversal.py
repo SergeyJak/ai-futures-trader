@@ -122,7 +122,7 @@ def phase(bars, rates, start, entry_end, end, final=False):
 def audit_history(report, side, bars, rates, end):
     """Recorded corrected fills only. A capped UI history never masquerades as complete."""
     if (report.get("realOrders") is not False or report.get("mode") != "forward-paper-only"
-            or report.get("symbol") != "SOLUSDT" or report.get("side") != side):
+            or report.get("symbol") != "SOLUSDT" or report.get("side") not in (None,side)):
         raise ValueError("unexpected SOL paper history: "+json.dumps({k:report.get(k) for k in ("symbol","mode","side","realOrders")})+" expected side="+side)
     candles = {t:(b[3],b[4]) for t,b in bars.items()}
     result = {}
@@ -145,6 +145,7 @@ def audit_history(report, side, bars, rates, end):
             except (ValueError,KeyError,TypeError):
                 invalid_dates+=1
         quality = dict(total_corrected=total,loaded_corrected=len(corrected),
+                       side_source="explicit_report" if report.get("side") else "dedicated_endpoint",
                        complete_history=len(corrected)==total,eligible=len(rows),
                        outside_window=len(corrected)-len(rows)-invalid_dates,duplicates=0,overlaps=0,
                        invalid=invalid_dates,exact_rule_matches=0,mismatch_ids=[])
