@@ -125,11 +125,11 @@ def load_funding(start, end, status):
         return None, "funding settlement gap exceeds 8h"
     return rates, "public rates complete; mark-notional approximated by preceding 1m close"
 
-def score(row, candles, rates):
+def score(row, candles, rates, max_duration=12*3600):
     a, b = ts(row["entry_at"]), ts(row["exit_at"])
     entry, exit_price = number(row["entry_price"]), number(row["exit_price"])
     side = row["side"]
-    if side not in ("LONG", "SHORT") or a % MINUTE or b % MINUTE or not 0 < b-a <= 12*3600 or min(entry, exit_price) <= 0:
+    if side not in ("LONG", "SHORT") or a % MINUTE or b % MINUTE or not 0 < b-a or (max_duration is not None and b-a > max_duration) or min(entry, exit_price) <= 0:
         raise ValueError("invalid corrected trade")
     if row.get("execution_model") != "next-open-v2":
         raise ValueError("legacy trade")
