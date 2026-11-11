@@ -92,3 +92,18 @@ jobs:
           name: dip-independent-replay
           path: dip-independent-replay.json
           retention-days: 90
+
+  sol-reversal:
+    if: github.event.schedule != '17 15 * * *'
+    continue-on-error: ${{ github.event_name == 'schedule' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m unittest discover -s research/dip-regime-forward -p 'test_sol_reversal.py'
+      - run: python3 research/dip-regime-forward/sol_reversal.py --output sol-reversal-report.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sol-reversal-report
+          path: sol-reversal-report.json
+          retention-days: 90
