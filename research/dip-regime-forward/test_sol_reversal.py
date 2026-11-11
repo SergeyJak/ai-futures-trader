@@ -69,6 +69,12 @@ class SolReversalTest(unittest.TestCase):
         result=audit_history(report,"SHORT",data,{},a+3*MINUTE)
         self.assertFalse(result[CANDIDATE]["quality"]["complete_history"])
         self.assertIsNone(result[CANDIDATE]["metrics"])
+        report.pop("side")
+        self.assertEqual(audit_history(report,"SHORT",data,{},a+3*MINUTE)[CANDIDATE]["quality"]["side_source"],
+                         "dedicated_endpoint")
+        report["side"]="LONG"
+        with self.assertRaises(ValueError):
+            audit_history(report,"SHORT",data,{},a+3*MINUTE)
 
 if __name__=="__main__":
     unittest.main()
