@@ -123,7 +123,7 @@ def audit_history(report, side, bars, rates, end):
     """Recorded corrected fills only. A capped UI history never masquerades as complete."""
     if (report.get("realOrders") is not False or report.get("mode") != "forward-paper-only"
             or report.get("symbol") != "SOLUSDT" or report.get("side") != side):
-        raise ValueError("unexpected SOL paper history")
+        raise ValueError("unexpected SOL paper history: "+json.dumps({k:report.get(k) for k in ("symbol","mode","side","realOrders")})+" expected side="+side)
     candles = {t:(b[3],b[4]) for t,b in bars.items()}
     result = {}
     for variant in VARIANTS:
@@ -134,11 +134,20 @@ def audit_history(report, side, bars, rates, end):
         corrected = [r for r in v["trades"] if r.get("execution_model")=="next-open-v2"]
         if len(corrected)>total:
             raise ValueError("inconsistent corrected history count")
-        rows = [r for r in corrected if START <= ts(r["entry_at"]) < ts(r["exit_at"]) <= end]
+        rows, invalid_dates = [], 0
+        for r in corrected:
+            try:
+                a,b=ts(r["entry_at"]),ts(r["exit_at"])
+                if a % MINUTE or b % MINUTE or b <= a or r.get("variant") != variant:
+                    raise ValueError("invalid corrected trade clock or variant")
+                if START <= a and b <= end:
+                    rows.append(r)
+            except (ValueError,KeyError,TypeError):
+                invalid_dates+=1
         quality = dict(total_corrected=total,loaded_corrected=len(corrected),
                        complete_history=len(corrected)==total,eligible=len(rows),
-                       outside_window=len(corrected)-len(rows),duplicates=0,overlaps=0,
-                       invalid=0,exact_rule_matches=0,mismatch_ids=[])
+                       outside_window=len(corrected)-len(rows)-invalid_dates,duplicates=0,overlaps=0,
+                       invalid=invalid_dates,exact_rule_matches=0,mismatch_ids=[])
         scored_rows, seen, last_exit = [], set(), -1
         for r in sorted(rows,key=lambda r:(ts(r["entry_at"]),str(r["id"]))):
             a,b = ts(r["entry_at"]),ts(r["exit_at"])
