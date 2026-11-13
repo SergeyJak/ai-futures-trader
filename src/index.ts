@@ -1,3 +1,4 @@
+import {createLegacyScheduler,legacyJobsEnabled} from './legacy-scheduler.js';
 import {createRelativeStrengthJob} from './relative-strength-job.js';
 import {RelativeStrengthStore} from './relative-strength-store.js';
 import {runRelativeStrengthWorker} from './relative-strength-worker.js';
@@ -44,6 +45,8 @@ if(!url)throw new Error('DATABASE_URL required');
 if(!endpoint.startsWith('wss://'))throw new Error('Secure WebSocket required');
 if(!Number.isInteger(port)||port<1||port>65535)throw new Error('Invalid port');
 installOutboundTelemetry();
+const legacy=createLegacyScheduler(legacyJobsEnabled(process.env));
+console.info('BACKGROUND_MODE',JSON.stringify({legacyJobsEnabled:legacyJobsEnabled(process.env),candleStatsMinutes:15}));
 const db=new Database(url);await db.init();await db.initExperiments();await db.initShadow();await db.initV3();await db.initV4();await db.initV5();await initV6(db.v6Pool());await initOkxHistory(db.v6Pool());await initSolPaper(db.v6Pool());await initSolShort(db.v6Pool());await initSol5m(db.v6Pool());await initV8Paper(db.v6Pool());await initStrategyPaper(db.v6Pool());await initV7(db.v6Pool());await initDipOos(db.v6Pool());const stream=new MarketStream(endpoint,symbols,db);stream.start();
 const relativeStrengthJob=createRelativeStrengthJob(new RelativeStrengthStore(db.v6Pool()),{worker:runRelativeStrengthWorker,enabled:process.env.RELATIVE_STRENGTH_ENABLED!=='false'&&!process.env.RELATIVE_STRENGTH_CHECKPOINT_FILE});
 relativeStrengthJob.start();
@@ -51,14 +54,14 @@ const researchProgress=createResearchProgress(db.v6Pool());
 const researchData=createResearchData(researchDataConfig(process.env,symbols,endpoint),url);
 await researchData.runtime.start();
 // A bounded observational job, never part of the trade execution tick.
-const researchTimer=setInterval(()=>{void researchProgress.run().catch(e=>console.error('RESEARCH_PROGRESS_ERROR',e))},6*3600000);
-researchTimer.unref();
-const researchStart=setTimeout(()=>{void researchProgress.run().catch(e=>console.error('RESEARCH_PROGRESS_ERROR',e))},120000);
-researchStart.unref();
+const researchTimer=legacy.every(()=>{void researchProgress.run().catch(e=>console.error('RESEARCH_PROGRESS_ERROR',e))},6*3600000);
+researchTimer?.unref();
+const researchStart=legacy.after(()=>{void researchProgress.run().catch(e=>console.error('RESEARCH_PROGRESS_ERROR',e))},120000);
+researchStart?.unref();
 // Read-only historical SOL study; run off the trading tick and log measurable results.
 const solRecoveryJob=()=>{void runRecoveryStudy(db.v6Pool()).then(study=>console.log('AI_FUTURES_SOL_RECOVERY_STUDY '+JSON.stringify(study))).catch(e=>console.error('SOL_RECOVERY_STUDY_ERROR',e))};
-const solRecoveryStart=setTimeout(solRecoveryJob,180000);solRecoveryStart.unref();
-const solRecoveryTimer=setInterval(solRecoveryJob,6*3600000);solRecoveryTimer.unref();
+const solRecoveryStart=legacy.after(solRecoveryJob,180000);solRecoveryStart?.unref();
+const solRecoveryTimer=legacy.every(solRecoveryJob,6*3600000);solRecoveryTimer?.unref();
 const server=http.createServer(async(req,res)=>{
  res.setHeader('cache-control','no-store');
  res.setHeader('x-content-type-options','nosniff');
@@ -321,8 +324,8 @@ async function extendHistory(){
   }
  }catch(e){console.error('HISTORY_ERROR',e)}finally{historyBusy=false}
 }
-const historyTimer=setInterval(()=>{void extendHistory()},300000);
-setTimeout(()=>{void extendHistory()},30000);
+const historyTimer=legacy.every(()=>{void extendHistory()},300000);
+legacy.after(()=>{void extendHistory()},30000);
 
 async function repair(){
  if(repairing||closing)return;
@@ -347,22 +350,22 @@ const repairTimer=setInterval(()=>{void repair()},300000);
 setTimeout(()=>{void repair()},10000);
 let paperRunning=false;
 async function runPaper(){if(paperRunning||closing)return;paperRunning=true;try{await db.paperTick(symbols);await db.recordOriginalSnapshot();await db.runExperiments();await db.runShadow()}catch(e){console.error('PAPER_ERROR',e)}finally{paperRunning=false}}
-const paperTimer=setInterval(()=>{void runPaper()},15000);setTimeout(()=>{void runPaper()},20000);
+const paperTimer=legacy.every(()=>{void runPaper()},15000);legacy.after(()=>{void runPaper()},20000);
 let solShortRunning=false;
 async function runSolShort(){if(solShortRunning||closing)return;solShortRunning=true;try{await tickSolShort(db.v6Pool())}catch(e){console.error('SOL_SHORT_TICK_ERROR',e)}finally{solShortRunning=false}}
-const solShortTimer=setInterval(()=>{void runSolShort()},15000);setTimeout(()=>{void runSolShort()},27000);
+const solShortTimer=legacy.every(()=>{void runSolShort()},15000);legacy.after(()=>{void runSolShort()},27000);
 let v8Running=false;
 async function runV8Paper(){if(v8Running||closing)return;v8Running=true;try{await tickV8Paper(db.v6Pool())}catch(e){console.error('V8_PAPER_TICK_ERROR',e)}finally{v8Running=false}}
-const v8Timer=setInterval(()=>{void runV8Paper()},15000);setTimeout(()=>{void runV8Paper()},31000);
+const v8Timer=legacy.every(()=>{void runV8Paper()},15000);legacy.after(()=>{void runV8Paper()},31000);
 let sol5mRunning=false;
 async function runSol5m(){if(sol5mRunning||closing)return;sol5mRunning=true;try{await tickSol5m(db.v6Pool())}catch(e){console.error('SOL_5M_TICK_ERROR',e)}finally{sol5mRunning=false}}
-const sol5mTimer=setInterval(()=>{void runSol5m()},15000);setTimeout(()=>{void runSol5m()},29000);
+const sol5mTimer=legacy.every(()=>{void runSol5m()},15000);legacy.after(()=>{void runSol5m()},29000);
 let solPaperRunning=false;
 async function runSolPaper(){if(solPaperRunning||closing)return;solPaperRunning=true;try{await tickSolPaper(db.v6Pool())}catch(e){console.error('SOL_DIP_TICK_ERROR',e)}finally{solPaperRunning=false}}
 let strategyPaperRunning=false;
 async function runStrategyPaper(){if(strategyPaperRunning||closing)return;strategyPaperRunning=true;try{await tickStrategyPaper(db.v6Pool());await tickDipOos(db.v6Pool());await tickV7(db.v6Pool())}catch(e){console.error('STRATEGY_PAPER_TICK_ERROR',e)}finally{strategyPaperRunning=false}}
-const strategyPaperTimer=setInterval(()=>{void runStrategyPaper()},15000);setTimeout(()=>{void runStrategyPaper()},26000);
-const solPaperTimer=setInterval(()=>{void runSolPaper()},15000);setTimeout(()=>{void runSolPaper()},23000);
+const strategyPaperTimer=legacy.every(()=>{void runStrategyPaper()},15000);legacy.after(()=>{void runStrategyPaper()},26000);
+const solPaperTimer=legacy.every(()=>{void runSolPaper()},15000);legacy.after(()=>{void runSolPaper()},23000);
 let v3Running=false;
 async function runIndependentV3(){
  if(v3Running||closing)return;
@@ -375,7 +378,7 @@ async function runIndependentV3(){
 }
 let v5Running=false;
 async function runIndependentV5(){if(v5Running||closing)return;v5Running=true;try{const result=await db.runV5();if(result.changed||result.opened||result.closed||result.gaps)console.info('V5_TICK',JSON.stringify({at:new Date().toISOString(),...result}))}catch(e){console.error('V5_TICK_ERROR',e)}finally{v5Running=false}}
-const v5Timer=setInterval(()=>{void runIndependentV5()},15000);setTimeout(()=>{void runIndependentV5()},16000);
+const v5Timer=legacy.every(()=>{void runIndependentV5()},15000);legacy.after(()=>{void runIndependentV5()},16000);
 let v4Running=false;
 async function runIndependentV4(){
  if(v4Running||closing)return;
@@ -384,17 +387,17 @@ async function runIndependentV4(){
  catch(e){console.error('V4_TICK_ERROR',e)}
  finally{v4Running=false}
 }
-const v4Timer=setInterval(()=>{void runIndependentV4()},15000);
-setTimeout(()=>{void runIndependentV4()},14000);
-const v3Timer=setInterval(()=>{void runIndependentV3()},15000);
-setTimeout(()=>{void runIndependentV3()},12000);
+const v4Timer=legacy.every(()=>{void runIndependentV4()},15000);
+legacy.after(()=>{void runIndependentV4()},14000);
+const v3Timer=legacy.every(()=>{void runIndependentV3()},15000);
+legacy.after(()=>{void runIndependentV3()},12000);
 
 async function reportTelemetry(){
  try{const [solLong,solShort]=await Promise.all([solPaperReport(db.v6Pool()),solShortReport(db.v6Pool())]);console.info('AI_FUTURES_SOL_PAPER',JSON.stringify(solPaperDiagnostics(solLong,solShort)));console.info('AI_FUTURES_ACCOUNTS',JSON.stringify(await db.telemetrySnapshot()));console.info('AI_FUTURES_PAIRS',JSON.stringify(await db.pairedDiagnostics()));const summarize=(report:any)=>{const accounts=report.accounts??[];return {at:report.at,configs:report.configs,active:accounts.filter((a:any)=>a.position).length,closed:accounts.reduce((n:number,a:any)=>n+Number(a.trades??0),0),wins:accounts.reduce((n:number,a:any)=>n+Number(a.wins??0),0),processed:accounts.filter((a:any)=>a.last_at).length,lastAt:accounts.reduce((max:string,a:any)=>a.last_at&&a.last_at>max?a.last_at:max,''),netRealizedPnl:accounts.reduce((n:number,a:any)=>n+Number(a.realized_pnl??a.net??0),0),fees:accounts.reduce((n:number,a:any)=>n+Number(a.fees??0),0),accounts};};const v4=await db.v4Report();console.info('AI_FUTURES_V4',JSON.stringify(summarize(v4)))}
  catch(e){console.error('AI_FUTURES_ACCOUNTS_ERROR',e)}
 }
-const telemetryTimer=setInterval(()=>{void reportTelemetry()},300000);
-setTimeout(()=>{void reportTelemetry()},25000);
+const telemetryTimer=legacy.every(()=>{void reportTelemetry()},300000);
+legacy.after(()=>{void reportTelemetry()},25000);
 async function reportStrategyPaperTelemetry(){
  try{
   const reports=await Promise.all(EXPERIMENT_KEYS.map(key=>strategyPaperReport(db.v6Pool(),key)));
@@ -412,8 +415,8 @@ async function reportStrategyPaperTelemetry(){
   console.info('AI_FUTURES_MOMENTUM_BRACKET_RESEARCH',JSON.stringify(await momentumBracketResearch(db.v6Pool())));
  }catch(e){console.error('AI_FUTURES_MOMENTUM_BRACKET_RESEARCH_ERROR',e)}
 }
-const strategyTelemetryTimer=setInterval(()=>{if(!closing)void reportStrategyPaperTelemetry()},30*60000);
-setTimeout(()=>{if(!closing)void reportStrategyPaperTelemetry()},45000);
+const strategyTelemetryTimer=legacy.every(()=>{if(!closing)void reportStrategyPaperTelemetry()},30*60000);
+legacy.after(()=>{if(!closing)void reportStrategyPaperTelemetry()},45000);
 async function reportBounceResearch(){
  try{
   const results=[];
@@ -431,13 +434,13 @@ async function reportBounceResearch(){
   console.info('AI_FUTURES_BOUNCE30',JSON.stringify({at:new Date().toISOString(),method:'read-only 30m threshold-touch stop-first OHLC backtest; validation ranking is exploratory and subject to selection bias',results}));
  }catch(e){console.error('AI_FUTURES_BOUNCE30_ERROR',e)}
 }
-const bounceResearchTimer=setInterval(()=>{void reportBounceResearch()},3600000);
-setTimeout(()=>{void reportBounceResearch()},45000);
-const statsTimer=setInterval(()=>{void reportStats()},60000);
+const bounceResearchTimer=legacy.every(()=>{void reportBounceResearch()},3600000);
+legacy.after(()=>{void reportBounceResearch()},45000);
+const statsTimer=setInterval(()=>{void reportStats()},15*60000);
 void reportStats();
 const v6CostResearch=createV6CostResearchScheduler(db.v6Pool(),configuredV6FrozenSplit(process.env));
-const v6CostTimer=setInterval(()=>{if(closing)return;void v6CostResearch.run().then(ok=>{if(ok)console.info('V6_COST_STRESS',JSON.stringify(v6CostResearch.snapshot()))})},6*3600000);
-setTimeout(()=>{if(closing)return;void v6CostResearch.run().then(ok=>{if(ok)console.info('V6_COST_STRESS',JSON.stringify(v6CostResearch.snapshot()))})},90000);
+const v6CostTimer=legacy.every(()=>{if(closing)return;void v6CostResearch.run().then(ok=>{if(ok)console.info('V6_COST_STRESS',JSON.stringify(v6CostResearch.snapshot()))})},6*3600000);
+legacy.after(()=>{if(closing)return;void v6CostResearch.run().then(ok=>{if(ok)console.info('V6_COST_STRESS',JSON.stringify(v6CostResearch.snapshot()))})},90000);
 const v6ResearchJobs=createV6ResearchJobs(
  ()=>runV6(db.v6Pool()),
  ()=>backfillV6EntryCandles(db.v6Pool(),c=>db.upsert(c)),
@@ -452,23 +455,23 @@ async function runV6Backfill(){
   }
  }catch(e){console.error('V6_SELECTIVE_BACKFILL_ERROR',e)}
 }
-const v6BackfillTimer=setInterval(()=>{void runV6Backfill()},15*60000);
-setTimeout(()=>{void runV6Backfill()},45000);
+const v6BackfillTimer=legacy.every(()=>{void runV6Backfill()},15*60000);
+legacy.after(()=>{void runV6Backfill()},45000);
 // Optional OKX public trader IDs, configured independently of Kopyon.
 const okxCodes=(process.env.OKX_TRADER_CODES??'').split(',').map(x=>x.trim()).filter(Boolean);
 let okxRunning=false;
 async function runOkx(){if(okxRunning||closing)return;okxRunning=true;try{const codes=okxCodes.length?okxCodes:await discoverOkxTraderCodes();if(!codes.length){console.info('V6_OKX_DISCOVERY_EMPTY');return}console.info('V6_OKX_COLLECTION',JSON.stringify(await collectOkxHistory(db.v6Pool(),codes)))}catch(e){console.error('V6_OKX_ERROR',e)}finally{okxRunning=false}}
-const okxTimer=setInterval(()=>{void runOkx()},6*3600000);
-setTimeout(()=>{void runOkx()},60000);
-const v6Timer=setInterval(()=>{if(closing)return;void runV6(db.v6Pool()).then(result=>console.info('V6_DISCOVERY',JSON.stringify(result))).catch(e=>console.error('V6_ERROR',e))},6*3600000);
-setTimeout(()=>{if(closing)return;void runV6(db.v6Pool()).then(result=>console.info('V6_DISCOVERY',JSON.stringify(result))).catch(e=>console.error('V6_ERROR',e))},20000);
-let closing=false;async function stop(){if(closing)return;closing=true;clearInterval(statsTimer);clearInterval(storageTimer);clearInterval(repairTimer);clearInterval(historyTimer);clearInterval(paperTimer);clearInterval(telemetryTimer);clearInterval(strategyTelemetryTimer);clearInterval(bounceResearchTimer);clearInterval(v3Timer);clearInterval(v4Timer);clearInterval(v5Timer);clearInterval(v6Timer);clearInterval(v6BackfillTimer);clearInterval(v6CostTimer);clearInterval(solPaperTimer);clearInterval(solShortTimer);clearInterval(strategyPaperTimer);server.close();
+const okxTimer=legacy.every(()=>{void runOkx()},6*3600000);
+legacy.after(()=>{void runOkx()},60000);
+const v6Timer=legacy.every(()=>{if(closing)return;void runV6(db.v6Pool()).then(result=>console.info('V6_DISCOVERY',JSON.stringify(result))).catch(e=>console.error('V6_ERROR',e))},6*3600000);
+legacy.after(()=>{if(closing)return;void runV6(db.v6Pool()).then(result=>console.info('V6_DISCOVERY',JSON.stringify(result))).catch(e=>console.error('V6_ERROR',e))},20000);
+let closing=false;async function stop(){if(closing)return;closing=true;legacy.stop();clearInterval(statsTimer);clearInterval(storageTimer);clearInterval(repairTimer);clearInterval(historyTimer);clearInterval(paperTimer);clearInterval(telemetryTimer);clearInterval(strategyTelemetryTimer);clearInterval(bounceResearchTimer);clearInterval(v3Timer);clearInterval(v4Timer);clearInterval(v5Timer);clearInterval(v6Timer);clearInterval(v6BackfillTimer);clearInterval(v6CostTimer);clearInterval(solPaperTimer);clearInterval(solShortTimer);clearInterval(strategyPaperTimer);server.close();
  const forwardStop=relativeStrengthJob.stop();
  const researchStop=researchData.runtime.stop().catch(e=>console.error('RESEARCH_DATA_STOP_ERROR',e instanceof Error?e.message:String(e)));
  // Existing jobs may still be using the pools after timers have stopped.
  // Drain paper-trading ticks before closing the shared database pools.
  const drainDeadline=Date.now()+15000;
- while(paperRunning||solPaperRunning||solShortRunning||strategyPaperRunning||v3Running||v4Running||v5Running||historyBusy||repairing||okxRunning){
+ while(v8Running||sol5mRunning||paperRunning||solPaperRunning||solShortRunning||strategyPaperRunning||v3Running||v4Running||v5Running||historyBusy||repairing||okxRunning){
   if(Date.now()>=drainDeadline){
    console.error('SHUTDOWN_DRAIN_TIMEOUT',JSON.stringify({paperRunning,solPaperRunning,strategyPaperRunning,v3Running,v4Running,v5Running,historyBusy,repairing,okxRunning}));
    break;
